@@ -154,6 +154,53 @@ static int walk(game *g, u32 target)
     return g->view == target;
 }
 
+/* Talks to a character and asks every question that has not been asked
+ * yet, again and again while answers open new ones. Timers get a few
+ * seconds between rounds, since some questions open on a timer. */
+static int ask_all(game *g, u32 character, u32 *now)
+{
+    int round, asked = 0;
+    for (round = 0; round < 16; round++) {
+        u32 ids[GAME_MAX_CHOICES];
+        int n, i, any = 0;
+        if (!game_click_object(g, character))
+            return asked > 0;
+        drain_media(g);
+        n = game_choices(g, ids, GAME_MAX_CHOICES);
+        for (i = 0; i < n; i++)
+            if (!game_times_asked(g, ids[i])) {
+                char q[128] = "";
+                vc_conversation c;
+                if (vc_read_conversation(&g->db, ids[i], &c) == 0)
+                    vc_read_name(&g->db, c.name, q, sizeof(q));
+                printf("  ask %u  %s\n", ids[i], q);
+                game_ask(g, ids[i]);
+                drain_media(g);
+                asked++;
+                any = 1;
+                break; /* the choices may change after each answer */
+            }
+        if (!any) {
+            u32 end = *now + 3000;
+            int before = n;
+            while (*now < end) {
+                *now += 100;
+                game_tick(g, *now);
+                drain_media(g);
+            }
+            if (!game_click_object(g, character))
+                break;
+            drain_media(g);
+            n = game_choices(g, ids, GAME_MAX_CHOICES);
+            for (i = 0; i < n && !any; i++)
+                any = !game_times_asked(g, ids[i]);
+            if (!any && n == before)
+                break;
+        }
+    }
+    return 1;
+}
+
 /* Checks one "expect" line. Returns 1 when it holds. */
 static int expect(game *g, const char *what, long a, long b, int have_b)
 {
@@ -182,28 +229,15 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
     return 0;
 }
 
-static int cmd_play(int argc, char **argv)
+/* Plays a script. Returns the number of failed steps (it stops at the
+ * first one). */
+static int run_script(game *g, const char *path, u32 *now, int *steps, int quiet)
 {
-    game *g;
-    FILE *fp;
-    char line[512];
-    int lineno = 0, failed = 0, steps = 0, i;
-    u32 now = 0;
-
-    setvbuf(stdout, NULL, _IOLBF, 0); /* keep the log and the steps in order */
-    if (argc != 3) {
-        fputs("usage: xftool play <game folder> <script>\n", stderr);
-        return 2;
-    }
-    fp = fopen(argv[2], "r");
+    FILE *fp = fopen(path, "r");
+    char line[512], file[256];
+    int lineno = 0, failed = 0;
     if (!fp) {
-        perror(argv[2]);
-        return 1;
-    }
-    g = malloc(sizeof(*g));
-    if (!g || game_open(g, argv[1]) != 0) {
-        free(g);
-        fclose(fp);
+        perror(path);
         return 1;
     }
     while (fgets(line, sizeof(line), fp)) {
@@ -217,11 +251,20 @@ static int cmd_play(int argc, char **argv)
         n = sscanf(line, "%31s", cmd);
         if (n <= 0)
             continue;
-        steps++;
-        printf("%s:%d: %s", argv[2], lineno, line);
-        if (!strchr(line, '\n'))
-            printf("\n");
-        if (strcmp(cmd, "new") == 0) {
+        (*steps)++;
+        if (!quiet) {
+            printf("%s:%d: %s", path, lineno, line);
+            if (!strchr(line, '\n'))
+                printf("\n");
+        }
+        if (strcmp(cmd, "include") == 0 && sscanf(line, "%*s %255s", file) == 1) {
+            /* Plays another script first, quietly: a disc starts where
+             * the previous one ends. */
+            char inc[512];
+            const char *slash = strrchr(path, '/');
+            snprintf(inc, sizeof(inc), "%.*s%s", slash ? (int)(slash - path + 1) : 0, path, file);
+            ok = run_script(g, inc, now, steps, 1) == 0;
+        } else if (strcmp(cmd, "new") == 0) {
             ok = game_new(g) == 0;
         } else if (strcmp(cmd, "view") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = game_enter_view(g, (u32)a) == 0;
@@ -241,16 +284,18 @@ static int cmd_play(int argc, char **argv)
                 ok = game_ask(g, (u32)a);
         } else if (strcmp(cmd, "hold") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             ok = game_hold(g, strcmp(what, "none") == 0 ? NULL : what);
+        } else if (strcmp(cmd, "askall") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            ok = ask_all(g, (u32)a, now);
         } else if (strcmp(cmd, "inv") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = game_click_inventory(g, (u32)a);
         } else if (strcmp(cmd, "back") == 0) {
             game_back(g);
         } else if (strcmp(cmd, "wait") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             /* Advance in small steps so timers fire in order. */
-            u32 end = now + (u32)a;
-            while (now < end) {
-                now = XF_MIN(now + 100, end);
-                game_tick(g, now);
+            u32 end = *now + (u32)a;
+            while (*now < end) {
+                *now = XF_MIN(*now + 100, end);
+                game_tick(g, *now);
                 drain_media(g);
             }
         } else if (strcmp(cmd, "set") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
@@ -260,18 +305,38 @@ static int cmd_play(int argc, char **argv)
         } else if (strcmp(cmd, "expect") == 0 && (n = sscanf(line, "%*s %31s %ld %ld", what, &a, &b)) >= 2) {
             ok = expect(g, what, a, b, n == 3);
         } else {
-            fprintf(stderr, "%s:%d: cannot read this line\n", argv[2], lineno);
+            fprintf(stderr, "%s:%d: cannot read this line\n", path, lineno);
             ok = 0;
         }
         drain_media(g);
         if (!ok) {
-            printf("  FAILED\n");
+            printf("%s:%d: %s  FAILED\n", path, lineno, line);
             print_state(g);
             failed++;
             break; /* later steps depend on this one */
         }
     }
     fclose(fp);
+    return failed;
+}
+
+static int cmd_play(int argc, char **argv)
+{
+    game *g;
+    int failed, steps = 0, i;
+    u32 now = 0;
+
+    setvbuf(stdout, NULL, _IOLBF, 0); /* keep the log and the steps in order */
+    if (argc != 3) {
+        fputs("usage: xftool play <game folder> <script>\n", stderr);
+        return 2;
+    }
+    g = malloc(sizeof(*g));
+    if (!g || game_open(g, argv[1]) != 0) {
+        free(g);
+        return 1;
+    }
+    failed = run_script(g, argv[2], &now, &steps, 0);
     printf("%d steps, %s\n", steps, failed ? "stopped at a failure" : "all passed");
     if (g->missing_count) {
         printf("functions not implemented yet (%d):", g->missing_count);

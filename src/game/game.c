@@ -301,26 +301,38 @@ void game_media_end(game *g)
     }
 }
 
-/* Media actions name a media list; its first entry plays. Sounds (paths
- * under Sounds/) play beside the clips instead of in the queue. */
+/* A media list holds alternatives: the first entry that is enabled
+ * plays. Actions switch entries on and off, for example a clerk's line
+ * before and after the badge is shown. Returns 0 when none is enabled. */
+static u32 first_enabled(game *g, u32 list)
+{
+    u32 ids[32];
+    int n = vc_read_list(&g->db, list, ids, 32), i;
+    for (i = 0; i < n; i++)
+        if (vc_is_enabled(&g->interp, ids[i]))
+            return ids[i];
+    return 0;
+}
+
+/* Media actions name a media list. Sounds (paths under Sounds/) play
+ * beside the clips instead of in the queue. */
 static void host_play_media(void *user, u32 list, u8 selector)
 {
     game *g = user;
-    u32 ids[8];
     vc_asset_ref a;
-    int n = vc_read_list(&g->db, list, ids, 8);
+    u32 asset = first_enabled(g, list);
     (void)selector;
-    if (n <= 0 || vc_read_asset_ref(&g->db, ids[0], &a) != 0) {
-        xf_info("play media list #%u: empty or missing", list);
+    if (!asset || vc_read_asset_ref(&g->db, asset, &a) != 0) {
+        xf_info("play media list #%u: nothing enabled", list);
         return;
     }
     if (strncmp(a.logical, "Sounds/", 7) == 0) {
-        g->sound = ids[0];
+        g->sound = asset;
         g->sound_serial++;
         vc_run_triggers(&g->interp, a.triggers, 8);
         return;
     }
-    game_queue_media(g, ids[0]);
+    game_queue_media(g, asset);
 }
 
 /* 0x46A0D0 act_set_view: the engine runs queued actions in order, so the
@@ -588,9 +600,9 @@ void game_end_talk(game *g) { g->talking = 0; }
 
 static void queue_list_media(game *g, u32 list, u32 conversation)
 {
-    u32 ids[4];
-    if (vc_read_list(&g->db, list, ids, 4) > 0) {
-        game_queue_media(g, ids[0]);
+    u32 asset = first_enabled(g, list);
+    if (asset) {
+        game_queue_media(g, asset);
         g->queue[(g->queue_tail + GAME_MEDIA_QUEUE - 1) % GAME_MEDIA_QUEUE].conversation = conversation;
     }
 }
@@ -796,6 +808,12 @@ static int host_call_function(void *user, const vc_action *a)
         g->timer_count = 0;
         return 1;
     }
+    /* RegPreferences registers the 24 preference variables; the engine
+     * fills them from the player's settings. We keep the GAM defaults,
+     * except Artificial Intuition (argument 1), which is on: Disc 1
+     * cannot go on without it (Cook only takes the case files with it). */
+    if (strcmp(name, "RegPreferences") == 0 && argc > 1)
+        vc_set_var(&g->interp, args[1].value, 1);
     if (strncmp(name, "Reg", 3) == 0 && g->reg_count < (int)XF_COUNT(g->regs)) {
         game_registration *r = &g->regs[g->reg_count++];
         memcpy(r->name, name, sizeof(r->name));

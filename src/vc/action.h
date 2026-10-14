@@ -34,7 +34,7 @@ typedef struct {
     u8 op;
 } vc_expression;
 
-#define VC_MAX_ARGS 8
+#define VC_MAX_ARGS 32 /* RegPreferences passes 24 */
 
 typedef struct {
     u8 type;          /* VC_ACT_* */

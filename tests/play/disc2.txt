@@ -1,0 +1,11 @@
+# Disc 2, from the arrival at the Comity Inn.
+include disc1.txt
+expect view 6548
+
+click 22631                     # the motel clerk
+state
+hold Badge
+click 22631                     # flash the badge
+hold none
+click 22631
+state
