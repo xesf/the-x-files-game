@@ -6,6 +6,7 @@
 
 #include "gfx/text.h"
 #include "media/mov.h"
+#include "media/player.h"
 #include "media/video.h"
 #include "platform/plat.h"
 #include "vc/interp.h"
@@ -37,7 +38,14 @@ typedef struct {
     xf_neo_db db;
     xf_neo_db gam;
     vc_interp interp;
+    vc_place_map places;
     u32 pending_view;
+    u32 view_triggers; /* trigger list of the current view */
+    /* media queued by actions, played one after the other */
+    u32 media_queue[32];
+    int media_head, media_tail;
+    xf_player player;
+    int playing;
     xf_font font;
     int have_font;
     u32 fb[SCREEN_W * SCREEN_H];
@@ -54,6 +62,8 @@ typedef struct {
     xf_mov nav;
     int nav_open;
 } explorer;
+
+static void stop_media(explorer *e);
 
 static int open_nav_file(explorer *e, const char *name)
 {
@@ -146,14 +156,52 @@ static void host_go_to_view(void *user, u32 view)
     ((explorer *)user)->pending_view = view;
 }
 
-static void host_play_media(void *user, u32 asset, u8 selector)
+/* Media actions name a media list; its first entry is played. */
+static void host_play_media(void *user, u32 list, u8 selector)
 {
     explorer *e = user;
-    vc_asset_ref a;
-    if (vc_read_asset_ref(&e->db, asset, &a) == 0)
-        xf_info("play media #%u (%s), selector %u", asset, a.logical, selector);
-    else
-        xf_info("play media #%u, selector %u", asset, selector);
+    u32 ids[8];
+    int n = vc_read_list(&e->db, list, ids, 8);
+    if (n <= 0) {
+        xf_info("play media list #%u: empty or missing", list);
+        return;
+    }
+    if ((e->media_tail + 1) % 32 != e->media_head) {
+        e->media_queue[e->media_tail] = ids[0];
+        e->media_tail = (e->media_tail + 1) % 32;
+    }
+    (void)selector;
+}
+
+/* Starts the next queued clip that exists on disk. */
+static void start_next_media(explorer *e)
+{
+    while (!e->playing && e->media_head != e->media_tail) {
+        vc_asset_ref a;
+        u32 id = e->media_queue[e->media_head];
+        int j;
+        e->media_head = (e->media_head + 1) % 32;
+        if (vc_read_asset_ref(&e->db, id, &a) != 0)
+            continue;
+        for (j = 0; j < a.entry_count && !e->playing; j++) {
+            char path[1024];
+            if (xf_path_resolve(e->data_dir, a.entries[j].path, path, sizeof(path)) != 0)
+                continue;
+            if (xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
+                e->playing = 1;
+                xf_info("playing %s (%s)", a.logical, a.entries[j].path);
+            }
+        }
+        if (!e->playing)
+            xf_info("media %s: no file on disk", a.logical);
+    }
+}
+
+static void stop_media(explorer *e)
+{
+    if (e->playing)
+        xf_player_close(&e->player);
+    e->playing = 0;
 }
 
 static int host_call_function(void *user, const vc_action *a)
@@ -170,8 +218,28 @@ static int enter_view(explorer *e, u32 id)
         xf_warn("explore: %u is not a view", id);
         return -1;
     }
+    /* Kinds 8 and 9 are taken as entering and leaving (see
+     * scene-graph.md). Leave from the inside out, enter from the outside in. */
+    {
+        const vc_place *from = e->view ? vc_place_of(&e->places, e->view) : NULL;
+        const vc_place *to = vc_place_of(&e->places, id);
+        if (e->view)
+            vc_run_triggers(&e->interp, e->view_triggers, 9);
+        if (from && (!to || to->viewpoint != from->viewpoint))
+            vc_run_triggers(&e->interp, from->viewpoint_triggers, 9);
+        if (from && (!to || to->location != from->location))
+            vc_run_triggers(&e->interp, from->location_triggers, 9);
+        if (from && (!to || to->node != from->node))
+            vc_run_triggers(&e->interp, from->node_triggers, 9);
+        if (to && (!from || to->node != from->node))
+            vc_run_triggers(&e->interp, to->node_triggers, 8);
+        if (to && (!from || to->location != from->location))
+            vc_run_triggers(&e->interp, to->location_triggers, 8);
+        if (to && (!from || to->viewpoint != from->viewpoint))
+            vc_run_triggers(&e->interp, to->viewpoint_triggers, 8);
+    }
     e->view = id;
-    /* Kind 8 is our working guess for "entering"; see scene-graph.md. */
+    e->view_triggers = v.triggers;
     vc_run_triggers(&e->interp, v.triggers, 8);
     if (e->pending_view && e->pending_view != id) {
         u32 next = e->pending_view;
@@ -211,6 +279,18 @@ static void draw(explorer *e, int mx, int my)
     int i, y;
 
     memset(e->fb, 0, sizeof(e->fb));
+    if (e->playing) {
+        const u32 *f = xf_player_frame(&e->player);
+        const char *sub = xf_player_subtitle(&e->player);
+        if (f)
+            for (y = 0; y < XF_MIN(e->player.video.height, SCREEN_H - PICTURE_Y); y++)
+                memcpy(&e->fb[(PICTURE_Y + y) * SCREEN_W + PICTURE_X], f + y * e->player.video.width,
+                       (size_t)XF_MIN(e->player.video.width, PICTURE_W) * 4);
+        if (sub && e->have_font)
+            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
+                                 sub, 0xFFFFFF, 0x000000);
+        return;
+    }
     if (e->have_picture)
         for (y = 0; y < PICTURE_H; y++)
             memcpy(&e->fb[(PICTURE_Y + y) * SCREEN_W + PICTURE_X], &e->picture[y * PICTURE_W],
@@ -266,6 +346,8 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
             return 1;
         }
         e->interp.trace = getenv("XF_TRACE") != NULL;
+        vc_place_map_build(&e->db, &e->places);
+        xf_info("%u views placed in the hierarchy", e->places.count);
     }
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
@@ -283,6 +365,8 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
             else if (ev.type == PLAT_EV_MOUSE_MOVE) {
                 mx = ev.x;
                 my = ev.y;
+            } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
+                stop_media(e); /* skip the clip */
             } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
                 const spot *s = spot_at(e, ev.x, ev.y);
                 if (s) {
@@ -302,16 +386,21 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
                     enter_view(e, e->history[--e->history_len]);
             }
         }
+        if (e->playing && !xf_player_update(&e->player, plat_ticks_ms()))
+            stop_media(e);
+        start_next_media(e);
         draw(e, mx, my);
         plat_present(e->fb, SCREEN_W, SCREEN_H, SCREEN_W);
-        plat_sleep_ms(16);
+        plat_sleep_ms(e->playing ? 5 : 16);
     }
+    stop_media(e);
     if (e->nav_open)
         xf_mov_close(&e->nav);
     if (e->have_font) {
         xf_text_cache_clear();
         xf_font_free(&e->font);
     }
+    vc_place_map_free(&e->places);
     vc_interp_free(&e->interp);
     xf_neo_close(&e->gam);
     xf_neo_close(&e->db);

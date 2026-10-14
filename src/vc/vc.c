@@ -211,3 +211,97 @@ int vc_read_list(const xf_neo_db *db, u32 id, u32 *ids, int max)
         return -1;
     return XF_MIN(c.n, max);
 }
+
+static int cmp_place(const void *a, const void *b)
+{
+    u32 x = ((const vc_place *)a)->view, y = ((const vc_place *)b)->view;
+    return x < y ? -1 : x > y;
+}
+
+/* Walks title -> nodes -> locations -> viewpoints -> views. Field offsets
+ * follow the layouts in docs/engine/classes.md. */
+int vc_place_map_build(const xf_neo_db *db, vc_place_map *m)
+{
+    u32 nodes[64], locs[256], vps[512], views[64], i;
+    int nn, nl, nv, nw, a, b, c, d;
+    u32 cap = 0;
+
+    memset(m, 0, sizeof(*m));
+    for (i = 0; i < db->count && db->entries[i].class_id != VC_TITLE; i++)
+        ;
+    if (i == db->count)
+        return -1;
+    nn = vc_read_list(db, db->entries[i].id, nodes, 64);
+    for (a = 0; a < nn; a++) {
+        xf_neo_reader r;
+        u32 node_triggers;
+        if (xf_neo_object(db, nodes[a], &r, NULL, NULL) != 0)
+            continue;
+        xf_neo_read_list(&r);
+        xf_neo_u32(&r);             /* name */
+        node_triggers = xf_neo_u32(&r);
+        nl = vc_read_list(db, nodes[a], locs, 256);
+        for (b = 0; b < nl; b++) {
+            u32 loc_triggers;
+            if (xf_neo_object(db, locs[b], &r, NULL, NULL) != 0)
+                continue;
+            xf_neo_read_list(&r);
+            xf_neo_u32(&r);         /* name */
+            xf_neo_u32(&r);         /* media list */
+            loc_triggers = xf_neo_u32(&r);
+            nv = vc_read_list(db, locs[b], vps, 512);
+            for (c = 0; c < nv; c++) {
+                u32 vp_triggers;
+                if (xf_neo_object(db, vps[c], &r, NULL, NULL) != 0)
+                    continue;
+                xf_neo_read_list(&r);
+                xf_neo_u32(&r);     /* position: x, y */
+                xf_neo_u32(&r);     /* position: name */
+                vp_triggers = xf_neo_u32(&r);
+                nw = vc_read_list(db, vps[c], views, 64);
+                for (d = 0; d < nw; d++) {
+                    vc_place *p;
+                    if (m->count == cap) {
+                        vc_place *n;
+                        cap = cap ? cap * 2 : 1024;
+                        n = realloc(m->places, cap * sizeof(*n));
+                        if (!n)
+                            return -1;
+                        m->places = n;
+                    }
+                    p = &m->places[m->count++];
+                    p->view = views[d];
+                    p->viewpoint = vps[c];
+                    p->location = locs[b];
+                    p->node = nodes[a];
+                    p->viewpoint_triggers = vp_triggers;
+                    p->location_triggers = loc_triggers;
+                    p->node_triggers = node_triggers;
+                }
+            }
+        }
+    }
+    qsort(m->places, m->count, sizeof(*m->places), cmp_place);
+    return 0;
+}
+
+void vc_place_map_free(vc_place_map *m)
+{
+    free(m->places);
+    memset(m, 0, sizeof(*m));
+}
+
+const vc_place *vc_place_of(const vc_place_map *m, u32 view)
+{
+    u32 lo = 0, hi = m->count;
+    while (lo < hi) {
+        u32 mid = (lo + hi) / 2;
+        if (m->places[mid].view == view)
+            return &m->places[mid];
+        if (m->places[mid].view < view)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return NULL;
+}

@@ -82,6 +82,15 @@ Kinds 2 and 11 occur once each. Working guesses, not yet confirmed in
 the engine code: 0 is a click, 8 is entering and 9 is leaving the owner,
 4 and 5 are the mouse moving over and off an interface item.
 
+The data supports 8 and 9: kind 8 lists on views store the current view
+in variable 1057, and kind 9 lists disable hotspots and stop timers. The
+explorer runs them in this order when the player moves: kind 9 of the
+old view, viewpoint, location and node (inside out, only for the levels
+that change), then kind 8 of the new node, location, viewpoint and view
+(outside in). On the first visit to the Field Office this plays the
+establishing shot of the FBI building and the scene where Willmore
+enters, as in the original game.
+
 ## Navigation
 
 A `VCNav` connects a view to another view:

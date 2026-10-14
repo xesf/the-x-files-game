@@ -133,8 +133,10 @@ The four functions in the table that the data never calls are
 - `DoActionList`, passing its second argument as integer local 0 of the
   called list (still to be confirmed).
 
-It passes media actions and other built-in functions to the game, which
-for now only logs them. It runs actions at once instead of queuing them,
+Media actions (types 1 and 7) name a `VCAssetRefList`; the explorer
+plays the first media reference of the list in the picture area, one
+clip after the other, and a click skips the clip. Other built-in
+functions are only logged so far. It runs actions at once instead of queuing them,
 and it does not yet read trigger context values (operand kind 4).
 
 ```sh

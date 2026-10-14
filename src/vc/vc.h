@@ -81,6 +81,22 @@ int vc_read_name(const xf_neo_db *db, u32 id, char *out, size_t size);
  * Returns the number of IDs written, up to `max`, or -1. */
 int vc_read_list(const xf_neo_db *db, u32 id, u32 *ids, int max);
 
+/* Where a view sits in the hierarchy, and the trigger lists of each level. */
+typedef struct {
+    u32 view, viewpoint, location, node;
+    u32 viewpoint_triggers, location_triggers, node_triggers;
+} vc_place;
+
+/* Builds the map from views to their viewpoint, location and node. */
+typedef struct {
+    vc_place *places; /* sorted by view */
+    u32 count;
+} vc_place_map;
+
+int vc_place_map_build(const xf_neo_db *db, vc_place_map *m);
+void vc_place_map_free(vc_place_map *m);
+const vc_place *vc_place_of(const vc_place_map *m, u32 view);
+
 /* Parses a packed media description (see the scene graph page). */
 int vc_parse_media(const u8 *data, size_t size, vc_asset_ref *a);
 
