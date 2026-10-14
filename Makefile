@@ -14,7 +14,7 @@ endif
 
 UNAME := $(shell uname -s)
 
-CORE_SRC := $(wildcard src/core/*.c) $(wildcard src/media/*.c) $(wildcard src/data/*.c)
+CORE_SRC := $(wildcard src/core/*.c) $(wildcard src/media/*.c) $(wildcard src/data/*.c) $(wildcard src/audio/*.c)
 CORE_OBJ := $(CORE_SRC:%.c=$(BUILD)/%.o)
 
 ifeq ($(UNAME),Darwin)
