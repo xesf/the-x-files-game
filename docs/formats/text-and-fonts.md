@@ -30,5 +30,22 @@ different extension:
 | `JRN.TTR` | Journal |
 | `PHN.TTR` | Phone display |
 
-The engine will render them with its own TrueType rasterizer, so the game
-does not need to install fonts on the system.
+In the English CD install the fonts are named `dlg.ttf`, `hcd.ttf` and
+`jrn.ttf`, with only `phn.ttr` keeping the original extension. The engine
+looks for both names.
+
+| File | Glyphs | Units per em | Character map |
+|---|---|---|---|
+| `DLG` | 247 | 1100 | Windows Unicode |
+| `HCD` | 230 | 4096 | Macintosh Roman only |
+| `JRN` | 221 | 4096 | Macintosh Roman only |
+| `PHN` | 247 | 1271 | Windows Unicode |
+
+The engine renders the fonts with its own TrueType rasterizer
+(`src/gfx/ttf.c`), so the game does not install fonts on the system. For
+fonts with only a Macintosh character map, the engine converts each
+Unicode character to its Mac Roman byte before the lookup.
+
+```sh
+xftool font DLG.TTR 24 "The truth is out there" out.bmp
+```
