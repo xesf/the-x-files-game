@@ -1,11 +1,13 @@
-/* Entry point. `xfiles --play <movie> [--data <game folder>]` plays one
- * movie; without arguments it shows a test pattern, to prove the platform
- * layer works. */
+/* Entry point.
+ *   xfiles --play <movie> [--data <game folder>]   play one movie
+ *   xfiles --explore <game folder> <view> [disc]   walk the scene graph
+ * Without arguments it shows a test pattern. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "audio/mixer.h"
+#include "game/explore.h"
 #include "gfx/text.h"
 #include "media/player.h"
 #include "platform/plat.h"
@@ -128,7 +130,9 @@ int main(int argc, char **argv)
     if (plat_audio_open(AUDIO_RATE, xf_mixer_render, NULL) != 0)
         xf_warn("no audio output");
 
-    if (argc > 2 && strcmp(argv[1], "--play") == 0)
+    if (argc > 3 && strcmp(argv[1], "--explore") == 0)
+        r = xf_explore(argv[2], (u32)strtoul(argv[3], NULL, 10), argc > 4 ? atoi(argv[4]) : 1);
+    else if (argc > 2 && strcmp(argv[1], "--play") == 0)
         r = play_movie(argv[2], argc > 4 && strcmp(argv[3], "--data") == 0 ? argv[4] : NULL);
     else
         test_pattern(argc > 1 ? (u32)atoi(argv[1]) : 0);

@@ -143,7 +143,59 @@ static int cmd_asset(int argc, char **argv)
     return 0;
 }
 
+/* Follows every move from a view and reports what it reaches. */
+static int cmd_walk(int argc, char **argv)
+{
+    xf_neo_db db;
+    u32 *queue, *seen_ids, head = 0, tail = 0, seen = 0, stills = 0, dead = 0, i;
+    int disc;
+
+    if (argc != 3 && argc != 4) {
+        fputs("usage: xftool hdb-walk <file.hdb> <view> [disc]\n", stderr);
+        return 2;
+    }
+    if (xf_neo_open(&db, argv[1]) != 0)
+        return 1;
+    disc = argc == 4 ? atoi(argv[3]) : 1;
+    queue = calloc(db.count, sizeof(u32));
+    seen_ids = calloc(db.count, sizeof(u32));
+    queue[tail++] = (u32)strtoul(argv[2], NULL, 0);
+    while (head < tail) {
+        u32 id = queue[head++], navs[64], assets[32];
+        vc_view v;
+        int n, k, has_still = 0;
+        for (i = 0; i < seen && seen_ids[i] != id; i++)
+            ;
+        if (i < seen || vc_read_view(&db, id, &v) != 0)
+            continue;
+        seen_ids[seen++] = id;
+        n = vc_read_list(&db, v.assets, assets, 32);
+        for (k = 0; k < n && !has_still; k++) {
+            vc_asset_ref a;
+            int j;
+            if (vc_read_asset_ref(&db, assets[k], &a) == 0 && a.kind == 67)
+                for (j = 0; j < a.entry_count; j++)
+                    has_still |= a.entries[j].disc == disc;
+        }
+        stills += has_still;
+        n = vc_read_list(&db, v.navs, navs, 64);
+        if (n <= 0)
+            dead++;
+        for (k = 0; k < n; k++) {
+            vc_nav nav;
+            if (vc_read_nav(&db, navs[k], &nav) == 0 && tail < db.count)
+                queue[tail++] = nav.target;
+        }
+    }
+    printf("%u views reachable, %u with a still for disc %d, %u without moves\n", seen, stills, disc, dead);
+    free(queue);
+    free(seen_ids);
+    xf_neo_close(&db);
+    return 0;
+}
+
 const xftool_cmd xftool_hdb_cmds[] = {
+    { "hdb-walk", "<file.hdb> <view> [disc]  follow every move from a view", cmd_walk },
     { "hdb-asset", "<file.hdb> <id>...  decode media references", cmd_asset },
     { "hdb", "<file.hdb>  count the objects of each class", cmd_hdb },
     { "hdb-obj", "<file.hdb> <id> [list]  dump one object, and its list", cmd_obj },

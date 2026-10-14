@@ -172,7 +172,7 @@ tests/       format round-trips and decoder golden frames
 | M1 | `xftool` + format readers: HDB/GAM (NeoPersist), PFF, HOT, XTX, MOV atoms | Byte-exact round-trip on HDB/GAM. All assets in `../Installations/data` listed and mapped | PFF, HOT, XTX, MOV done. HDB/GAM in progress (needs RE) |
 | M2 | Codecs: JPEG, Cinepak, RPZA, Motion JPEG A, IMA4, PCM, text track, then QDMC | Every `.xmv`/`.nmv`/`.amv` decodes; output matches a reference decoder | Done except QDMC (24 files) |
 | M3 | Media player: A/V sync, subtitles, TTF text | One FMV with subtitles plays correctly in the macOS app | Done (`xfiles --play`) |
-| M4 | VC model + script VM from the HDB; navigation, hotspots, cursor | Walk the CD1 opening (Mulder's apartment / Seattle) with the mouse | Next |
+| M4 | VC model + script VM from the HDB; navigation, hotspots, cursor | Walk the CD1 opening (Mulder's apartment / Seattle) with the mouse | In progress: HDB reader, scene graph and `xfiles --explore` done |
 | M5 | Inventory, PDA, phone, computer, conversations, UberStates, timers, save/load (`.x`) | Original `start*.x` saves load and continue. State traces match the original | |
 | M6 | Full game on all 7 CDs + DVD `.vob` (MPEG-2 decoder; may be optional), all languages | Complete playthrough on every major branch, verified by state traces | |
 | M7 | Ports: Steam Deck → Vita → Windows/Linux → iOS/Android → Web → PSP | See §6 | |

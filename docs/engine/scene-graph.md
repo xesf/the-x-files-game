@@ -102,8 +102,27 @@ track shows the picture at that time (see
 
 The meaning of the other numbers is not yet confirmed.
 
+## Exploring
+
+`xfiles --explore` shows a view's still and outlines its hotspots: green
+for moves, yellow for things to examine, cyan for characters. Clicking a
+move goes to its target view; a right click goes back.
+
+```sh
+build/xfiles --explore /path/to/game 1236      # Field Office, disc 1
+build/xfiles --explore /path/to/game 1236 2    # the same view on disc 2
+```
+
+Following every move from view 1236 reaches 76 views of the Field Office,
+none of them a dead end. 47 have a navigation still on disc 1 and 50 on
+disc 2; the others show loops or video, which the explorer does not play
+yet.
+
 ## Tools
 
 ```sh
 python3 -I tools/re/hdb_tree.py XFILES.HDB 301 3   # graph below node 301, 3 levels deep
+xftool hdb-asset XFILES.HDB 39028                  # decode a media reference
+xftool hdb-walk XFILES.HDB 1236 1                  # follow every move from a view
+xftool still NAV1.NMV 112001 out.bmp               # the still shown at 112.001 s
 ```
