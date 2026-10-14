@@ -56,7 +56,7 @@ static main()
     set_name(0x432D30, "event_dispatch", SN_NOWARN);
     set_name(0x433180, "ev_activate", SN_NOWARN);
     set_name(0x419A00, "event_target", SN_NOWARN);
-    set_name(0x440CB0, "StartupTask_start", SN_NOWARN);
+    set_name(0x440CB0, "MainMenu_start", SN_NOWARN);
     set_name(0x45FD40, "event_post_type3", SN_NOWARN);
     set_name(0x4405A0, "event_post_code", SN_NOWARN);
     set_name(0x477000, "view_build_display", SN_NOWARN);
@@ -65,8 +65,14 @@ static main()
     set_name(0x4857D0, "VCEngineApp_exit", SN_NOWARN);
     set_name(0x433480, "Application_set_startup", SN_NOWARN);
     set_name(0x4873D0, "app_alloc_memory", SN_NOWARN);
-    set_name(0x48EE40, "StartupTask_ctor", SN_NOWARN);
-    set_name(0x44AC50, "StartupTask_run", SN_NOWARN);
+    set_name(0x48EE40, "MainMenu_ctor", SN_NOWARN);
+    set_name(0x44AC50, "MainMenu_run", SN_NOWARN);
+    set_name(0x482FE0, "MainMenu_load_media", SN_NOWARN);
+    set_name(0x44E990, "MainMenu_on_command", SN_NOWARN);
+    set_name(0x44DB40, "MainMenu_show", SN_NOWARN);
+    set_name(0x482500, "media_player_create", SN_NOWARN);
+    set_name(0x433320, "ev_activate_load", SN_NOWARN);
+    set_name(0x433240, "ev_command", SN_NOWARN);
     set_name(0x606EB0, "VCTitle_create", SN_NOWARN);
     set_name(0x4660D0, "VCNode_create", SN_NOWARN);
     set_name(0x42FB00, "VCLocaton_create", SN_NOWARN);
@@ -322,6 +328,7 @@ static main()
     set_name(0x4BCCC0, "fn_TakePhoto", SN_NOWARN);
     set_name(0x4BCD40, "fn_TextOn", SN_NOWARN);
     set_name(0x4BCE10, "fn_WillmoreSleeps", SN_NOWARN);
+    set_name(0x6B6B10, "g_game_in_progress", SN_NOWARN);
     set_name(0x6B6FEC, "g_app", SN_NOWARN);
     set_name(0x6B7A14, "g_vc_root", SN_NOWARN);
     msg("names applied\n");

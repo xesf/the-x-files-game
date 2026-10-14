@@ -66,6 +66,42 @@ and run (slot 11). The start-up event's run posts follow-up events, so
 the boot sequence is a chain of events. Queued actions (see
 [actions.md](actions.md)) are events too.
 
+### Event types and target slots
+
+Each event type calls one virtual method of the event's target, so
+events work like messages:
+
+| Type | Effect on the target |
+|---|---|
+| 0 | register by kind, then slot 9 (activate) and slot 11 (run) |
+| 11 | slot 29 (command, with a code) |
+| 12 | register by kind, then slot 9 (activate) and slot 22 (load) |
+
+## Main menu
+
+The start-up event posted by `VCEngineApp_init` is the main menu
+(`MainMenu_ctor`, `0x48EE40`). Its run (slot 11) posts two events to
+itself: type 12, which loads its media, and type 11 with code 1, which
+shows it.
+
+`MainMenu_load_media` (`0x482FE0`, slot 22) creates players for media
+references whose IDs are fixed in the code:
+
+| ID | Media |
+|---|---|
+| 49583 | `Graphics:Game:MAIN MENU MOVIES:LEFTmain.mov` (`XG/49583.xmv`) |
+| 49585 | `MIDloop.mov` (`XG/49585.xmv`) |
+| 94320 | `MIDloop.amv`, the sound of the middle loop (`XS/94320.amv`) |
+| 49589 | `TOPro.mov`, the top rollover (`XG/49589.xmv`) |
+| 49587 | `RIGHT.mov` (`XG/49587.xmv`) |
+| 72895 | `return.pic`, image 610 of `X.PFF`; only when a game is in progress (`g_game_in_progress`) |
+
+The last entry shows that for PFF media the number in the media entry is
+the image index.
+
+`MainMenu_show` (`0x44DB40`) shows or hides these players and adds them
+to the display list at `manager + 0x7D4`.
+
 ## Interface layouts
 
 `view_build_display` (`0x477000`) looks up the interface layout of the
@@ -76,7 +112,7 @@ therefore shown through the same event system.
 
 ## Next steps
 
-- Follow the start-up event chain to the intro videos, the main menu and
-  a new game.
+- Follow the menu commands to "new game", and find where the intro
+  videos play (before the menu or from a menu command).
 - Decode `VCIFaceLayout` and `VCInterfaceItem` at run time: how items
   are placed, drawn and wired to triggers.

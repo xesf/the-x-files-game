@@ -54,7 +54,7 @@
 0x432D30 event_dispatch        switch on event type 0..23 (slot 1), handler(manager, event, list)
 0x433180 ev_activate           type 0: register target by kind (slot 6), activate (slot 9), run (slot 11)
 0x419A00 event_target
-0x440CB0 StartupTask_start     posts the first follow-up events
+0x440CB0 MainMenu_start        posts event types 12 and 11 (code 1) to the menu
 0x45FD40 event_post_type3      posts a 12-byte event built by 0x45F600
 0x4405A0 event_post_code       posts a 16-byte event built by 0x440400
 0x477000 view_build_display    wraps the view's interface layout in a display object and posts it
@@ -63,8 +63,14 @@
 0x4857D0 VCEngineApp_exit      slot 4
 0x433480 Application_set_startup
 0x4873D0 app_alloc_memory      fails with "Insufficient memory to load The X-Files"
-0x48EE40 StartupTask_ctor      0x114-byte task pushed on app+0x268, vtable 0x65D8C0
-0x44AC50 StartupTask_run       slot 11 of the startup task
+0x48EE40 MainMenu_ctor         0x114-byte main menu object, posted at start-up, vtable 0x65D8C0
+0x44AC50 MainMenu_run          slot 11
+0x482FE0 MainMenu_load_media   slot 22: loads the menu movies (asset refs 49583, 49585, 94320, 49589, 49587; 72895 when a game is running)
+0x44E990 MainMenu_on_command   slot 29: passes the command code to MainMenu_show
+0x44DB40 MainMenu_show         shows or hides the menu players and adds them to the display list at manager+0x7D4
+0x482500 media_player_create   creates a player object for a VCAssetRef
+0x433320 ev_activate_load      event type 12: register, slot 9, slot 22
+0x433240 ev_command            event type 11: slot 29
 # Class factories (class ID in the comment)
 0x606EB0 VCTitle_create  class 0x27
 0x4660D0 VCNode_create  class 0x28
@@ -322,5 +328,6 @@
 0x4BCCC0 fn_TakePhoto  entry 0x6BE7C0
 0x4BCD40 fn_TextOn  entry 0x6BE7D4
 0x4BCE10 fn_WillmoreSleeps  entry 0x6BE7E8
+data 0x6B6B10 g_game_in_progress  1 when a game runs; the menu then shows "return"
 data 0x6B6FEC g_app  the application object
 data 0x6B7A14 g_vc_root  global set after the database opens
