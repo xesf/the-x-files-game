@@ -16,6 +16,7 @@ static const xftool_cmd *const g_groups[] = {
     xftool_subs_cmds,
     xftool_font_cmds,
     xftool_hdb_cmds,
+    xftool_play_cmds,
 };
 
 int xftool_write_file(const char *path, const void *data, unsigned long size)

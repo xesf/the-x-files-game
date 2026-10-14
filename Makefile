@@ -34,7 +34,7 @@ all: $(BUILD)/xfiles $(if $(TOOL_SRC),$(BUILD)/xftool)
 $(BUILD)/xfiles: $(GAME_OBJ) $(CORE_OBJ) $(PLAT_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(PLAT_LIBS) -lm
 
-$(BUILD)/xftool: $(TOOL_OBJ) $(CORE_OBJ)
+$(BUILD)/xftool: $(TOOL_OBJ) $(CORE_OBJ) $(BUILD)/src/game/game.o
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/%.o: %.c
@@ -68,11 +68,15 @@ MOVIE    ?= ../Installations/x-files-en/xv/19650.xmv
 run: $(BUILD)/xfiles
 	$(BUILD)/xfiles --explore "$(GAME_DIR)" $(VIEW) $(DISC) --media "$(MEDIA_DIR)"
 
+# Run the story scripts in tests/play against GAME_DIR, without a window.
+playtest: $(BUILD)/xftool
+	@for f in tests/play/*.txt; do $(BUILD)/xftool play "$(GAME_DIR)" $$f 2>/dev/null | tail -2 || exit 1; done
+
 play: $(BUILD)/xfiles
 	$(BUILD)/xfiles --play "$(MOVIE)" --data "$(GAME_DIR)"
 
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean test run play
+.PHONY: playtest all clean test run play
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)

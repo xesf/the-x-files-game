@@ -75,3 +75,46 @@ Current results:
 | PCM (`twos`) | ffmpeg | Bit-exact |
 | Motion JPEG A | ffmpeg | Maximum difference 4, mean 0.71 |
 | JPEG | macOS ImageIO | Mean difference 0.13 to 0.31 per channel; ImageIO interpolates chroma, we use nearest neighbour |
+
+## Story scripts
+
+`xftool play` runs the game logic from a script, without a window or
+media: every clip ends as soon as it starts, so its start and end
+triggers still run in order. The scripts in `tests/play` follow the
+story disc by disc. `make playtest` runs all of them.
+
+```sh
+build/xftool play ../Installations/x-files-en-dvd tests/play/disc1.txt
+XF_TRACE=1 build/xftool play <game> <script>   # with every action
+```
+
+A script has one command per line; `#` starts a comment.
+
+| Command | What it does |
+|---|---|
+| `new` | Starts a new game, as the New item of the main menu |
+| `view <id>` | Jumps to a view |
+| `walk <view>` | Walks to a view through the moves that are enabled now |
+| `click <id>` | Clicks a hotspot or interface item by object ID; for a move, the target view also works |
+| `at <x> <y>` | Clicks a screen point |
+| `back` | Goes back to the previous view |
+| `wait <ms>` | Advances the clock, firing timers |
+| `set <var> <value>` | Sets a GAM variable |
+| `state` | Prints the view, its hotspots and the interface layouts that are up |
+| `expect view <id>` | Fails unless the current view is `<id>` |
+| `expect var <id> <value>` | Fails unless the GAM variable has the value |
+| `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |
+| `expect spot <id>` / `nospot <id>` | Checks that a hotspot is or is not in the view |
+| `expect iface <id>` / `noiface <id>` | Checks that a layout is or is not up |
+
+The run stops at the first failing step and prints the state there. At
+the end it lists the engine functions the story called that are not
+implemented yet.
+
+To find the IDs for a walkthrough step, `tools/re/vc_map.py` prints the
+views around a view, their moves and objects, and what clicking each
+object does:
+
+```sh
+python3 -I tools/re/vc_map.py XFILES.HDB 691 40
+```

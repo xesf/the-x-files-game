@@ -1,0 +1,46 @@
+# Disc 1, from the start of a new game. Run with:
+#   build/xftool play <game folder> tests/play/disc1.txt
+# Object IDs are from the English HDB (CD and DVD share them).
+
+new
+expect view 691                 # hallway, Cook greets Willmore
+expect spot 692                 # the moves open once the opening ends
+
+# Meeting room: the equipment case.
+walk 1228                       # meeting room, facing the case
+click 32714                     # open the case
+expect iface 84370
+click 84380                     # take the six pieces of equipment
+click 84382
+click 84384
+click 84386
+click 84388
+click 84390
+expect var 3707 6               # all six taken
+
+# Willmore's office: drawer and case files.
+walk 1237
+click 28576                     # look at the drawer
+click 32654                     # open it
+click 84330                     # badge, gun, handcuffs
+click 84332
+click 84334
+expect var 3706 3
+click 1237                      # back to the desk
+click 31845                     # case files
+expect iface 47543
+click 47578                     # put them down
+
+# The phone rings: Shanks wants to see Willmore.
+wait 5000
+expect spot 26655
+click 26655
+
+# Shanks's office.
+walk 911
+click 26535                     # knock and enter
+expect view 889
+expect spot 22148               # Shanks
+expect spot 22428               # Skinner
+
+# Next: talk to Shanks and Skinner (conversations are not implemented).
