@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "media/pff.h"
+#include "media/pict.h"
 #include "xf_endian.h"
 #include "xftool.h"
 
@@ -84,7 +86,45 @@ static int cmd_extract(int argc, char **argv)
     return r ? 0 : 1;
 }
 
+/* Decodes one image, or with index "all" checks every image. */
+static int cmd_image(int argc, char **argv)
+{
+    xf_pff pff;
+    u32 i, first, last, failed = 0;
+    int check_all;
+
+    if (argc != 4 && !(argc == 3 && strcmp(argv[2], "all") == 0)) {
+        fputs("usage: xftool pff-image <file.pff> <index> <out.bmp>\n"
+              "       xftool pff-image <file.pff> all\n", stderr);
+        return 2;
+    }
+    if (xf_pff_open(&pff, argv[1]) != 0)
+        return 1;
+    check_all = strcmp(argv[2], "all") == 0;
+    first = check_all ? 0 : (u32)atoi(argv[2]);
+    last = check_all ? pff.count : first + 1;
+    for (i = first; i < last && i < pff.count; i++) {
+        u32 size;
+        u8 *p = xf_pff_read(&pff, i, &size);
+        xf_image img;
+        if (!p || xf_pict_decode(p, size, &img) != 0) {
+            printf("%u: cannot decode\n", i);
+            failed++;
+        } else if (!check_all) {
+            xftool_write_bmp(argv[3], img.pixels, img.width, img.height);
+        }
+        if (p && img.pixels)
+            free(img.pixels);
+        free(p);
+    }
+    if (check_all)
+        printf("%u of %u images failed\n", failed, pff.count);
+    xf_pff_close(&pff);
+    return failed ? 1 : 0;
+}
+
 const xftool_cmd xftool_pff_cmds[] = {
+    { "pff-image", "<file.pff> <index>|all [out.bmp]  decode an image to BMP, or check all", cmd_image },
     { "pff", "<file.pff>  list the images in a PFF bundle", cmd_list },
     { "pff-extract", "<file.pff> <index> <out.pict>  save one image as a PICT file", cmd_extract },
     { 0 }

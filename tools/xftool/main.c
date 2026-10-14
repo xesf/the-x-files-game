@@ -1,5 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+#include "xf_log.h"
 
 #include "xftool.h"
 
@@ -41,6 +44,8 @@ int main(int argc, char **argv)
     size_t g;
     const xftool_cmd *c;
 
+    if (getenv("XF_DEBUG"))
+        xf_log_set_level(XF_LOG_DEBUG);
     if (argc < 2) {
         usage();
         return 2;

@@ -17,6 +17,7 @@ typedef int64_t i64;
 #define XF_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 #define XF_MIN(a, b) ((a) < (b) ? (a) : (b))
 #define XF_MAX(a, b) ((a) > (b) ? (a) : (b))
+#define XF_FOURCC(a, b, c, d) ((u32)(a) << 24 | (u32)(b) << 16 | (u32)(c) << 8 | (u32)(d))
 #define XF_CLAMP(v, lo, hi) ((v) < (lo) ? (lo) : (v) > (hi) ? (hi) : (v))
 
 #endif

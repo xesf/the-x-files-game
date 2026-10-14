@@ -73,7 +73,6 @@ u32 xf_mov_chunk_at(const xf_mov_track *t, u32 sample);
  * Only for tracks with per-sample tables. */
 int xf_mov_read_sample(xf_mov *mov, const xf_mov_track *t, u32 index, void *dst);
 
-#define XF_FOURCC(a, b, c, d) ((u32)(a) << 24 | (u32)(b) << 16 | (u32)(c) << 8 | (u32)(d))
 /* Writes the fourcc as text into `buf` (5 bytes). */
 const char *xf_fourcc_str(u32 cc, char *buf);
 
