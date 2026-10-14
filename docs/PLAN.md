@@ -134,13 +134,23 @@ tests/       format round-trips and decoder golden frames
      (`LoadLibraryA`/`GetProcAddress`, "QuickTime.qts"). Find that loader
      and name each resolved entry point, because every QuickTime call site
      marks a media feature we must reimplement.
-4. **Per-subsystem decompilation** (use the `decomp` skill). Start from the
+4. **Keep names in sync.** Every function or global we identify gets a
+   descriptive name in three places:
+   - the IDB, renamed through the MCP as soon as it is understood;
+   - `tools/ida/names.txt`, the committed list (`address name comment`),
+     from which `tools/ida/gen_names.py` builds `apply_names.idc`. Running
+     that script restores all names in a fresh IDB;
+   - the C code that follows the function, as a one-line comment
+     `/* 0x600490 VCTrigger_read */`.
+   The IDB itself is not committed. The names and addresses are our own
+   work and point into the shipped binary, so they can be public.
+5. **Per-subsystem decompilation** (use the `decomp` skill). Start from the
    entry points that the data drives:
    NeoPersist loading → VC class load methods → trigger evaluation → action
    dispatch → scene and node transitions → media playback calls.
    Each ported function records its original address in a one-line comment
    (`/* 0x4xxxxx */`) so we can audit it.
-5. **Ground truth.** The original game, with the enhancement patch, is
+6. **Ground truth.** The original game, with the enhancement patch, is
    installed under Wine at
    `~/.wine/drive_c/Games/The X-Files/XFilesPlay.exe` (Wine 9.3 at
    `/usr/local/bin/wine`).

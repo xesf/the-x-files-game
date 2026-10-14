@@ -5,6 +5,7 @@
 
 #include "data/neo.h"
 
+/* Class IDs from 0x498060 vc_register_classes. */
 enum {
     VC_TITLE = 0x27,
     VC_NODE = 0x28,

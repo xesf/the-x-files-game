@@ -54,8 +54,21 @@ $(BUILD)/xftest: $(TEST_OBJ) $(CORE_OBJ)
 test: $(BUILD)/xftest
 	$(BUILD)/xftest
 
+# Run against a game install. Override on the command line, for example:
+#   make run GAME_DIR=/path/to/game VIEW=1236 DISC=2
+GAME_DIR ?= ../Installations/x-files-en-dvd
+VIEW     ?= 1236
+DISC     ?= 1
+MOVIE    ?= ../Installations/x-files-en/xv/19650.xmv
+
+run: $(BUILD)/xfiles
+	$(BUILD)/xfiles --explore "$(GAME_DIR)" $(VIEW) $(DISC)
+
+play: $(BUILD)/xfiles
+	$(BUILD)/xfiles --play "$(MOVIE)" --data "$(GAME_DIR)"
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean test
+.PHONY: all clean test run play
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)

@@ -27,6 +27,7 @@ static vc_region read_region(xf_neo_reader *r)
     return g;
 }
 
+/* 0x5EDFB0 VCView_read */
 int vc_read_view(const xf_neo_db *db, u32 id, vc_view *v)
 {
     xf_neo_reader r;
@@ -168,6 +169,7 @@ int vc_read_asset_ref(const xf_neo_db *db, u32 id, vc_asset_ref *a)
     return vc_parse_media(blob.p, (size_t)(blob.end - blob.p), a);
 }
 
+/* 0x62B0B0 VCName_read */
 int vc_read_name(const xf_neo_db *db, u32 id, char *out, size_t size)
 {
     xf_neo_reader r, b;

@@ -172,6 +172,7 @@ const xf_neo_entry *xf_neo_find(const xf_neo_db *db, u32 id)
     return NULL;
 }
 
+/* Header fields: 0x4136A0 neo_persist_read_header */
 int xf_neo_object(const xf_neo_db *db, u32 id, xf_neo_reader *r, u16 *flags, u32 *version)
 {
     const xf_neo_entry *e = xf_neo_find(db, id);
@@ -233,6 +234,7 @@ xf_neo_reader xf_neo_blob(const xf_neo_db *db, xf_neo_reader *r)
     return b;
 }
 
+/* 0x4137E0 neo_list_read_header */
 xf_neo_list xf_neo_read_list(xf_neo_reader *r)
 {
     xf_neo_list l;

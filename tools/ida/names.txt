@@ -1,0 +1,73 @@
+# Names we gave to functions and data in xfiles.exe, DVD build
+# (MD5 09608097f3697c98f2a3a43a665e195e). One per line: address name [comment].
+# This is the source of truth; regenerate the IDC with tools/ida/gen_names.py.
+0x521D20 operator_new          allocator wrapper; FLIRT took it for _exit
+0x521CB0 heap_alloc_retry      heap allocation with new-handler retry
+0x442FF0 neo_class_register    registers a persistent class: id, name, factory
+0x498060 vc_register_classes   registers the 51 VirtualCinema classes
+0x414D80 neo_object_alloc      allocates a persistent object
+0x4136A0 neo_persist_read_header  reads object flags and version
+0x4137E0 neo_list_read_header  reads an embedded ID list header
+0x44D5C0 vc_open_game_database opens XFiles.hdb
+0x44D820 file_open_mode        opens a file: 0/1/2 = read/write/both
+0x443C20 VCStringField_read    reads a string field as a blob reference
+0x6007A0 FixedArray_size       size of a fixed array member
+0x600490 VCTrigger_read
+0x606FC0 VCTitle_read
+0x5EAD50 VCViewPoint_read
+0x62B0B0 VCName_read
+0x62F880 VCDefaultCursors_read
+0x5EDFB0 VCView_read
+# Class factories (class ID in the comment)
+0x606EB0 VCTitle_create  class 0x27
+0x4660D0 VCNode_create  class 0x28
+0x42FB00 VCLocaton_create  class 0x29
+0x5EABB0 VCViewPoint_create  class 0x2A
+0x5EDEC0 VCView_create  class 0x2B
+0x62FEE0 VCCharacter_create  class 0x2C
+0x497E50 VCCharView_create  class 0x2D
+0x609EB0 VCCharViewList_create  class 0x2E
+0x62AFA0 VCName_create  class 0x2F
+0x5F6610 VCConversation_create  class 0x31
+0x5FA7F0 VCConversationList_create  class 0x32
+0x415640 VCNav_create  class 0x33
+0x61DA30 VCNav_List_create  class 0x34
+0x415450 VCAssetRef_create  class 0x35
+0x5DBD80 VCAssetRefList_create  class 0x36
+0x4380D0 VCExplorable_create  class 0x37
+0x620350 VCExplorableList_create  class 0x38
+0x4155A0 VCHotSpot_create  class 0x39
+0x62BD30 VCHotSpotList_create  class 0x3A
+0x627550 VCStdHotSpotList_create  class 0x3B
+0x623E30 VCAssetCategory_create  class 0x3C
+0x415500 VCCursor_create  class 0x3D
+0x62F6D0 VCDefaultCursors_create  class 0x3E
+0x62EEA0 VCDefaultHotSpots_create  class 0x40
+0x415380 VCAction_create  class 0x41
+0x5FD110 VCActionList_create  class 0x42
+0x630400 VCBlob_create  class 0x43
+0x62A990 VCPlayer_create  class 0x44
+0x61AC80 VCEnabled_create  class 0x46
+0x6308C0 VCActionIcon_create  class 0x47
+0x62E9C0 VCEmotionIcon_create  class 0x48
+0x62E5C0 VCEvidenceIcon_create  class 0x49
+0x62B8E0 VCIdeaIcon_create  class 0x4A
+0x62B4E0 VCInventory_create  class 0x4B
+0x5F70E0 VCIdeaMap_create  class 0x4C
+0x5F75D0 VCIdeaMapList_create  class 0x4D
+0x60CC50 VCIFaceLayout_create  class 0x4E
+0x5D1DF0 VCInterfaceItem_create  class 0x4F
+0x624440 VCString_create  class 0x50
+0x6001D0 VCTrigger_create  class 0x51
+0x603FA0 VCTriggerList_create  class 0x52
+0x5E0310 VCVariable_create  class 0x53
+0x62A4C0 VCStdAction_create  class 0x54
+0x6279A0 VCStdActionList_create  class 0x55
+0x5F3910 VCConversationHistory_create  class 0x56
+0x5EF5D0 VCGameState_create  class 0x57
+0x5F2170 VCPDANotes_create  class 0x58
+0x5E1390 VCPhoto_create  class 0x59
+0x5EE560 VCEmail_create  class 0x5A
+0x5F0CB0 VCEmailRead_create  class 0x5B
+0x5F0650 VCEmailPending_create  class 0x5C
+data 0x6B7A14 g_vc_root  global set after the database opens
