@@ -48,7 +48,18 @@
 0x493750 Application_ctor      base application object, vtable 0x65F528
 0x42F190 VCEngineApp_ctor      game application object, vtable 0x65B060
 0x411F90 VCEngineApp_init      slot 1: checks, fonts, display, database, first task
-0x426B20 VCEngineApp_run       slot 2
+0x426B20 VCEngineApp_run       slot 2: message pump, calls slot 3 every iteration
+0x402A20 VCEngineApp_tick      slot 3: moves app+0x280 to app+0x268, timers, events
+0x402830 app_process_events    pops events from app+0x268 and dispatches them
+0x432D30 event_dispatch        switch on event type 0..23 (slot 1), handler(manager, event, list)
+0x433180 ev_activate           type 0: register target by kind (slot 6), activate (slot 9), run (slot 11)
+0x419A00 event_target
+0x440CB0 StartupTask_start     posts the first follow-up events
+0x45FD40 event_post_type3      posts a 12-byte event built by 0x45F600
+0x4405A0 event_post_code       posts a 16-byte event built by 0x440400
+0x477000 view_build_display    wraps the view's interface layout in a display object and posts it
+0x44D8B0 IFaceLayoutDisplay_ctor  0x17C-byte display object for a VCIFaceLayout
+0x4D2FD0 view_current_layout   interface layout ID of the current view
 0x4857D0 VCEngineApp_exit      slot 4
 0x433480 Application_set_startup
 0x4873D0 app_alloc_memory      fails with "Insufficient memory to load The X-Files"

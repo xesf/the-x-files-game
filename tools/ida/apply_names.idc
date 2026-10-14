@@ -51,6 +51,17 @@ static main()
     set_name(0x42F190, "VCEngineApp_ctor", SN_NOWARN);
     set_name(0x411F90, "VCEngineApp_init", SN_NOWARN);
     set_name(0x426B20, "VCEngineApp_run", SN_NOWARN);
+    set_name(0x402A20, "VCEngineApp_tick", SN_NOWARN);
+    set_name(0x402830, "app_process_events", SN_NOWARN);
+    set_name(0x432D30, "event_dispatch", SN_NOWARN);
+    set_name(0x433180, "ev_activate", SN_NOWARN);
+    set_name(0x419A00, "event_target", SN_NOWARN);
+    set_name(0x440CB0, "StartupTask_start", SN_NOWARN);
+    set_name(0x45FD40, "event_post_type3", SN_NOWARN);
+    set_name(0x4405A0, "event_post_code", SN_NOWARN);
+    set_name(0x477000, "view_build_display", SN_NOWARN);
+    set_name(0x44D8B0, "IFaceLayoutDisplay_ctor", SN_NOWARN);
+    set_name(0x4D2FD0, "view_current_layout", SN_NOWARN);
     set_name(0x4857D0, "VCEngineApp_exit", SN_NOWARN);
     set_name(0x433480, "Application_set_startup", SN_NOWARN);
     set_name(0x4873D0, "app_alloc_memory", SN_NOWARN);

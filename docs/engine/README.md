@@ -10,3 +10,4 @@ shipped game and its data. File layouts are in [../formats](../formats).
 | [scene-graph.md](scene-graph.md) | Nodes, locations, viewpoints, views, navigation and media references |
 | [actions.md](actions.md) | Action data, expressions and the built-in function table |
 | [game-state.md](game-state.md) | Variables and enabled states in `XFILES.GAM` |
+| [runtime.md](runtime.md) | Start-up, main loop and the event system |
