@@ -171,8 +171,14 @@ A `VCAssetRef` names one piece of media:
 | string | Packed media description (below) |
 | u32 | ID of a `VCName` with a short label |
 | u32 | Flags |
-| u8 | Media kind: 3 for video, 9 for navigation loops, 67 for navigation stills |
-| u8 | Not yet known |
+| u8 | Media type (meaning per value not yet confirmed; navigation stills use 67) |
+| u8 | Category: the number of a `VCAssetCategory` |
+
+The 84 categories (`VCAssetCategory`: name, number) group the media by
+use and by place, for example 1 "Emotion Icons", 7 "Inventory", 8
+"Cursor", 18 "Field Office", 21 "Dialog box pieces", 37 "Game" (intro
+and main menu media), 63 "Location Text" (the location cards), 69
+"E-mail" and 75 "Interface". Many are marked "Unused" by the authors.
 
 The packed description is a sequence of tokens. Each token is a Pascal
 string: one length byte, then that many characters. Numbers are written
