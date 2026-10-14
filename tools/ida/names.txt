@@ -68,7 +68,15 @@
 0x482FE0 MainMenu_load_media   slot 22: loads the menu movies (asset refs 49583, 49585, 94320, 49589, 49587; 72895 when a game is running)
 0x44E990 MainMenu_on_command   slot 29: passes the command code to MainMenu_show
 0x44DB40 MainMenu_show         shows or hides the menu players and adds them to the display list at manager+0x7D4
-0x482500 media_player_create   creates a player object for a VCAssetRef
+0x482500 media_player_create   creates a player object for a VCAssetRef, with a parent canvas
+0x517190 media_object_create   factory: media object for a VCAssetRef and a time range
+0x422A00 Time_ctor             time value with a scale (1000 = milliseconds)
+0x4087C0 display_list_add      adds an item to a display list with a layer number
+0x44E5F0 MainMenu_left_player  menu+0x18
+0x43C3A0 MainMenu_mid_player   menu+0x1C
+0x50BC20 MainMenu_mid_sound    menu+0x20
+0x44E4C0 MainMenu_top_player   menu+0x24
+0x44E4A0 MainMenu_right_player menu+0x28
 0x471820 play_intro_sequence   called from VCEngineApp_init before the main menu
 0x4E5E30 dvd_play_title        plays a DVD title by name ("ddigital1", "teaser", "intro")
 0x461680 media_resolve_path_install

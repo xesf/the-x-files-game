@@ -71,6 +71,14 @@ static main()
     set_name(0x44E990, "MainMenu_on_command", SN_NOWARN);
     set_name(0x44DB40, "MainMenu_show", SN_NOWARN);
     set_name(0x482500, "media_player_create", SN_NOWARN);
+    set_name(0x517190, "media_object_create", SN_NOWARN);
+    set_name(0x422A00, "Time_ctor", SN_NOWARN);
+    set_name(0x4087C0, "display_list_add", SN_NOWARN);
+    set_name(0x44E5F0, "MainMenu_left_player", SN_NOWARN);
+    set_name(0x43C3A0, "MainMenu_mid_player", SN_NOWARN);
+    set_name(0x50BC20, "MainMenu_mid_sound", SN_NOWARN);
+    set_name(0x44E4C0, "MainMenu_top_player", SN_NOWARN);
+    set_name(0x44E4A0, "MainMenu_right_player", SN_NOWARN);
     set_name(0x471820, "play_intro_sequence", SN_NOWARN);
     set_name(0x4E5E30, "dvd_play_title", SN_NOWARN);
     set_name(0x461680, "media_resolve_path_install", SN_NOWARN);

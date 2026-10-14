@@ -126,8 +126,23 @@ references whose IDs are fixed in the code:
 The last entry shows that for PFF media the number in the media entry is
 the image index.
 
-`MainMenu_show` (`0x44DB40`) shows or hides these players and adds them
-to the display list at `manager + 0x7D4`.
+`MainMenu_show` (`0x44DB40`) shows or hides these players and adds two
+display items of the menu (at `menu + 0xA0` and `+0xD8`) to the display
+list at `manager + 0x7D4`, on layers 21 and 20.
+
+The menu object keeps its players at fixed offsets: left `+0x18`,
+middle loop `+0x1C`, its sound `+0x20`, top `+0x24`, right `+0x28`. The
+menu is animated by time: getters return segment times in milliseconds,
+and tables at `0x6C3F38`–`0x6C3FB8` passed to the players (method
+`0xF8`) hold rising 16-bit values, which look like segment start times.
+
+The menu is not described in the game data: no media list or interface
+item refers to its movies. The movies carry no position either (their
+track matrices are all zero). Their sizes fit a 640×480 screen: the left
+movie is 472×480 and the right one 168×480 (together 640 wide); the
+middle loop is 388×310 and the top rollover 352×60. The players are
+created with a canvas object (`menu + 0x44`) as parent; where that
+canvas places them is the next thing to read.
 
 ## Playing a clip with skip
 
