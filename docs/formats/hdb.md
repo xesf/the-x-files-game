@@ -87,7 +87,9 @@ Field types:
 | Number | 1, 2 or 4 | Big-endian integer |
 | Object ID | 4 | ID of another object |
 | String or blob | 8 | File offset and length of the data. The data is stored elsewhere, often right after the record. Strings include their terminating zero. |
-| List | 22 | An embedded list of object IDs (below) |
+| List | 26 | An embedded list of object IDs (below) |
+| Region | 12 | A cursor object ID, then a rectangle: left, top, right, bottom as 16-bit values |
+| Date | 4 | A Julian day number (2450938 is 6 May 1998) |
 
 ### Embedded lists
 
@@ -100,6 +102,7 @@ Field types:
 | 16 | 4 | 1 |
 | 20 | 1 | `0xFF` |
 | 21 | 1 | 0 |
+| 22 | 4 | 0; only from file format `0x501` |
 
 The list nodes use the index node layout. Leaf entries are 4-byte object
 IDs, in list order. A list can hold objects of different classes.
@@ -114,7 +117,7 @@ Object 24226 is a `VCActionList` (class `0x42`) at `0x1951A8`:
 ```
 c2 31 00 00 00 01                  flags, version 1
 00 00 00 05 00 19 51 d8            list: 5 IDs, first node at 0x1951D8
-00 00 00 0b 6e 75 6c 6c 00 00 00 01 ff 00
+00 00 00 0b 6e 75 6c 6c 00 00 00 01 ff 00 00 00 00 00
 ```
 
 The node at `0x1951D8` is a leaf with 5 IDs: 24227, 51985, 42470, 60543

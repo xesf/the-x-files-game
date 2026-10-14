@@ -243,6 +243,7 @@ xf_neo_list xf_neo_read_list(xf_neo_reader *r)
     xf_neo_u32(r); /* 1 */
     xf_neo_u8(r);  /* 0xFF */
     xf_neo_u8(r);
+    xf_neo_u32(r); /* tagged 'ID  ', present from file format 0x501 */
     return l;
 }
 
