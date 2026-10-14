@@ -13,6 +13,12 @@ typedef struct {
 } xf_mov_tts; /* time-to-sample run */
 
 typedef struct {
+    u32 duration;   /* in movie time units */
+    i32 media_time; /* start in media time units; -1 means an empty edit */
+    u32 rate;       /* 16.16 fixed point; 1.0 = normal speed */
+} xf_mov_edit;
+
+typedef struct {
     u32 first_chunk; /* 1-based, as stored */
     u32 samples_per_chunk;
     u32 desc_index;
@@ -48,6 +54,8 @@ typedef struct {
     u64 *chunk_offset;
     u32 stc_count;
     xf_mov_stc *stc;
+    u32 edit_count;     /* 0 means the media plays from its start */
+    xf_mov_edit *edits;
     u32 *chunk_samples; /* samples in each chunk */
     u32 *chunk_first;   /* index of the first sample of each chunk */
 } xf_mov_track;
@@ -67,6 +75,8 @@ xf_mov_track *xf_mov_find(xf_mov *mov, int kind);
 /* Returns the index of the sample shown at `time` (media units). */
 u32 xf_mov_sample_at(const xf_mov_track *t, u32 time);
 int xf_mov_is_sync(const xf_mov_track *t, u32 sample);
+/* Media time at which playback starts, from the first non-empty edit. */
+u32 xf_mov_media_start(const xf_mov_track *t);
 /* Returns the chunk that holds `sample`. */
 u32 xf_mov_chunk_at(const xf_mov_track *t, u32 sample);
 /* Reads sample `index` into `dst`, which must hold sample_size[index].

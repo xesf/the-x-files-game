@@ -118,6 +118,18 @@ static int parse_leaf(parse_ctx *c, u32 type, const u8 *p, u64 n)
         break;
     case XF_FOURCC('s', 't', 's', 'd'):
         return parse_stsd(t, p, n);
+    case XF_FOURCC('e', 'l', 's', 't'):
+        if (n < 8)
+            return -1;
+        count = xf_be32(p + 4);
+        ALLOC_TABLE(t->edits, count, n - 8, 12);
+        t->edit_count = count;
+        for (i = 0; i < count; i++) {
+            t->edits[i].duration = xf_be32(p + 8 + i * 12);
+            t->edits[i].media_time = (i32)xf_be32(p + 12 + i * 12);
+            t->edits[i].rate = xf_be32(p + 16 + i * 12);
+        }
+        break;
     case XF_FOURCC('s', 't', 't', 's'):
         if (n < 8)
             return -1;
@@ -383,6 +395,7 @@ static void free_track(xf_mov_track *t)
     free(t->sync);
     free(t->chunk_offset);
     free(t->stc);
+    free(t->edits);
     free(t->chunk_samples);
     free(t->chunk_first);
 }
@@ -482,4 +495,13 @@ u32 xf_mov_chunk_at(const xf_mov_track *t, u32 sample)
             hi = mid;
     }
     return lo;
+}
+
+u32 xf_mov_media_start(const xf_mov_track *t)
+{
+    u32 i;
+    for (i = 0; i < t->edit_count; i++)
+        if (t->edits[i].media_time >= 0)
+            return (u32)t->edits[i].media_time;
+    return 0;
 }
