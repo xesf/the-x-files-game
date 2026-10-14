@@ -160,8 +160,8 @@ The four functions in the table that the data never calls are
 - variable statements, on GAM variables and on list locals (parameters);
 - enable and disable;
 - go to view;
-- `DoActionList`, passing its second argument as integer local 0 of the
-  called list (still to be confirmed).
+- `DoActionList(trigger, action list)`: every call in the data names a
+  `VCTrigger` and then its action list, which runs.
 
 Media actions (types 1 and 7) name a `VCAssetRefList`; the explorer
 plays the first media reference of the list in the picture area, one

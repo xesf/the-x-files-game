@@ -11,8 +11,8 @@
 #define GAME_MAX_SPOTS 64
 #define GAME_HISTORY 64
 #define GAME_MAX_TIMERS 32
-#define GAME_MAX_IFACES 4
-#define GAME_MAX_IFACE_ITEMS 24
+#define GAME_MAX_IFACES 8
+#define GAME_MAX_IFACE_ITEMS 128
 #define GAME_MEDIA_QUEUE 32
 
 enum { SPOT_NAV, SPOT_EXPLORE, SPOT_CHARACTER };
@@ -49,7 +49,17 @@ typedef struct {
 typedef struct {
     u32 asset;
     int card;
+    u32 conversation; /* runs this conversation's end triggers when it ends */
 } game_media;
+
+/* How often each conversation was asked (VCConversationHistory). */
+typedef struct {
+    u32 conversation;
+    int count;
+} game_asked;
+
+#define GAME_MAX_ASKED 1024
+#define GAME_MAX_CHOICES 16
 
 typedef struct {
     char name[16];
@@ -62,9 +72,11 @@ typedef struct {
     vc_interp interp;
     vc_place_map places;
     u32 now;              /* game clock in ms, set by game_tick */
+    int disc;             /* disc the story is on, from SwapDisc */
 
     u32 view, view_triggers, pending_view;
     u32 view_epoch;       /* counts view changes, to notice nested ones */
+    u32 entering;         /* view being entered, while its triggers run */
     game_spot spots[GAME_MAX_SPOTS];
     int spot_count;
     u32 history[GAME_HISTORY];
@@ -85,6 +97,10 @@ typedef struct {
     int iface_count;
     u32 iface_serial;     /* changes when a layout opens or closes */
     u32 iface_hover;
+
+    u32 talking;          /* character view whose questions are offered, or 0 */
+    game_asked asked[GAME_MAX_ASKED];
+    int asked_count;
 
     game_registration regs[32];
     int reg_count;
@@ -120,6 +136,23 @@ int game_media_start(game *g, game_media *m);
 void game_media_end(game *g);
 int game_media_pending(const game *g);
 void game_queue_media(game *g, u32 asset);
+
+/* Conversations: clicking a character with no inventory item held
+ * offers its enabled questions. game_choices lists them; game_ask asks
+ * one. game_end_talk closes the choices. */
+int game_choices(game *g, u32 *ids, int max);
+int game_ask(game *g, u32 conversation);
+void game_end_talk(game *g);
+int game_times_asked(const game *g, u32 conversation);
+/* Inventory: the VCInventory objects the player carries (enabled ones),
+ * and a click on one of them in the inventory bar. */
+int game_inventory(game *g, u32 *ids, int max);
+int game_click_inventory(game *g, u32 id);
+/* Takes an inventory item in hand by name ("CaseFiles" for the GAM
+ * constant Inventory_iCaseFiles), or empties the hand with NULL. */
+int game_hold(game *g, const char *item);
+/* The value of the engine variable registered by Reg<name>, argument i. */
+i32 game_reg_value(game *g, const char *name, int i);
 
 /* The enabled media of the current view, in list order. */
 int game_view_media(game *g, u32 *ids, int max);

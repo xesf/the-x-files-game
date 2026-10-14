@@ -21,7 +21,9 @@ enum {
     VC_EXPLORABLE_LIST = 0x38,
     VC_HOTSPOT = 0x39,
     VC_CHAR_VIEW = 0x2D,
+    VC_CONVERSATION = 0x31,
     VC_ACTION = 0x41,
+    VC_INVENTORY = 0x4B,
     VC_IFACE_LAYOUT = 0x4E,
     VC_IFACE_ITEM = 0x4F,
     VC_ACTION_LIST = 0x42,
@@ -97,6 +99,19 @@ typedef struct {
     u32 conversations, idea_maps, assets, triggers;
 } vc_char_view;
 
+/* VCConversation: one question the player can ask a character. Fields
+ * in record order (0x5F6720 VCConversation_read). */
+typedef struct {
+    u32 name;     /* VCName: the question as text */
+    u32 icons;    /* VCAssetRefList: icon in the dialogue box */
+    u32 answer;   /* VCAssetRefList: clip played after the question */
+    u32 triggers; /* VCTriggerList */
+    u32 question; /* VCAssetRefList: Willmore asking */
+    u32 repeat;   /* VCAssetRefList: answer when asked again, or 0 */
+    u8 flag;
+} vc_conversation;
+
+int vc_read_conversation(const xf_neo_db *db, u32 id, vc_conversation *c);
 int vc_read_iface_item(const xf_neo_db *db, u32 id, vc_iface_item *it);
 int vc_read_char_view(const xf_neo_db *db, u32 id, vc_char_view *c);
 int vc_read_name(const xf_neo_db *db, u32 id, char *out, size_t size);

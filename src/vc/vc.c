@@ -75,6 +75,27 @@ int vc_read_iface_item(const xf_neo_db *db, u32 id, vc_iface_item *it)
     return r.error ? -1 : 0;
 }
 
+int vc_read_conversation(const xf_neo_db *db, u32 id, vc_conversation *c)
+{
+    xf_neo_reader r;
+    memset(c, 0, sizeof(*c));
+    if (open_obj(db, id, VC_CONVERSATION, &r) != 0)
+        return -1;
+    c->name = xf_neo_u32(&r);
+    c->icons = xf_neo_u32(&r);
+    c->answer = xf_neo_u32(&r);
+    c->triggers = xf_neo_u32(&r);
+    if (r.error)
+        return -1;
+    /* Later schema versions add the question, the repeat answer and a flag. */
+    c->question = xf_neo_u32(&r);
+    c->repeat = xf_neo_u32(&r);
+    c->flag = xf_neo_u8(&r);
+    if (r.error)
+        c->question = c->repeat = c->flag = 0;
+    return 0;
+}
+
 int vc_read_char_view(const xf_neo_db *db, u32 id, vc_char_view *c)
 {
     xf_neo_reader r;

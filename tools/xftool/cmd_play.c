@@ -53,6 +53,31 @@ static void print_state(game *g)
                    s->region.left, s->region.top);
         }
     }
+    {
+        u32 ids[64];
+        int n = game_inventory(g, ids, 64);
+        printf("  inventory:");
+        for (i = 0; i < n; i++) {
+            char nm[64] = "";
+            xf_neo_reader r;
+            if (xf_neo_object(&g->db, ids[i], &r, NULL, NULL) == 0)
+                vc_read_name(&g->db, xf_neo_u32(&r), nm, sizeof(nm));
+            printf(" %u:%s", ids[i], nm);
+        }
+        printf("\n");
+    }
+    if (g->talking) {
+        u32 ids[GAME_MAX_CHOICES];
+        int n = game_choices(g, ids, GAME_MAX_CHOICES);
+        printf("  talking to %u, %d questions\n", g->talking, n);
+        for (i = 0; i < n; i++) {
+            vc_conversation c;
+            char q[128] = "";
+            if (vc_read_conversation(&g->db, ids[i], &c) == 0)
+                vc_read_name(&g->db, c.name, q, sizeof(q));
+            printf("    ask %u  %s%s\n", ids[i], q, game_times_asked(g, ids[i]) ? "  (asked)" : "");
+        }
+    }
     for (k = 0; k < g->iface_count; k++) {
         printf("  interface %u:", g->ifaces[k].layout);
         for (i = 0; i < g->ifaces[k].count; i++)
@@ -142,6 +167,13 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
         return has_spot(g, (u32)a);
     if (strcmp(what, "nospot") == 0)
         return !has_spot(g, (u32)a);
+    if (strcmp(what, "choice") == 0 || strcmp(what, "nochoice") == 0) {
+        u32 ids[GAME_MAX_CHOICES];
+        int n = game_choices(g, ids, GAME_MAX_CHOICES), i, found = 0;
+        for (i = 0; i < n; i++)
+            found |= ids[i] == (u32)a;
+        return what[0] == 'c' ? found : !found;
+    }
     if (strcmp(what, "iface") == 0)
         return has_iface(g, (u32)a);
     if (strcmp(what, "noiface") == 0)
@@ -199,6 +231,18 @@ static int cmd_play(int argc, char **argv)
             ok = game_click(g, (int)a, (int)b);
         } else if (strcmp(cmd, "walk") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = walk(g, (u32)a);
+        } else if (strcmp(cmd, "ask") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            u32 ids[GAME_MAX_CHOICES];
+            int n = game_choices(g, ids, GAME_MAX_CHOICES), k;
+            ok = 0;
+            for (k = 0; k < n && !ok; k++)
+                ok = ids[k] == (u32)a;
+            if (ok)
+                ok = game_ask(g, (u32)a);
+        } else if (strcmp(cmd, "hold") == 0 && sscanf(line, "%*s %31s", what) == 1) {
+            ok = game_hold(g, strcmp(what, "none") == 0 ? NULL : what);
+        } else if (strcmp(cmd, "inv") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            ok = game_click_inventory(g, (u32)a);
         } else if (strcmp(cmd, "back") == 0) {
             game_back(g);
         } else if (strcmp(cmd, "wait") == 0 && sscanf(line, "%*s %ld", &a) == 1) {

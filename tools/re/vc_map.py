@@ -109,6 +109,21 @@ def view_name(v):
     return asset_name(a[0]).replace("Navs/", "") if a else "?"
 
 
+def name_text(n):
+    o = off(n)
+    if cls(n) != 0x2F or not o:
+        return "?"
+    m, k = u32(o + 6), u32(o + 10)
+    return d[m:m + k].split(b"\0")[0].decode("latin1")
+
+
+def character_name(cv):
+    o = off(cv)
+    ch = u32(o + 6) if o else 0
+    co = off(ch)
+    return name_text(u32(co + 6)) if cls(ch) == 0x2C and co else "?"
+
+
 def summary(acts, limit=6):
     s = "; ".join(acts[:limit])
     return s + ("; ..." if len(acts) > limit else "")
@@ -139,7 +154,7 @@ def main():
         for c in lst(chars):
             co = off(c)
             r = struct.unpack(">4h", d[co + 14:co + 22])
-            print("  character %d at (%d,%d)-(%d,%d): %s" % ((c,) + r + (summary(triggers(u32(co + 34))),)))
+            print("  character %d (%s) at (%d,%d)-(%d,%d): %s" % ((c, character_name(c)) + r + (summary(triggers(u32(co + 34))),)))
 
 
 main()

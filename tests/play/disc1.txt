@@ -43,4 +43,42 @@ expect view 889
 expect spot 22148               # Shanks
 expect spot 22428               # Skinner
 
-# Next: talk to Shanks and Skinner (conversations are not implemented).
+# Ask Skinner and Shanks everything.
+click 22428                     # Skinner
+expect choice 22432
+ask 22474                       # Are they romantically involved?
+ask 22432                       # Where were they last seen?
+ask 22446                       # What case were they working on?
+expect iface 43351              # the case file
+click 43370                     # put it down
+ask 22435                       # Can I get their cell phone numbers?
+ask 22453                       # Have they disappeared before?
+ask 22465                       # ... romantically involved in the past?
+click 22148                     # Shanks
+ask 22161                       # Should Cook be involved ...?
+ask 22167                       # ... anything unusual in Everett?
+wait 3000                       # Shanks's next question opens on a timer
+expect choice 22150
+ask 22150                       # What should I do with my current assignments?
+wait 3000                       # Skinner and Shanks wrap up: cases to Cook, APB
+expect choice 56174             # What were my instructions?
+
+# Cook's office: hand over the case files.
+walk 793
+hold CaseFiles
+click 21993                     # give Cook the case files
+hold none
+click 21993                     # talk to Cook
+expect choice 58356
+ask 58356                       # Will you file these APB's on Mulder and Scully?
+
+# Back in the hallway Skinner suggests the hotel where Mulder and Scully
+# stayed. The PDA map takes Willmore there.
+walk 713
+expect enabled 58742 1          # Everett is on the map now
+inv 17451                       # the PDA
+expect iface 34008              # PDA map: Puget Sound
+click 58742                     # Everett
+expect iface 34012
+click 34078                     # the Comity Inn
+expect view 6548                # Disc 2 starts at the Comity Inn

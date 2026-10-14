@@ -8,6 +8,7 @@ typedef struct {
     u32 id;
     i32 value;
     u8 type;    /* type flags from the GAM */
+    char name[32];
 } vc_var;
 
 typedef struct {
@@ -47,6 +48,8 @@ int vc_interp_init(vc_interp *in, const xf_neo_db *hdb, const xf_neo_db *gam, co
 void vc_interp_free(vc_interp *in);
 
 i32 vc_get_var(const vc_interp *in, u32 id);
+/* Finds a variable by its GAM name; returns its id, or 0. */
+u32 vc_find_var(const vc_interp *in, const char *name);
 void vc_set_var(vc_interp *in, u32 id, i32 value);
 /* 1 unless a VCEnabled object turns the HDB object off. */
 int vc_is_enabled(const vc_interp *in, u32 hdb_object);

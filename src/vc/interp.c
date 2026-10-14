@@ -53,7 +53,13 @@ int vc_interp_init(vc_interp *in, const xf_neo_db *hdb, const xf_neo_db *gam, co
         if (e->class_id == 0x53) {
             /* VCVariable: name, value, owner, owner class, type flags */
             vc_var *v = &in->vars[in->var_count++];
-            xf_neo_blob(gam, &r);
+            xf_neo_reader name = xf_neo_blob(gam, &r);
+            size_t i, k = 0;
+            /* Names are padded with leading spaces in the GAM. */
+            for (i = 0; name.p && name.p + i < name.end && name.p[i] && k + 1 < sizeof(v->name); i++)
+                if (name.p[i] != ' ' || k)
+                    v->name[k++] = (char)name.p[i];
+            v->name[k] = '\0';
             v->id = e->id;
             v->value = (i32)xf_neo_u32(&r);
             xf_neo_u32(&r);
@@ -128,6 +134,15 @@ void vc_set_var(vc_interp *in, u32 id, i32 value)
         v->value = value;
     else
         xf_warn("interp: no variable %u", id);
+}
+
+u32 vc_find_var(const vc_interp *in, const char *name)
+{
+    u32 i;
+    for (i = 0; i < in->var_count; i++)
+        if (strcmp(in->vars[i].name, name) == 0)
+            return in->vars[i].id;
+    return 0;
 }
 
 int vc_is_enabled(const vc_interp *in, u32 hdb_object)
@@ -279,11 +294,14 @@ static void run_action(vc_interp *in, locals *loc, u32 id)
         break;
     case VC_ACT_FUNCTION:
         if (strcmp(a.u.function.name, "DoActionList") == 0 && a.u.function.argc >= 1) {
-            /* The second argument becomes integer local 0 of the called list
-             * (to be confirmed in 0x480FF0 fn_DoActionList). */
-            i32 args[1];
-            args[0] = a.u.function.argc > 1 ? operand(in, loc, &a.u.function.args[1]) : 0;
-            run_list(in, (u32)operand(in, loc, &a.u.function.args[0]), args, 1);
+            /* 0x480FF0 fn_DoActionList(trigger, action list): every call in
+             * the data names a VCTrigger and then its action list. */
+            u32 list = (u32)operand(in, loc, &a.u.function.args[a.u.function.argc > 1 ? 1 : 0]);
+            if (vc_class(in->hdb, list) == VC_TRIGGER) {
+                xf_neo_reader r;
+                list = xf_neo_object(in->hdb, list, &r, NULL, NULL) == 0 ? xf_neo_u32(&r) : 0;
+            }
+            run_list(in, list, NULL, 0);
         } else if (!in->host.call_function || !in->host.call_function(in->host.user, &a)) {
             xf_debug("interp: function %s not implemented", a.u.function.name);
         }
@@ -329,9 +347,19 @@ void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)
     }
 }
 
-/* 0x4163D0 registers each action of a kind 7 trigger whose condition
- * compares the trigger context, keyed by the other operand; 0x42F8B0
- * turns a fired timer into an event that runs the matching actions. */
+/* 0x4163D0 files a kind 7 trigger under every timer number that one of
+ * its actions compares the event value with (0x480560). When that timer
+ * fires, the whole action list runs with the event value set, so the
+ * conditions on the event act as filters. */
+static int compares_event_with(const vc_expression *e, int timer)
+{
+    if (e->left.kind == VC_OPND_CONTEXT && e->right.kind != VC_OPND_CONTEXT)
+        return (i32)e->right.value == timer;
+    if (e->right.kind == VC_OPND_CONTEXT && e->left.kind != VC_OPND_CONTEXT)
+        return (i32)e->left.value == timer;
+    return 0;
+}
+
 void vc_run_timer_triggers(vc_interp *in, u32 trigger_list, int timer)
 {
     u32 ids[64], acts[MAX_LIST];
@@ -340,21 +368,22 @@ void vc_run_timer_triggers(vc_interp *in, u32 trigger_list, int timer)
     for (i = 0; i < n; i++) {
         xf_neo_reader r;
         u32 actions;
-        locals loc;
+        int listens = 0;
         if (vc_class(in->hdb, ids[i]) != VC_TRIGGER || xf_neo_object(in->hdb, ids[i], &r, NULL, NULL) != 0)
             continue;
         actions = xf_neo_u32(&r);
         if (xf_neo_u8(&r) != 7 || !vc_is_enabled(in, ids[i]))
             continue;
-        memset(&loc, 0, sizeof(loc));
-        in->context = timer;
         m = vc_read_list(in->hdb, actions, acts, MAX_LIST);
-        for (j = 0; j < m; j++) {
+        for (j = 0; j < m && !listens; j++) {
             vc_action a;
-            if (vc_read_action(in->hdb, acts[j], &a) == 0 && a.has_condition &&
-                (a.condition.left.kind == VC_OPND_CONTEXT || a.condition.right.kind == VC_OPND_CONTEXT))
-                run_action(in, &loc, acts[j]);
+            listens = vc_read_action(in->hdb, acts[j], &a) == 0 && a.has_condition &&
+                      compares_event_with(&a.condition, timer);
         }
+        if (!listens)
+            continue;
+        in->context = timer;
+        run_list(in, actions, NULL, 0);
     }
     in->context = saved;
 }
