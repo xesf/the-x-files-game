@@ -49,6 +49,8 @@ typedef struct {
     /* location card from StartVideoText, shown over the next clip */
     char card[256];
     int card_pending, card_active;
+    int card_slot;        /* media queue slot the card belongs to */
+    int playing_slot;     /* media queue slot now playing */
     u32 card_start;
     xf_font font;
     int have_font;
@@ -68,6 +70,7 @@ typedef struct {
 } explorer;
 
 static void stop_media(explorer *e);
+static void queue_media(explorer *e, u32 asset);
 
 static int open_nav_file(explorer *e, const char *name)
 {
@@ -170,11 +173,30 @@ static void host_play_media(void *user, u32 list, u8 selector)
         xf_info("play media list #%u: empty or missing", list);
         return;
     }
+    queue_media(e, ids[0]);
+    (void)selector;
+}
+
+/* Queues one media reference to play next. */
+static void queue_media(explorer *e, u32 asset)
+{
     if ((e->media_tail + 1) % 32 != e->media_head) {
-        e->media_queue[e->media_tail] = ids[0];
+        e->media_queue[e->media_tail] = asset;
         e->media_tail = (e->media_tail + 1) % 32;
     }
-    (void)selector;
+}
+
+/* 0x471820 play_intro_sequence: Fox logo, HyperBole logo, teaser and
+ * title, each skippable with a click. The DVD build plays its own DVD
+ * titles instead of the last two; we use the QuickTime files. */
+static void queue_intro(explorer *e)
+{
+    static const u32 intro[] = { 56003, 56002, 19668, 56001 };
+    size_t i;
+    if (getenv("XF_SKIP_INTRO"))
+        return;
+    for (i = 0; i < XF_COUNT(intro); i++)
+        queue_media(e, intro[i]);
 }
 
 /* Starts the next queued clip that exists on disk. */
@@ -184,6 +206,7 @@ static void start_next_media(explorer *e)
         vc_asset_ref a;
         u32 id = e->media_queue[e->media_head];
         int j;
+        e->playing_slot = e->media_head;
         e->media_head = (e->media_head + 1) % 32;
         if (vc_read_asset_ref(&e->db, id, &a) != 0)
             continue;
@@ -193,7 +216,7 @@ static void start_next_media(explorer *e)
                 continue;
             if (xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
                 e->playing = 1;
-                if (e->card_pending) {
+                if (e->card_pending && e->playing_slot == e->card_slot) {
                     e->card_pending = 0;
                     e->card_active = 1;
                     e->card_start = plat_ticks_ms();
@@ -285,6 +308,7 @@ static int host_call_function(void *user, const vc_action *a)
         format_location_card(e, a->u.function.args[0].value, arg_value(e, &a->u.function.args[1]),
                              arg_value(e, &a->u.function.args[2]), arg_value(e, &a->u.function.args[3]) != 0);
         e->card_pending = 1;
+        e->card_slot = (e->media_tail + 31) % 32; /* the clip queued just before */
         xf_info("location card: %s", e->card);
         return 1;
     }
@@ -403,10 +427,18 @@ static void draw(explorer *e, int mx, int my)
     if (e->playing) {
         const u32 *f = xf_player_frame(&e->player);
         const char *sub = xf_player_subtitle(&e->player);
-        if (f)
-            for (y = 0; y < XF_MIN(e->player.video.height, SCREEN_H - PICTURE_Y); y++)
-                memcpy(&e->fb[(PICTURE_Y + y) * SCREEN_W + PICTURE_X], f + y * e->player.video.width,
-                       (size_t)XF_MIN(e->player.video.width, PICTURE_W) * 4);
+        if (f) {
+            /* Scene clips fill the picture area; other clips (logos, titles)
+             * are centred on the screen. */
+            int w = XF_MIN(e->player.video.width, SCREEN_W), h = XF_MIN(e->player.video.height, SCREEN_H);
+            int x0 = (SCREEN_W - w) / 2, y0 = (SCREEN_H - h) / 2;
+            if (w == PICTURE_W && h == PICTURE_H) {
+                x0 = PICTURE_X;
+                y0 = PICTURE_Y;
+            }
+            for (y = 0; y < h; y++)
+                memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], f + y * e->player.video.width, (size_t)w * 4);
+        }
         if (sub && e->have_font)
             xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
                                  sub, 0xFFFFFF, 0x000000);
@@ -482,8 +514,10 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
         e->have_font = xf_font_load(&e->font, path) == 0;
-    if (start_view == 0)
+    if (start_view == 0) {
+        queue_intro(e);
         start_view = new_game(e);
+    }
     if (enter_view(e, start_view) != 0) {
         xf_neo_close(&e->db);
         free(e);

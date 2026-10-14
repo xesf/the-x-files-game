@@ -98,6 +98,12 @@ title `ddigital1`; when it exists, it plays the DVD titles `teaser` and
 Each media file is looked up in the install folder first and on the CD
 second (`0x461680`, `0x4616F0`).
 
+The clips have different sizes: the Fox logo is 140×144, the HyperBole
+logo and the title 560×400, the teaser 600×240. Our engine plays the
+intro before a new game (`xfiles --explore <game> 0`; set
+`XF_SKIP_INTRO=1` to skip it) and centres clips that are not 600×240.
+Where the original places them is not yet read from the code.
+
 ## Main menu
 
 The start-up event posted by `VCEngineApp_init` is the main menu
