@@ -1,0 +1,12 @@
+/xfiles.exe
+/ida/
+*.i64
+*.idb
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+notes/private/
+/build/
+.DS_Store
