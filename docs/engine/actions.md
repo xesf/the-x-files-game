@@ -13,6 +13,22 @@ The engine reads the action in `0x4138E0 VCAction_read` and byte-swaps
 the data for its own use in `0x43B0F0 VCAction_swap_payload`. On disk the
 data is big-endian like the rest of the HDB.
 
+The editor code compiled into the engine confirms the data size of each
+type: `0x5DB1F0 VCAction_set_arg_count` sets 11, 5, 6, 9, 16, 5,
+16 + 5 × arguments and 10 bytes for types 0 to 7, plus 12 when there is a
+condition. `0x5D8E50 VCAction_describe` builds the text "If … then …" for
+an action; for timers it writes "expires:" and "(periodic)", so the timer
+control byte includes a periodic flag.
+
+## Running actions
+
+`fn_DoActionList` (the built-in `DoActionList`) evaluates its arguments
+and calls `0x47BD40 vc_queue_action_list`. That function fetches the
+action list and the trigger, then wraps each action in a 0x140-byte
+queued-action object (`0x40C2B0`, vtable `0x65DBA8`) and pushes it on a
+queue. Actions therefore do not run at once; a later step processes the
+queue. Where that happens is not yet traced.
+
 ## Expressions
 
 Conditions and variable statements use the same 11-byte expression (a

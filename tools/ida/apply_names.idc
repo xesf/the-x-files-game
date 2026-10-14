@@ -23,6 +23,15 @@ static main()
     set_name(0x5EDFB0, "VCView_read", SN_NOWARN);
     set_name(0x4138E0, "VCAction_read", SN_NOWARN);
     set_name(0x43B0F0, "VCAction_swap_payload", SN_NOWARN);
+    set_name(0x5D8E50, "VCAction_describe", SN_NOWARN);
+    set_name(0x5DB1F0, "VCAction_set_arg_count", SN_NOWARN);
+    set_name(0x5D9AB0, "VCAction_set_has_condition", SN_NOWARN);
+    set_name(0x4420A0, "neo_get_object", SN_NOWARN);
+    set_name(0x47BD40, "vc_queue_action_list", SN_NOWARN);
+    set_name(0x40C2B0, "QueuedAction_ctor", SN_NOWARN);
+    set_name(0x458780, "action_queue_push", SN_NOWARN);
+    set_name(0x47CE30, "fn_get_argument", SN_NOWARN);
+    set_name(0x5E42C0, "operand_to_int", SN_NOWARN);
     set_name(0x606EB0, "VCTitle_create", SN_NOWARN);
     set_name(0x4660D0, "VCNode_create", SN_NOWARN);
     set_name(0x42FB00, "VCLocaton_create", SN_NOWARN);
