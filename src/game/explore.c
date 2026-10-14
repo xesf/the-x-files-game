@@ -422,6 +422,128 @@ static void stop_sound(explorer *e)
     e->sound_open = 0;
 }
 
+/* --- Questions and inventory ----------------------------------------- */
+
+/* Until the dialogue box and the inventory art are reverse engineered,
+ * the explorer lists questions and inventory items as text: questions
+ * under the picture, the inventory along the bottom of the screen. */
+#define UI_TEXT 15
+#define CHOICE_Y (PICTURE_Y + PICTURE_H + 8)
+#define CHOICE_H 18
+#define INV_Y 448
+
+typedef struct {
+    int x, y, w, h;
+    u32 id;
+} ui_button;
+
+static int item_name(explorer *e, u32 id, char *out, size_t size)
+{
+    xf_neo_reader r;
+    out[0] = '\0';
+    if (vc_class(&e->g->db, id) == VC_CONVERSATION) {
+        vc_conversation c;
+        return vc_read_conversation(&e->g->db, id, &c) == 0 ? vc_read_name(&e->g->db, c.name, out, size) : -1;
+    }
+    if (xf_neo_object(&e->g->db, id, &r, NULL, NULL) != 0)
+        return -1;
+    return vc_read_name(&e->g->db, xf_neo_u32(&r), out, size);
+}
+
+/* Lays out the question buttons, or the inventory buttons. */
+static int layout_buttons(explorer *e, int questions, ui_button *b, int max)
+{
+    u32 ids[64];
+    int n = questions ? game_choices(e->g, ids, XF_MIN(max, GAME_MAX_CHOICES)) : game_inventory(e->g, ids, 64);
+    int i, k = 0, x = 8, y = questions ? CHOICE_Y : INV_Y;
+    for (i = 0; i < n && k < max; i++) {
+        char name[128];
+        int w;
+        item_name(e, ids[i], name, sizeof(name));
+        w = e->have_font ? xf_text_width(&e->font, UI_TEXT, name, strlen(name)) : 60;
+        if (questions) {
+            b[k].x = 24;
+            b[k].y = y + k * CHOICE_H;
+        } else {
+            if (x + w > SCREEN_W - 8) {
+                x = 8;
+                y += CHOICE_H;
+            }
+            b[k].x = x;
+            b[k].y = y;
+            x += w + 14;
+        }
+        b[k].w = w;
+        b[k].h = CHOICE_H;
+        b[k].id = ids[i];
+        k++;
+    }
+    return k;
+}
+
+static const ui_button *button_at(const ui_button *b, int n, int x, int y)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (x >= b[i].x && x < b[i].x + b[i].w && y >= b[i].y && y < b[i].y + b[i].h)
+            return &b[i];
+    return NULL;
+}
+
+static void draw_buttons(explorer *e, int questions, int mx, int my)
+{
+    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    ui_button b[64];
+    i32 held = game_reg_value(e->g, "RegCurrInvVar", 0);
+    int n = layout_buttons(e, questions, b, 64), i;
+    if (!e->have_font)
+        return;
+    for (i = 0; i < n; i++) {
+        char name[128];
+        u32 color = 0xC0C0C0;
+        int over = mx >= b[i].x && mx < b[i].x + b[i].w && my >= b[i].y && my < b[i].y + b[i].h;
+        item_name(e, b[i].id, name, sizeof(name));
+        if (questions && game_times_asked(e->g, b[i].id))
+            color = 0x808080;
+        if (!questions) {
+            /* The item in hand: its OnInvClick argument is in the triggers;
+             * compare by name with the Inventory_i constant instead. */
+            char var[48], *p, *q;
+            snprintf(var, sizeof(var), "Inventory_i%s", name);
+            for (p = q = var; *p; p++)
+                if (*p != ' ' && *p != '-')
+                    *q++ = *p;
+            *q = '\0';
+            if (held && vc_get_var(&e->g->interp, vc_find_var(&e->g->interp, var)) == held)
+                color = 0xFFE040;
+        }
+        if (over)
+            color = 0xFFFFFF;
+        xf_text_draw(&s, &e->font, UI_TEXT, b[i].x, b[i].y + 14, name, strlen(name), color);
+    }
+}
+
+/* Returns 1 when the click hit a question or an inventory item. */
+static int click_buttons(explorer *e, int x, int y)
+{
+    ui_button b[64];
+    const ui_button *hit;
+    int n;
+    if (e->g->talking) {
+        n = layout_buttons(e, 1, b, 64);
+        if ((hit = button_at(b, n, x, y)) != NULL) {
+            game_ask(e->g, hit->id);
+            return 1;
+        }
+    }
+    n = layout_buttons(e, 0, b, 64);
+    if ((hit = button_at(b, n, x, y)) != NULL) {
+        game_click_inventory(e->g, hit->id);
+        return 1;
+    }
+    return 0;
+}
+
 /* --- Drawing --------------------------------------------------------- */
 
 static void frame_rect(explorer *e, const vc_region *r, u32 color)
@@ -496,11 +618,11 @@ static void draw(explorer *e, int mx, int my)
         int inside = mx >= r->left && mx < r->right && my >= r->top && my < r->bottom;
         frame_rect(e, r, inside ? 0xFFFFFF : colors[g->spots[i].kind]);
     }
-    if (e->have_font) {
-        static const char help[] = "green: move  yellow: examine  cyan: character  right click: back";
+    if (e->have_font)
         xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
-        xf_text_draw(&s, &e->font, 14, 8, 470, help, sizeof(help) - 1, 0x808080);
-    }
+    if (g->talking)
+        draw_buttons(e, 1, mx, my);
+    draw_buttons(e, 0, mx, my);
     draw_ifaces(e);
 }
 
@@ -708,10 +830,21 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
                 if (!e->card_active)
                     finish_media(e); /* skip the clip; the location card cannot be skipped */
             } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
-                game_click(e->g, ev.x, ev.y);
+                /* Layout items first (a close-up covers everything), then
+                 * questions and inventory, then the view. */
+                if (game_iface_item_at(e->g, ev.x, ev.y))
+                    game_click(e->g, ev.x, ev.y);
+                else if (!click_buttons(e, ev.x, ev.y) && !game_click(e->g, ev.x, ev.y))
+                    game_end_talk(e->g);
             } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
                        (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
-                game_back(e->g);
+                /* Right click: put the item in hand away, stop talking, or go back. */
+                if (game_reg_value(e->g, "RegCurrInvVar", 0) != game_reg_value(e->g, "RegCurrInvVar", 1))
+                    game_hold(e->g, NULL);
+                else if (e->g->talking)
+                    game_end_talk(e->g);
+                else
+                    game_back(e->g);
             }
         }
         if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
