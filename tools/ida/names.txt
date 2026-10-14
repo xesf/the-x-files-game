@@ -42,6 +42,18 @@
 0x420000 act_enable            action type 3
 0x46A0D0 act_set_view          action type 4
 0x44E760 act_interface         action type 5
+# Start-up path: WinMain -> app object -> init -> first task
+0x654700 _WinMain@16            calls app slots 1 (init), 2 (run), 4 (exit)
+0x401320 app_get               returns g_app
+0x493750 Application_ctor      base application object, vtable 0x65F528
+0x42F190 VCEngineApp_ctor      game application object, vtable 0x65B060
+0x411F90 VCEngineApp_init      slot 1: checks, fonts, display, database, first task
+0x426B20 VCEngineApp_run       slot 2
+0x4857D0 VCEngineApp_exit      slot 4
+0x433480 Application_set_startup
+0x4873D0 app_alloc_memory      fails with "Insufficient memory to load The X-Files"
+0x48EE40 StartupTask_ctor      0x114-byte task pushed on app+0x268, vtable 0x65D8C0
+0x44AC50 StartupTask_run       slot 11 of the startup task
 # Class factories (class ID in the comment)
 0x606EB0 VCTitle_create  class 0x27
 0x4660D0 VCNode_create  class 0x28
@@ -299,4 +311,5 @@
 0x4BCCC0 fn_TakePhoto  entry 0x6BE7C0
 0x4BCD40 fn_TextOn  entry 0x6BE7D4
 0x4BCE10 fn_WillmoreSleeps  entry 0x6BE7E8
+data 0x6B6FEC g_app  the application object
 data 0x6B7A14 g_vc_root  global set after the database opens

@@ -45,6 +45,17 @@ static main()
     set_name(0x420000, "act_enable", SN_NOWARN);
     set_name(0x46A0D0, "act_set_view", SN_NOWARN);
     set_name(0x44E760, "act_interface", SN_NOWARN);
+    set_name(0x654700, "_WinMain@16", SN_NOWARN);
+    set_name(0x401320, "app_get", SN_NOWARN);
+    set_name(0x493750, "Application_ctor", SN_NOWARN);
+    set_name(0x42F190, "VCEngineApp_ctor", SN_NOWARN);
+    set_name(0x411F90, "VCEngineApp_init", SN_NOWARN);
+    set_name(0x426B20, "VCEngineApp_run", SN_NOWARN);
+    set_name(0x4857D0, "VCEngineApp_exit", SN_NOWARN);
+    set_name(0x433480, "Application_set_startup", SN_NOWARN);
+    set_name(0x4873D0, "app_alloc_memory", SN_NOWARN);
+    set_name(0x48EE40, "StartupTask_ctor", SN_NOWARN);
+    set_name(0x44AC50, "StartupTask_run", SN_NOWARN);
     set_name(0x606EB0, "VCTitle_create", SN_NOWARN);
     set_name(0x4660D0, "VCNode_create", SN_NOWARN);
     set_name(0x42FB00, "VCLocaton_create", SN_NOWARN);
@@ -300,6 +311,7 @@ static main()
     set_name(0x4BCCC0, "fn_TakePhoto", SN_NOWARN);
     set_name(0x4BCD40, "fn_TextOn", SN_NOWARN);
     set_name(0x4BCE10, "fn_WillmoreSleeps", SN_NOWARN);
+    set_name(0x6B6FEC, "g_app", SN_NOWARN);
     set_name(0x6B7A14, "g_vc_root", SN_NOWARN);
     msg("names applied\n");
 }
