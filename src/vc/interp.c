@@ -263,6 +263,10 @@ static void run_action(vc_interp *in, locals *loc, u32 id)
         if (in->host.timer)
             in->host.timer(in->host.user, a.u.timer.id, a.u.timer.duration, a.u.timer.control);
         break;
+    case VC_ACT_INTERFACE: /* 0x44E760 act_interface */
+        if (in->host.interface)
+            in->host.interface(in->host.user, a.u.iface.id, a.u.iface.control);
+        break;
     case VC_ACT_SET_VIEW:
         if (in->host.go_to_view)
             in->host.go_to_view(in->host.user, a.u.set_view.view);

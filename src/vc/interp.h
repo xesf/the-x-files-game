@@ -23,6 +23,8 @@ typedef struct {
     void (*play_media)(void *user, u32 asset_ref, u8 selector);
     /* Timer action: control 0 starts timer `id` (bit 0x80: periodic), 1 stops it. */
     void (*timer)(void *user, u8 id, u32 ms, u8 control);
+    /* Interface action: control 0 shows layout `id`, 1 closes it. */
+    void (*interface)(void *user, u32 id, u8 control);
     /* Returns 1 when the function was handled. */
     int (*call_function)(void *user, const vc_action *a);
 } vc_host;

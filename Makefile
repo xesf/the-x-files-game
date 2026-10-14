@@ -56,14 +56,17 @@ test: $(BUILD)/xftest
 
 # Run against a game install. Override on the command line, for example:
 #   make run GAME_DIR=/path/to/game VIEW=1236 DISC=2
-# VIEW=0 starts a new game from the title object.
+# VIEW=0 starts a new game from the title object. MEDIA_DIR is searched
+# for clips missing from GAME_DIR: the DVD build streams its video from
+# the disc, so the CD install provides the QuickTime clips.
 GAME_DIR ?= ../Installations/x-files-en-dvd
+MEDIA_DIR ?= ../Installations/x-files-en
 VIEW     ?= 0
 DISC     ?= 1
 MOVIE    ?= ../Installations/x-files-en/xv/19650.xmv
 
 run: $(BUILD)/xfiles
-	$(BUILD)/xfiles --explore "$(GAME_DIR)" $(VIEW) $(DISC)
+	$(BUILD)/xfiles --explore "$(GAME_DIR)" $(VIEW) $(DISC) --media "$(MEDIA_DIR)"
 
 play: $(BUILD)/xfiles
 	$(BUILD)/xfiles --play "$(MOVIE)" --data "$(GAME_DIR)"

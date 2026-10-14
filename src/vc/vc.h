@@ -20,7 +20,10 @@ enum {
     VC_EXPLORABLE = 0x37,
     VC_EXPLORABLE_LIST = 0x38,
     VC_HOTSPOT = 0x39,
+    VC_CHAR_VIEW = 0x2D,
     VC_ACTION = 0x41,
+    VC_IFACE_LAYOUT = 0x4E,
+    VC_IFACE_ITEM = 0x4F,
     VC_ACTION_LIST = 0x42,
     VC_TRIGGER = 0x51,
     VC_TRIGGER_LIST = 0x52,
@@ -77,6 +80,25 @@ int vc_read_nav(const xf_neo_db *db, u32 id, vc_nav *n);
 int vc_read_hotspot(const xf_neo_db *db, u32 id, vc_hotspot *h);
 int vc_read_asset_ref(const xf_neo_db *db, u32 id, vc_asset_ref *a);
 /* Copies the first string of a VCName into `out`. */
+/* VCInterfaceItem: a region of an interface layout with its media and
+ * triggers. `order` is the low byte of the last field: items with a
+ * higher value are in front. */
+typedef struct {
+    vc_region region;
+    u32 assets;   /* VCAssetRefList */
+    u32 triggers; /* VCTriggerList */
+    u16 flags;
+} vc_iface_item;
+
+/* VCCharView: a character standing in a view. */
+typedef struct {
+    u32 character;
+    vc_region region;
+    u32 conversations, idea_maps, assets, triggers;
+} vc_char_view;
+
+int vc_read_iface_item(const xf_neo_db *db, u32 id, vc_iface_item *it);
+int vc_read_char_view(const xf_neo_db *db, u32 id, vc_char_view *c);
 int vc_read_name(const xf_neo_db *db, u32 id, char *out, size_t size);
 /* Reads the IDs of a list object (any class whose first field is a list).
  * Returns the number of IDs written, up to `max`, or -1. */

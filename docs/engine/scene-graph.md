@@ -247,21 +247,55 @@ track shows the picture at that time (see
 
 The meaning of the other numbers is not yet confirmed.
 
+## Interfaces
+
+Close-ups, books, the PDA and other screens are interface layouts. An
+interface action (type 5) shows a `VCIFaceLayout` with control 0 and
+closes it with control 1 (`act_interface`, 0x44E760). Showing a layout
+that is already up does nothing.
+
+A `VCIFaceLayout` holds a list of `VCInterfaceItem` objects. Each item
+has these fields:
+
+| Field | Content |
+|---|---|
+| Region | Cursor and rectangle in screen coordinates |
+| u32 | `VCAssetRefList` with the picture, often an image of `x.pff` |
+| u32 | `VCTriggerList` |
+| u16 | Flags in the high byte (0x80 in all items seen so far); drawing order in the low byte |
+
+Items with a higher order are in front. A close-up typically has two
+items. The picture has order 200. Behind it, a full-screen item with
+order 199 closes the layout when the player clicks outside the picture.
+Book pages add page-turn items with order 100 at the edges of the
+picture. Those items have triggers and the picture has none, so the
+explorer gives a click to the front item that has triggers. While a
+layout is up, it takes every click. Rollover highlights are items that
+start disabled: the kind 4 trigger of an item enables its highlight and
+the kind 5 trigger disables it again.
+
 ## Exploring
 
-`xfiles --explore` shows a view's still and outlines its hotspots: green
-for moves, yellow for things to examine, cyan for characters. Clicking a
-move goes to its target view; a right click goes back.
+`xfiles --explore` shows a view's still and moving media and outlines
+its hotspots: green for moves, yellow for things to examine, cyan for
+characters. Clicking runs the click triggers of the hotspot: moves go
+to their target view, objects play clips or open close-ups, and
+characters start their scenes. A right click goes back.
 
 ```sh
 build/xfiles --explore /path/to/game 1236      # Field Office, disc 1
 build/xfiles --explore /path/to/game 1236 2    # the same view on disc 2
+build/xfiles --explore /path/to/dvd 0 1 --media /path/to/cd   # DVD data, CD clips
 ```
 
+The DVD build streams its video from the disc, so its install folder
+has no `XV` clips. The DVD database names the same `XV/<id>.xmv` files
+as the CD version. `--media` adds folders to search for media files
+that are missing from the game folder. `make run` uses the English CD
+install by default.
+
 Following every move from view 1236 reaches 76 views of the Field Office,
-none of them a dead end. 47 have a navigation still on disc 1 and 50 on
-disc 2; the others show loops or video, which the explorer does not play
-yet.
+none of them a dead end.
 
 ## Tools
 

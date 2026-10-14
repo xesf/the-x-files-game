@@ -63,6 +63,32 @@ int vc_read_hotspot(const xf_neo_db *db, u32 id, vc_hotspot *h)
     return r.error ? -1 : 0;
 }
 
+int vc_read_iface_item(const xf_neo_db *db, u32 id, vc_iface_item *it)
+{
+    xf_neo_reader r;
+    if (open_obj(db, id, VC_IFACE_ITEM, &r) != 0)
+        return -1;
+    it->region = read_region(&r);
+    it->assets = xf_neo_u32(&r);
+    it->triggers = xf_neo_u32(&r);
+    it->flags = xf_neo_u16(&r);
+    return r.error ? -1 : 0;
+}
+
+int vc_read_char_view(const xf_neo_db *db, u32 id, vc_char_view *c)
+{
+    xf_neo_reader r;
+    if (open_obj(db, id, VC_CHAR_VIEW, &r) != 0)
+        return -1;
+    c->character = xf_neo_u32(&r);
+    c->region = read_region(&r);
+    c->conversations = xf_neo_u32(&r);
+    c->idea_maps = xf_neo_u32(&r);
+    c->assets = xf_neo_u32(&r);
+    c->triggers = xf_neo_u32(&r);
+    return r.error ? -1 : 0;
+}
+
 /* Reads one token: a length byte and that many characters. */
 static int token(const u8 **p, const u8 *end, char *out, size_t size)
 {

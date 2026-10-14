@@ -6,6 +6,8 @@
 
 #include "gfx/text.h"
 #include "media/mov.h"
+#include "media/pff.h"
+#include "media/pict.h"
 #include "media/player.h"
 #include "media/video.h"
 #include "platform/plat.h"
@@ -89,8 +91,25 @@ typedef struct {
 
 #define MAX_TIMERS 32
 
+/* An interface layout on screen (0x44D8B0 IFaceLayoutDisplay_ctor): its
+ * items with their pictures, drawn over the view. */
+typedef struct {
+    u32 id;
+    vc_iface_item item;
+    xf_image img;
+} iface_item;
+
+typedef struct {
+    u32 layout;
+    int count;
+    iface_item items[24];
+} iface_display;
+
+#define MAX_IFACES 4
+
 typedef struct {
     const char *data_dir;
+    const char *const *media_dirs;
     int disc;
     xf_neo_db db;
     xf_neo_db gam;
@@ -135,6 +154,11 @@ typedef struct {
     int spot_count;
     u32 history[HISTORY];
     int history_len;
+    iface_display ifaces[MAX_IFACES];
+    int iface_count;
+    u32 iface_hover;      /* interface item under the mouse */
+    xf_pff pff;           /* x.pff, for interface pictures */
+    int pff_open;
     game_timer timers[MAX_TIMERS];
     int timer_count;
     /* moving media of the view (loops, clips), drawn over the still */
@@ -155,10 +179,22 @@ static void after_triggers(explorer *e);
 static int play_sound(explorer *e, u32 asset);
 static void stop_sound(explorer *e);
 
+/* Finds a media file in the game folder, then in the extra media folders. */
+static int resolve_media(const explorer *e, const char *name, char *out, size_t size)
+{
+    int i;
+    if (xf_path_resolve(e->data_dir, name, out, size) == 0)
+        return 0;
+    for (i = 0; e->media_dirs && e->media_dirs[i]; i++)
+        if (xf_path_resolve(e->media_dirs[i], name, out, size) == 0)
+            return 0;
+    return -1;
+}
+
 static int open_nav_file(explorer *e, const char *name)
 {
     char path[1024];
-    if (xf_path_resolve(e->data_dir, name, path, sizeof(path)) != 0)
+    if (resolve_media(e, name, path, sizeof(path)) != 0)
         return -1;
     if (e->nav_open && strcmp(path, e->nav_path) == 0)
         return 0;
@@ -251,7 +287,7 @@ static void load_picture(explorer *e, const vc_view *v)
                         snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->view, m->disc,
                                  a.logical);
                     }
-                } else if (xf_path_resolve(e->data_dir, m->path, path, sizeof(path)) == 0 &&
+                } else if (resolve_media(e, m->path, path, sizeof(path)) == 0 &&
                            open_anim(e, path, m->start, m->end, (a.kind & 0x08) != 0) == 0) {
                     done = 1;
                     if (!e->have_picture)
@@ -299,8 +335,17 @@ static void add_spots(explorer *e, u32 list, int kind)
              * views have one 4-byte field before it. */
             if (!vc_is_enabled(&e->interp, ids[i]) || xf_neo_object(&e->db, ids[i], &r, NULL, NULL) != 0)
                 continue;
-            if (kind == SPOT_CHARACTER)
-                xf_neo_u32(&r);
+            if (kind == SPOT_CHARACTER) {
+                vc_char_view c;
+                if (vc_read_char_view(&e->db, ids[i], &c) != 0)
+                    continue;
+                s->region = c.region;
+                s->target = ids[i];
+                s->triggers = c.triggers;
+                s->kind = kind;
+                e->spot_count++;
+                continue;
+            }
             s->region.cursor = xf_neo_u32(&r);
             s->region.left = (i16)xf_neo_u16(&r);
             s->region.top = (i16)xf_neo_u16(&r);
@@ -334,7 +379,7 @@ static int play_sound(explorer *e, u32 asset)
         xf_player_close(&e->sound);
     e->sound_open = 0;
     for (j = 0; j < a.entry_count && !e->sound_open; j++)
-        if (xf_path_resolve(e->data_dir, a.entries[j].path, e->sound_path, sizeof(e->sound_path)) == 0 &&
+        if (resolve_media(e, a.entries[j].path, e->sound_path, sizeof(e->sound_path)) == 0 &&
             xf_player_open(&e->sound, e->sound_path, plat_ticks_ms()) == 0)
             e->sound_open = 1;
     e->sound_loop = strstr(a.logical, "/Loops/") != NULL;
@@ -357,6 +402,156 @@ static void stop_sound(explorer *e)
     if (e->sound_open)
         xf_player_close(&e->sound);
     e->sound_open = 0;
+}
+
+/* Loads the picture of an interface item: the first media of its list,
+ * an image of a .pff bundle or a frame of a movie. */
+static void load_item_picture(explorer *e, iface_item *it)
+{
+    u32 ids[8];
+    int n = vc_read_list(&e->db, it->item.assets, ids, 8), i, j;
+    memset(&it->img, 0, sizeof(it->img));
+    for (i = 0; i < n && !it->img.pixels; i++) {
+        vc_asset_ref a;
+        if (vc_read_asset_ref(&e->db, ids[i], &a) != 0)
+            continue;
+        for (j = 0; j < a.entry_count && !it->img.pixels; j++) {
+            const vc_media_entry *m = &a.entries[j];
+            const char *ext = strrchr(m->path, '.');
+            char path[1024];
+            if (resolve_media(e, m->path, path, sizeof(path)) != 0)
+                continue;
+            if (ext && strcmp(ext, ".pff") == 0) {
+                u32 size;
+                u8 *data;
+                if (!e->pff_open)
+                    e->pff_open = xf_pff_open(&e->pff, path) == 0;
+                data = e->pff_open ? xf_pff_read(&e->pff, m->start, &size) : NULL;
+                if (data && xf_pict_decode(data, size, &it->img) != 0)
+                    memset(&it->img, 0, sizeof(it->img));
+                free(data);
+            } else {
+                int w = it->item.region.right - it->item.region.left;
+                int h = it->item.region.bottom - it->item.region.top;
+                if (open_nav_file(e, m->path) == 0 && w > 0 && h > 0) {
+                    it->img.pixels = calloc((size_t)w * h, 4);
+                    it->img.width = w;
+                    it->img.height = h;
+                    if (it->img.pixels && xf_movie_frame_at(&e->nav, m->start, it->img.pixels, w, h) != 0) {
+                        free(it->img.pixels);
+                        memset(&it->img, 0, sizeof(it->img));
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void close_iface(explorer *e, int k)
+{
+    int i;
+    for (i = 0; i < e->ifaces[k].count; i++)
+        free(e->ifaces[k].items[i].img.pixels);
+    e->ifaces[k] = e->ifaces[--e->iface_count];
+}
+
+/* 0x44E760 act_interface: control 0 shows a VCIFaceLayout unless it is
+ * already up, 1 closes it. */
+static void host_interface(void *user, u32 id, u8 control)
+{
+    explorer *e = user;
+    u32 ids[24];
+    int k, n, i;
+    for (k = 0; k < e->iface_count; k++)
+        if (e->ifaces[k].layout == id)
+            break;
+    if (control == 1) {
+        if (k < e->iface_count)
+            close_iface(e, k);
+        e->iface_hover = 0;
+        return;
+    }
+    if (control != 0 || k < e->iface_count || e->iface_count >= MAX_IFACES)
+        return;
+    n = vc_read_list(&e->db, id, ids, 24);
+    if (n <= 0)
+        return;
+    {
+        iface_display *d = &e->ifaces[e->iface_count++];
+        d->layout = id;
+        d->count = 0;
+        for (i = 0; i < n; i++) {
+            iface_item *it = &d->items[d->count];
+            if (vc_read_iface_item(&e->db, ids[i], &it->item) != 0)
+                continue;
+            it->id = ids[i];
+            load_item_picture(e, it);
+            d->count++;
+        }
+        xf_info("interface %u: %d items", id, d->count);
+    }
+}
+
+static int item_order(const iface_item *it) { return it->item.flags & 0xFF; }
+
+/* The front item under (x, y) of the top layout that has triggers. */
+static iface_item *iface_item_at(explorer *e, int x, int y)
+{
+    iface_item *best = NULL;
+    int i;
+    if (!e->iface_count)
+        return NULL;
+    {
+        iface_display *d = &e->ifaces[e->iface_count - 1];
+        for (i = 0; i < d->count; i++) {
+            iface_item *it = &d->items[i];
+            const vc_region *r = &it->item.region;
+            if (!it->item.triggers || !vc_is_enabled(&e->interp, it->id) || x < r->left || x >= r->right ||
+                y < r->top || y >= r->bottom)
+                continue;
+            if (!best || item_order(it) >= item_order(best))
+                best = it;
+        }
+    }
+    return best;
+}
+
+static void draw_ifaces(explorer *e)
+{
+    int k, i, y, order;
+    for (k = 0; k < e->iface_count; k++)
+        for (order = 0; order < 256; order++) /* back to front */
+            for (i = 0; i < e->ifaces[k].count; i++) {
+                const iface_item *it = &e->ifaces[k].items[i];
+                int x0 = it->item.region.left, y0 = it->item.region.top, w, h;
+                if (item_order(it) != order || !it->img.pixels || !vc_is_enabled(&e->interp, it->id))
+                    continue;
+                w = XF_MIN(it->img.width, SCREEN_W - x0);
+                h = XF_MIN(it->img.height, SCREEN_H - y0);
+                if (x0 < 0 || y0 < 0 || w <= 0)
+                    continue;
+                for (y = 0; y < h; y++)
+                    memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], it->img.pixels + (size_t)y * it->img.width,
+                           (size_t)w * 4);
+            }
+}
+
+/* Mouse over and off interface items run their kind 4 and 5 triggers. */
+static void iface_hover(explorer *e, int x, int y)
+{
+    iface_item *it = iface_item_at(e, x, y);
+    u32 id = it ? it->id : 0;
+    if (id == e->iface_hover)
+        return;
+    if (e->iface_hover) {
+        vc_iface_item old;
+        if (vc_read_iface_item(&e->db, e->iface_hover, &old) == 0)
+            vc_run_triggers(&e->interp, old.triggers, 5);
+    }
+    e->iface_hover = id;
+    if (it)
+        vc_run_triggers(&e->interp, it->item.triggers, 4);
+    after_triggers(e);
 }
 
 static void remove_timer(explorer *e, u8 id)
@@ -465,7 +660,7 @@ static void start_next_media(explorer *e)
         vc_run_triggers(&e->interp, a.triggers, 8);
         for (j = 0; j < a.entry_count && !e->playing; j++) {
             char path[1024];
-            if (xf_path_resolve(e->data_dir, a.entries[j].path, path, sizeof(path)) != 0)
+            if (resolve_media(e, a.entries[j].path, path, sizeof(path)) != 0)
                 continue;
             if (xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
                 e->playing = 1;
@@ -635,10 +830,14 @@ static u32 new_game(explorer *e)
 
 static void build_spots(explorer *e, const vc_view *v)
 {
+    int i;
     e->spot_count = 0;
     add_spots(e, v->navs, SPOT_NAV);
     add_spots(e, v->explorables, SPOT_EXPLORE);
     add_spots(e, v->characters, SPOT_CHARACTER);
+    for (i = 0; i < e->spot_count; i++)
+        xf_debug("spot %u kind %d (%d,%d)-(%d,%d)", e->spots[i].target, e->spots[i].kind, e->spots[i].region.left,
+                 e->spots[i].region.top, e->spots[i].region.right, e->spots[i].region.bottom);
 }
 
 static int enter_view(explorer *e, u32 id)
@@ -773,6 +972,7 @@ static void draw(explorer *e, int mx, int my)
         static const char help[] = "green: move  yellow: examine  cyan: character  right click: back";
         xf_text_draw(&s, &e->font, 14, 8, 470, help, sizeof(help) - 1, 0x808080);
     }
+    draw_ifaces(e);
 }
 
 /* Returns the move under the mouse, or NULL. The last matching spot wins,
@@ -796,7 +996,7 @@ static int open_asset_player(explorer *e, u32 asset, xf_player *p)
         return -1;
     for (j = 0; j < a.entry_count; j++) {
         char path[1024];
-        if (xf_path_resolve(e->data_dir, a.entries[j].path, path, sizeof(path)) == 0 &&
+        if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
             xf_player_open(p, path, plat_ticks_ms()) == 0)
             return 0;
     }
@@ -832,7 +1032,7 @@ static void menu_enter(explorer *e)
         vc_asset_ref a;
         char path[1024];
         if (vc_read_asset_ref(&e->db, g_menu_parts[MENU_RIGHT].asset, &a) == 0 && a.entry_count &&
-            xf_path_resolve(e->data_dir, a.entries[0].path, path, sizeof(path)) == 0 &&
+            resolve_media(e, a.entries[0].path, path, sizeof(path)) == 0 &&
             xf_mov_open(&e->right_mov, path) == 0) {
             xf_mov_track *t = xf_mov_find(&e->right_mov, XF_TRACK_VIDEO);
             e->right_open = t && xf_video_open(&e->right, &e->right_mov, t) == 0;
@@ -927,7 +1127,7 @@ static int menu_item_at(int x, int y)
     return -1;
 }
 
-int xf_explore(const char *data_dir, u32 start_view, int disc)
+int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_view, int disc)
 {
     explorer *e = calloc(1, sizeof(*e));
     char path[1024];
@@ -936,6 +1136,7 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
     if (!e)
         return 1;
     e->data_dir = data_dir;
+    e->media_dirs = media_dirs;
     e->disc = disc;
     if (xf_path_resolve(data_dir, "XFILES.HDB", path, sizeof(path)) != 0 || xf_neo_open(&e->db, path) != 0) {
         xf_error("explore: cannot open XFILES.HDB in %s", data_dir);
@@ -943,7 +1144,7 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         return 1;
     }
     {
-        vc_host host = { NULL, host_go_to_view, host_play_media, host_timer, host_call_function };
+        vc_host host = { NULL, host_go_to_view, host_play_media, host_timer, host_interface, host_call_function };
         host.user = e;
         if (xf_path_resolve(data_dir, "XFILES.GAM", path, sizeof(path)) != 0 ||
             xf_neo_open(&e->gam, path) != 0 || vc_interp_init(&e->interp, &e->db, &e->gam, &host) != 0) {
@@ -992,9 +1193,20 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
             else if (ev.type == PLAT_EV_MOUSE_MOVE) {
                 mx = ev.x;
                 my = ev.y;
+                if (e->iface_count && !e->playing)
+                    iface_hover(e, mx, my);
             } else if ((e->playing || e->card_until) && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
                 if (!e->card_active)
                     finish_media(e); /* skip the clip; the location card cannot be skipped */
+            } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && e->iface_count) {
+                /* An interface takes every click while it is up. */
+                iface_item *it = iface_item_at(e, ev.x, ev.y);
+                if (it) {
+                    xf_info("click interface item %u", it->id);
+                    vc_run_triggers(&e->interp, it->item.triggers, 0);
+                    e->iface_hover = 0;
+                    after_triggers(e);
+                }
             } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
                 const spot *s = spot_at(e, ev.x, ev.y);
                 if (s) {
@@ -1007,6 +1219,8 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
                     e->pending_view = 0;
                     if (target && enter_view(e, target) == 0 && e->history_len < HISTORY)
                         e->history[e->history_len++] = from;
+                    else if (!target)
+                        after_triggers(e);
                 }
             } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
                        (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
@@ -1035,6 +1249,10 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
     stop_media(e);
     stop_sound(e);
     close_anims(e);
+    while (e->iface_count)
+        close_iface(e, 0);
+    if (e->pff_open)
+        xf_pff_close(&e->pff);
     menu_close(e);
     if (e->nav_open)
         xf_mov_close(&e->nav);
