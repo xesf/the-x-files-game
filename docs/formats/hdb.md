@@ -5,7 +5,10 @@ actions, triggers, conversations, variables and the names of media files.
 It is a NeoAccess database. NeoAccess was a commercial object database
 for the Macintosh and Windows, so all numbers are big-endian.
 
-There are two versions of the file: one shared by every CD language and
+`XFILES.GAM`, the initial game state, uses the same format (see
+[../engine/game-state.md](../engine/game-state.md)).
+
+There are two versions of `XFILES.HDB`: one shared by every CD language and
 one for the DVD release. Both hold 66,168 objects.
 
 The engine finds objects through the database's own index, the same way

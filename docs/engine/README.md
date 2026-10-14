@@ -9,3 +9,4 @@ shipped game and its data. File layouts are in [../formats](../formats).
 | [media-playback.md](media-playback.md) | How a scene is played: clock, sound, video and subtitles |
 | [scene-graph.md](scene-graph.md) | Nodes, locations, viewpoints, views, navigation and media references |
 | [actions.md](actions.md) | Action data, expressions and the built-in function table |
+| [game-state.md](game-state.md) | Variables and enabled states in `XFILES.GAM` |
