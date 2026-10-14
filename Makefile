@@ -4,7 +4,7 @@
 CC      ?= cc
 BUILD   ?= build
 CFLAGS  ?= -std=c99 -Wall -Wextra -Wno-unused-parameter
-CFLAGS  += -Isrc -Isrc/core -D_FILE_OFFSET_BITS=64 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE
+CFLAGS  += -Isrc -Isrc/core -Itools/xftool -D_FILE_OFFSET_BITS=64 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE
 ifdef DEBUG
 CFLAGS  += -O0 -g -fsanitize=address,undefined
 LDFLAGS += -fsanitize=address,undefined
