@@ -4,7 +4,7 @@
 CC      ?= cc
 BUILD   ?= build
 CFLAGS  ?= -std=c99 -Wall -Wextra -Wno-unused-parameter
-CFLAGS  += -Isrc -Isrc/core -Itools/xftool -D_FILE_OFFSET_BITS=64 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE
+CFLAGS  += -Isrc -Isrc/core -Itools/xftool -Itests -D_FILE_OFFSET_BITS=64 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE
 ifdef DEBUG
 CFLAGS  += -O0 -g -fsanitize=address,undefined
 LDFLAGS += -fsanitize=address,undefined
@@ -45,8 +45,17 @@ $(BUILD)/%.o: %.m
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -fobjc-arc -MMD -MP -c -o $@ $<
 
+TEST_SRC := $(wildcard tests/*.c)
+TEST_OBJ := $(TEST_SRC:%.c=$(BUILD)/%.o)
+
+$(BUILD)/xftest: $(TEST_OBJ) $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
+
+test: $(BUILD)/xftest
+	$(BUILD)/xftest
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean
+.PHONY: all clean test
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
