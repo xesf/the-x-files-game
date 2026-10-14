@@ -1,19 +1,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "media/cinepak.h"
 #include "media/jpeg.h"
 #include "media/mov.h"
 #include "xftool.h"
 
-/* Decodes one video sample with the matching codec. */
-static int decode_sample(const xf_mov_track *t, const u8 *data, u32 size, u32 *out)
+/* Decodes video sample `index`. Inter-coded codecs need the frames since
+ * the previous key frame, so those are decoded first. */
+static int decode_sample(xf_mov *mov, const xf_mov_track *t, u32 index, u32 *out)
 {
+    u8 *data = malloc(t->sample_size[index]);
+    u32 size = t->sample_size[index];
+    int r = -1;
+
+    if (!data || xf_mov_read_sample(mov, t, index, data) != 0) {
+        free(data);
+        return -1;
+    }
     switch (t->codec) {
+    case XF_FOURCC('c', 'v', 'i', 'd'): {
+        xf_cinepak *c = xf_cinepak_create(t->width, t->height);
+        u32 i = index;
+        while (i > 0 && !xf_mov_is_sync(t, i))
+            i--;
+        for (r = 0; c && i <= index && r == 0; i++) {
+            u8 *d = malloc(t->sample_size[i]);
+            r = d && xf_mov_read_sample(mov, t, i, d) == 0
+                    ? xf_cinepak_decode(c, d, t->sample_size[i], out) : -1;
+            free(d);
+        }
+        xf_cinepak_destroy(c);
+        break;
+    }
     case XF_FOURCC('j', 'p', 'e', 'g'):
     case XF_FOURCC('m', 'j', 'p', 'a'):
-        return xf_jpeg_decode(data, size, out, t->width, t->height, t->width);
+        r = xf_jpeg_decode(data, size, out, t->width, t->height, t->width);
+        break;
     }
-    return -1;
+    free(data);
+    return r;
 }
 
 static int cmd_frame(int argc, char **argv)
@@ -21,7 +47,6 @@ static int cmd_frame(int argc, char **argv)
     xf_mov mov;
     xf_mov_track *t;
     u32 index, *pixels;
-    u8 *data;
     int r = 1;
     char cc[5];
 
@@ -44,15 +69,13 @@ static int cmd_frame(int argc, char **argv)
         xf_mov_close(&mov);
         return 1;
     }
-    data = malloc(t->sample_size[index]);
     pixels = calloc((size_t)t->width * t->height, 4);
-    if (data && pixels && xf_mov_read_sample(&mov, t, index, data) == 0) {
-        if (decode_sample(t, data, t->sample_size[index], pixels) == 0)
+    if (pixels) {
+        if (decode_sample(&mov, t, index, pixels) == 0)
             r = xftool_write_bmp(argv[4], pixels, t->width, t->height) == 0 ? 0 : 1;
         else
             fprintf(stderr, "cannot decode codec %s\n", xf_fourcc_str(t->codec, cc));
     }
-    free(data);
     free(pixels);
     xf_mov_close(&mov);
     return r;
