@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "data/neo.h"
+#include "vc/action.h"
 #include "vc/vc.h"
 #include "xftool.h"
 
@@ -194,7 +195,56 @@ static int cmd_walk(int argc, char **argv)
     return 0;
 }
 
+/* Prints the actions of a list, or statistics over all actions. */
+static int cmd_actions(int argc, char **argv)
+{
+    xf_neo_db db;
+    u32 i, types[8][2] = { { 0 } }, bad = 0;
+    char line[256];
+    int k;
+
+    if (argc != 2 && argc != 3) {
+        fputs("usage: xftool hdb-actions <file.hdb> [action list or action id]\n", stderr);
+        return 2;
+    }
+    if (xf_neo_open(&db, argv[1]) != 0)
+        return 1;
+    if (argc == 3) {
+        u32 id = (u32)strtoul(argv[2], NULL, 0), ids[256];
+        int n = vc_class(&db, id) == VC_ACTION ? (ids[0] = id, 1) : vc_read_list(&db, id, ids, 256);
+        for (k = 0; k < n; k++) {
+            vc_action a;
+            if (vc_read_action(&db, ids[k], &a) != 0)
+                continue;
+            vc_action_text(&a, line, sizeof(line));
+            printf("#%u %s\n", ids[k], line);
+        }
+    } else {
+        for (i = 0; i < db.count; i++) {
+            vc_action a;
+            if (db.entries[i].class_id != VC_ACTION || vc_read_action(&db, db.entries[i].id, &a) != 0)
+                continue;
+            if (a.type < 8)
+                types[a.type][a.has_condition]++;
+            bad += !a.valid;
+        }
+        for (k = 0; k < 8; k++)
+            printf("type %d: %u plain, %u with condition\n", k, types[k][0], types[k][1]);
+        if (getenv("XF_FUNCTIONS"))
+            for (i = 0; i < db.count; i++) {
+                vc_action a;
+                if (db.entries[i].class_id == VC_ACTION && vc_read_action(&db, db.entries[i].id, &a) == 0 &&
+                    a.type == VC_ACT_FUNCTION && a.valid)
+                    printf("function %s %d\n", a.u.function.name, a.u.function.argc);
+            }
+        printf("%u actions with an unexpected size\n", bad);
+    }
+    xf_neo_close(&db);
+    return 0;
+}
+
 const xftool_cmd xftool_hdb_cmds[] = {
+    { "hdb-actions", "<file.hdb> [list id]  decode actions, or count them by type", cmd_actions },
     { "hdb-walk", "<file.hdb> <view> [disc]  follow every move from a view", cmd_walk },
     { "hdb-asset", "<file.hdb> <id>...  decode media references", cmd_asset },
     { "hdb", "<file.hdb>  count the objects of each class", cmd_hdb },
