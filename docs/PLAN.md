@@ -210,7 +210,49 @@ Keep the core free of platform code, use fixed-point audio, and make
 allocation explicit (arena per scene). This lets the slow platforms work
 without a redesign.
 
-## 7. Risks
+## 7. Scope and enhancements
+
+### What we reimplement and what we replace
+
+We reimplement the game: the VirtualCinema model, the action interpreter,
+the built-in functions, the interface layouts, media playback and save
+games. We do not port the Windows system layer of `VCEngineApp_init`:
+CD-drive checks, the disc-swap prompts, the memory and disk-space checks,
+DirectDraw display modes, font installation and registry settings. Our
+platform layer and asset lookup replace them. We still read the engine
+code for those parts, to know what game state they set.
+
+### Several game versions
+
+The engine runs any release from its data:
+
+- English, French, German, Italian, Spanish and Japanese CD sets, and the
+  English and French DVD sets. They differ in their executable build, the
+  `XFILES.HDB` (CD and DVD versions) and `XFILES.GAM`, and the media.
+- Some localizations only translate the sound tracks. Their scenes can
+  serve as **alternative audio languages**: with matching clips from two
+  installs, the player picks the audio language and the subtitle language
+  separately, and can switch during the game.
+- Text exists in English and Japanese. We add **new text translations**
+  (subtitles, documents, interface text) as external text files keyed by
+  object ID and media ID, so translators do not need the original tools.
+
+### Enhancements (later)
+
+- **Widescreen.** The video and navigation pictures are 600×240, already
+  wide (2.5:1). A widescreen mode shows them larger and moves the
+  interface around them, instead of the 640×480 letterbox.
+- **Story mode.** Play the story's video sequences in order, like a TV
+  episode, without the interactive parts. The order comes from the
+  scene graph and the action lists that play media.
+- **Player statistics.** Track decisions, the three uber variables
+  (X-Track, paranoia, loss), places visited, evidence found and play
+  time, and show them at the end or in a menu.
+- Further quality-of-life features fit the same design: skippable
+  location cards, a scene selection, higher-quality DVD video where it
+  exists.
+
+## 8. Risks
 
 - **QDMC audio** (QDesign Music 1, not QDM2) is the hardest codec. It is
   used by 24 files (music and a few scenes). ScummVM only has QDM2; check
@@ -223,7 +265,7 @@ without a redesign.
   differ from 1998. Use them for understanding only, and verify layouts in
   the DVD binary.
 
-## 8. Repo hygiene
+## 9. Repo hygiene
 
 - `.gitignore` the IDA databases, every game file and `notes/private/`. `ida/xfiles.exe.i64`
   is currently staged and contains the original code. Keep it out of any
