@@ -39,13 +39,19 @@ also subtitle tracks.
 
 ## Navigation stills (`.nmv`)
 
-Each `NAV*.NMV` file has two JPEG video tracks of 600×240:
+Each `NAV*.NMV` file is a library of still JPEG images of 600×240, one per
+viewpoint. `NAV1.NMV` has two video tracks:
 
-- Track 1 has time scale 1 and one sample per viewpoint.
-- Track 2 has time scale 600 and few samples.
+| Track | Time scale | Samples | Sample duration |
+|---|---|---|---|
+| 1 | 1 | 166 | 1 (one second) |
+| 2 | 600 | 15 | 600 (one second) |
 
-The game shows one sample of track 1 as the still background of the
-current viewpoint.
+Both tracks have edit lists (`elst`) that interleave them: the movie
+timeline switches between track 1 and track 2 every few seconds. Together
+the two tracks give 181 one-second images. How the game picks an image
+(by movie time or by sample number) is not yet confirmed from the engine
+code.
 
 ## Unusual files
 
