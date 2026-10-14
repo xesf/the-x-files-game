@@ -1,0 +1,128 @@
+/* Game logic without a platform: the current view and its hotspots, the
+ * triggers that run on entering, leaving, clicking and timers, the media
+ * queue, interface layouts and the engine functions. The explorer draws
+ * it and plays its media; xftool play drives it from a script. */
+#ifndef XF_GAME_H
+#define XF_GAME_H
+
+#include "vc/interp.h"
+#include "vc/vc.h"
+
+#define GAME_MAX_SPOTS 64
+#define GAME_HISTORY 64
+#define GAME_MAX_TIMERS 32
+#define GAME_MAX_IFACES 4
+#define GAME_MAX_IFACE_ITEMS 24
+#define GAME_MEDIA_QUEUE 32
+
+enum { SPOT_NAV, SPOT_EXPLORE, SPOT_CHARACTER };
+
+typedef struct {
+    int kind;
+    u32 id;       /* VCNav, VCExplorable or VCCharView */
+    vc_region region;
+    u32 target;   /* view for moves */
+    u32 triggers; /* trigger list run on click, or 0 */
+} game_spot;
+
+/* A timer started by a timer action (0x4285A0 act_timer). */
+typedef struct {
+    u8 id;
+    u32 due, period; /* period 0: fires once */
+} game_timer;
+
+typedef struct {
+    u32 id;
+    vc_iface_item item;
+} game_iface_item;
+
+/* An interface layout on screen (0x44D8B0 IFaceLayoutDisplay_ctor). */
+typedef struct {
+    u32 layout;
+    int count;
+    game_iface_item items[GAME_MAX_IFACE_ITEMS];
+} game_iface;
+
+/* A media reference waiting to play; `card` marks the clip that the
+ * location card of StartVideoText is shown over. */
+typedef struct {
+    u32 asset;
+    int card;
+} game_media;
+
+typedef struct {
+    char name[16];
+    int argc;
+    u32 vars[VC_MAX_ARGS];
+} game_registration;
+
+typedef struct {
+    xf_neo_db db, gam;
+    vc_interp interp;
+    vc_place_map places;
+    u32 now;              /* game clock in ms, set by game_tick */
+
+    u32 view, view_triggers, pending_view;
+    game_spot spots[GAME_MAX_SPOTS];
+    int spot_count;
+    u32 history[GAME_HISTORY];
+    int history_len;
+
+    game_media queue[GAME_MEDIA_QUEUE];
+    int queue_head, queue_tail;
+    game_media current;   /* media playing, asset 0 when none */
+    char card[256];       /* text of the last location card */
+
+    u32 sound;            /* sound asset playing beside the clips */
+    u32 sound_serial;     /* changes when a sound starts */
+
+    game_timer timers[GAME_MAX_TIMERS];
+    int timer_count;
+
+    game_iface ifaces[GAME_MAX_IFACES];
+    int iface_count;
+    u32 iface_serial;     /* changes when a layout opens or closes */
+    u32 iface_hover;
+
+    game_registration regs[32];
+    int reg_count;
+    char missing[64][16]; /* unimplemented functions seen, by name */
+    int missing_count;
+} game;
+
+int game_open(game *g, const char *data_dir);
+void game_close(game *g);
+
+/* Runs the start-up triggers of the title object and enters the start
+ * view. Returns 0, or -1 when the data has no start view. */
+int game_new(game *g);
+int game_enter_view(game *g, u32 view);
+/* Goes back to the previous view. */
+void game_back(game *g);
+
+/* Click at a screen point: the top interface layout takes it when one is
+ * up, otherwise the hotspot under it. Returns 1 when something ran. */
+int game_click(game *g, int x, int y);
+/* Clicks the hotspot or interface item with this object ID. */
+int game_click_object(game *g, u32 id);
+/* Mouse moved: runs mouse over and off triggers of interface items. */
+void game_hover(game *g, int x, int y);
+
+/* Advances the clock and fires the timers that are due. */
+void game_tick(game *g, u32 now_ms);
+
+/* Media: game_media_start takes the next queued media and runs its start
+ * triggers; the caller plays it, then calls game_media_end, which runs
+ * its end triggers. game_media_start returns 0 when the queue is empty. */
+int game_media_start(game *g, game_media *m);
+void game_media_end(game *g);
+int game_media_pending(const game *g);
+void game_queue_media(game *g, u32 asset);
+
+/* The enabled media of the current view, in list order. */
+int game_view_media(game *g, u32 *ids, int max);
+
+const game_spot *game_spot_at(const game *g, int x, int y);
+const game_iface_item *game_iface_item_at(game *g, int x, int y);
+
+#endif

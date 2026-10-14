@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "game/game.h"
 #include "gfx/text.h"
 #include "media/mov.h"
 #include "media/pff.h"
@@ -11,8 +12,6 @@
 #include "media/player.h"
 #include "media/video.h"
 #include "platform/plat.h"
-#include "vc/interp.h"
-#include "vc/vc.h"
 #include "xf_file.h"
 #include "xf_log.h"
 
@@ -22,17 +21,6 @@
 #define PICTURE_Y 90
 #define PICTURE_W 600
 #define PICTURE_H 240
-#define MAX_SPOTS 64
-#define HISTORY 64
-
-enum { SPOT_NAV, SPOT_EXPLORE, SPOT_CHARACTER };
-
-typedef struct {
-    int kind;
-    vc_region region;
-    u32 target;   /* view for moves, object id otherwise */
-    u32 triggers; /* trigger list run on click, or 0 */
-} spot;
 
 /* Main menu (0x48EE40 MainMenu_ctor): media IDs are fixed in the engine
  * (0x482FE0 MainMenu_load_media). Positions measured from the original
@@ -83,89 +71,49 @@ typedef struct {
 
 #define MAX_ANIMS 4
 
-/* A timer started by a timer action (0x4285A0 act_timer). */
+/* The explorer draws the game and plays its media. */
 typedef struct {
-    u8 id;
-    u32 due, period; /* period 0: fires once */
-} game_timer;
-
-#define MAX_TIMERS 32
-
-/* An interface layout on screen (0x44D8B0 IFaceLayoutDisplay_ctor): its
- * items with their pictures, drawn over the view. */
-typedef struct {
-    u32 id;
-    vc_iface_item item;
-    xf_image img;
-} iface_item;
-
-typedef struct {
-    u32 layout;
-    int count;
-    iface_item items[24];
-} iface_display;
-
-#define MAX_IFACES 4
-
-typedef struct {
+    game *g;
     const char *data_dir;
     const char *const *media_dirs;
     int disc;
-    xf_neo_db db;
-    xf_neo_db gam;
-    vc_interp interp;
-    vc_place_map places;
-    u32 pending_view;
-    u32 view_triggers; /* trigger list of the current view */
-    /* media queued by actions, played one after the other */
-    u32 media_queue[32];
-    int media_head, media_tail;
+    /* the clip playing */
     xf_player player;
-    int playing;
-    /* location card from StartVideoText, shown over the next clip */
-    char card[256];
-    int card_pending, card_active;
-    int card_slot;        /* media queue slot the card belongs to */
+    int playing;          /* a clip, or the location card alone, is on screen */
+    int have_clip;
+    int card_active;
+    u32 card_start, card_until;
+    /* the main menu */
     int in_menu;
     xf_player menu[MENU_PARTS];
     int menu_open[MENU_PARTS];
     int menu_hover;
-    /* RIGHT.mov is stepped by frame instead of played through */
-    xf_mov right_mov;
+    xf_mov right_mov;     /* RIGHT.mov is stepped by frame */
     xf_video right;
     int right_open, right_frame, right_target;
     u32 right_next_ms;
-    int playing_slot;     /* media queue slot now playing */
-    u32 playing_triggers; /* trigger list of the media now playing */
-    /* sounds play beside the clips, one at a time; loops repeat */
+    /* sounds beside the clips; loops repeat */
     xf_player sound;
     int sound_open, sound_loop;
+    u32 sound_serial;
     char sound_path[1024];
-    u32 card_start;
-    u32 card_until;       /* card shown without a clip: when it ends */
     xf_font font;
     int have_font;
     u32 fb[SCREEN_W * SCREEN_H];
+    /* the view picture: still and moving media */
     u32 picture[PICTURE_W * PICTURE_H];
     int have_picture;
-    u32 view;
-    char label[256];
-    spot spots[MAX_SPOTS];
-    int spot_count;
-    u32 history[HISTORY];
-    int history_len;
-    iface_display ifaces[MAX_IFACES];
-    int iface_count;
-    u32 iface_hover;      /* interface item under the mouse */
-    xf_pff pff;           /* x.pff, for interface pictures */
-    int pff_open;
-    game_timer timers[MAX_TIMERS];
-    int timer_count;
-    /* moving media of the view (loops, clips), drawn over the still */
+    u32 shown_view;
+    u32 view_media[32];
+    int view_media_count;
     view_anim anims[MAX_ANIMS];
     int anim_count;
-    u32 view_media[32];   /* enabled media of the view, to notice changes */
-    int view_media_count;
+    char label[256];
+    /* pictures of the interface items on screen, by layout and item */
+    xf_image iface_img[GAME_MAX_IFACES][GAME_MAX_IFACE_ITEMS];
+    u32 iface_serial;
+    xf_pff pff;           /* x.pff, for interface pictures */
+    int pff_open;
     /* one open navigation file */
     char nav_path[1024];
     xf_mov nav;
@@ -173,10 +121,6 @@ typedef struct {
 } explorer;
 
 static void stop_media(explorer *e);
-static void finish_media(explorer *e);
-static void queue_media(explorer *e, u32 asset);
-static void after_triggers(explorer *e);
-static int play_sound(explorer *e, u32 asset);
 static void stop_sound(explorer *e);
 
 /* Finds a media file in the game folder, then in the extra media folders. */
@@ -205,6 +149,8 @@ static int open_nav_file(explorer *e, const char *name)
         snprintf(e->nav_path, sizeof(e->nav_path), "%s", path);
     return e->nav_open ? 0 : -1;
 }
+
+/* --- View picture ---------------------------------------------------- */
 
 static void close_anims(explorer *e)
 {
@@ -255,25 +201,23 @@ static void update_anim(view_anim *an, u32 now)
         xf_video_seek(&an->video, xf_mov_sample_at(an->track, (u32)media));
 }
 
-/* Loads the media of the view that are enabled: the navigation still
- * (media type bit 0x40, a frame of a .nmv file) and moving pictures
- * (a range of a movie; type bit 0x08 loops it). Uses the current disc,
- * or the first disc whose file is installed. */
-static void load_picture(explorer *e, const vc_view *v)
+/* Loads the enabled media of the view: the navigation still (media type
+ * bit 0x40, a frame of a .nmv file) and moving pictures (a range of a
+ * movie; type bit 0x08 loops it). Uses the current disc, or the first
+ * disc whose file is installed. */
+static void load_picture(explorer *e)
 {
-    u32 ids[32];
-    int n = vc_read_list(&e->db, v->assets, ids, 32), i, j, pass;
-
+    int i, j, pass;
     e->have_picture = 0;
-    e->view_media_count = 0;
     close_anims(e);
-    snprintf(e->label, sizeof(e->label), "view %u  (no still)", e->view);
-    for (i = 0; i < n; i++) {
+    e->shown_view = e->g->view;
+    e->view_media_count = game_view_media(e->g, e->view_media, 32);
+    snprintf(e->label, sizeof(e->label), "view %u  (no still)", e->g->view);
+    for (i = 0; i < e->view_media_count; i++) {
         vc_asset_ref a;
         int done = 0;
-        if (!vc_is_enabled(&e->interp, ids[i]) || vc_read_asset_ref(&e->db, ids[i], &a) != 0)
+        if (vc_read_asset_ref(&e->g->db, e->view_media[i], &a) != 0)
             continue;
-        e->view_media[e->view_media_count++] = ids[i];
         for (pass = 0; pass < 2 && !done; pass++)
             for (j = 0; j < a.entry_count && !done; j++) {
                 const vc_media_entry *m = &a.entries[j];
@@ -284,113 +228,187 @@ static void load_picture(explorer *e, const vc_view *v)
                     if (!e->have_picture && open_nav_file(e, m->path) == 0 &&
                         xf_movie_frame_at(&e->nav, m->start, e->picture, PICTURE_W, PICTURE_H) == 0) {
                         e->have_picture = done = 1;
-                        snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->view, m->disc,
+                        snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->g->view, m->disc,
                                  a.logical);
                     }
                 } else if (resolve_media(e, m->path, path, sizeof(path)) == 0 &&
                            open_anim(e, path, m->start, m->end, (a.kind & 0x08) != 0) == 0) {
                     done = 1;
                     if (!e->have_picture)
-                        snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->view, m->disc,
+                        snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->g->view, m->disc,
                                  a.logical);
                 }
             }
         if (!done)
-            xf_info("view %u: media %s not shown", e->view, a.logical);
+            xf_info("view %u: media %s not shown", e->g->view, a.logical);
     }
 }
 
-/* Reloads the view media when actions enabled or disabled some of them. */
-static void refresh_picture(explorer *e, const vc_view *v)
+/* Reloads the picture when the view changed or actions enabled or
+ * disabled some of its media. */
+static void refresh_picture(explorer *e)
 {
     u32 ids[32];
-    int n = vc_read_list(&e->db, v->assets, ids, 32), i, k = 0, same = 1;
-    for (i = 0; i < n; i++)
-        if (vc_is_enabled(&e->interp, ids[i]))
-            same &= k < e->view_media_count && e->view_media[k++] == ids[i];
-    if (!same || k != e->view_media_count)
-        load_picture(e, v);
+    int n = game_view_media(e->g, ids, 32);
+    if (e->shown_view != e->g->view || n != e->view_media_count ||
+        memcmp(ids, e->view_media, (size_t)n * sizeof(u32)) != 0)
+        load_picture(e);
 }
 
-static void add_spots(explorer *e, u32 list, int kind)
-{
-    u32 ids[MAX_SPOTS];
-    int n = vc_read_list(&e->db, list, ids, MAX_SPOTS), i;
+/* --- Interface pictures ---------------------------------------------- */
 
-    for (i = 0; i < n && e->spot_count < MAX_SPOTS; i++) {
-        spot *s = &e->spots[e->spot_count];
-        xf_neo_reader r;
-        if (kind == SPOT_NAV) {
-            vc_nav nav;
-            vc_hotspot h;
-            if (vc_read_nav(&e->db, ids[i], &nav) != 0 || vc_read_hotspot(&e->db, nav.hotspot, &h) != 0)
+/* Loads the picture of an interface item: the first media of its list,
+ * an image of a .pff bundle or a frame of a movie. */
+static void load_item_picture(explorer *e, const game_iface_item *it, xf_image *img)
+{
+    u32 ids[8];
+    int n = vc_read_list(&e->g->db, it->item.assets, ids, 8), i, j;
+    memset(img, 0, sizeof(*img));
+    for (i = 0; i < n && !img->pixels; i++) {
+        vc_asset_ref a;
+        if (vc_read_asset_ref(&e->g->db, ids[i], &a) != 0)
+            continue;
+        for (j = 0; j < a.entry_count && !img->pixels; j++) {
+            const vc_media_entry *m = &a.entries[j];
+            const char *ext = strrchr(m->path, '.');
+            char path[1024];
+            if (resolve_media(e, m->path, path, sizeof(path)) != 0)
                 continue;
-            if (!vc_is_enabled(&e->interp, ids[i]))
-                continue;
-            s->region = h.region;
-            s->target = nav.target;
-            s->triggers = nav.extra;
-        } else {
-            /* Explorables and character views start with a region; character
-             * views have one 4-byte field before it. */
-            if (!vc_is_enabled(&e->interp, ids[i]) || xf_neo_object(&e->db, ids[i], &r, NULL, NULL) != 0)
-                continue;
-            if (kind == SPOT_CHARACTER) {
-                vc_char_view c;
-                if (vc_read_char_view(&e->db, ids[i], &c) != 0)
-                    continue;
-                s->region = c.region;
-                s->target = ids[i];
-                s->triggers = c.triggers;
-                s->kind = kind;
-                e->spot_count++;
-                continue;
+            if (ext && strcmp(ext, ".pff") == 0) {
+                u32 size;
+                u8 *data;
+                if (!e->pff_open)
+                    e->pff_open = xf_pff_open(&e->pff, path) == 0;
+                data = e->pff_open ? xf_pff_read(&e->pff, m->start, &size) : NULL;
+                if (data && xf_pict_decode(data, size, img) != 0)
+                    memset(img, 0, sizeof(*img));
+                free(data);
+            } else {
+                int w = it->item.region.right - it->item.region.left;
+                int h = it->item.region.bottom - it->item.region.top;
+                if (open_nav_file(e, m->path) == 0 && w > 0 && h > 0) {
+                    img->pixels = calloc((size_t)w * h, 4);
+                    img->width = w;
+                    img->height = h;
+                    if (img->pixels && xf_movie_frame_at(&e->nav, m->start, img->pixels, w, h) != 0) {
+                        free(img->pixels);
+                        memset(img, 0, sizeof(*img));
+                    }
+                }
             }
-            s->region.cursor = xf_neo_u32(&r);
-            s->region.left = (i16)xf_neo_u16(&r);
-            s->region.top = (i16)xf_neo_u16(&r);
-            s->region.right = (i16)xf_neo_u16(&r);
-            s->region.bottom = (i16)xf_neo_u16(&r);
-            s->target = ids[i];
-            /* Explorables keep their trigger list right after the region. */
-            s->triggers = kind == SPOT_EXPLORE ? xf_neo_u32(&r) : 0;
-            if (r.error)
-                continue;
         }
-        s->kind = kind;
-        e->spot_count++;
     }
 }
 
-static void host_go_to_view(void *user, u32 view)
+static void free_iface_pictures(explorer *e)
 {
-    ((explorer *)user)->pending_view = view;
+    int k, i;
+    for (k = 0; k < GAME_MAX_IFACES; k++)
+        for (i = 0; i < GAME_MAX_IFACE_ITEMS; i++) {
+            free(e->iface_img[k][i].pixels);
+            memset(&e->iface_img[k][i], 0, sizeof(xf_image));
+        }
 }
 
-/* Plays a sound asset (a path under Sounds/) beside the clips. Returns
- * 0 when the asset is not a sound, so it goes to the clip queue. */
-static int play_sound(explorer *e, u32 asset)
+static void refresh_iface_pictures(explorer *e)
 {
-    vc_asset_ref a;
-    int j;
-    if (vc_read_asset_ref(&e->db, asset, &a) != 0 || strncmp(a.logical, "Sounds/", 7) != 0)
-        return 0;
-    if (e->sound_open)
-        xf_player_close(&e->sound);
-    e->sound_open = 0;
-    for (j = 0; j < a.entry_count && !e->sound_open; j++)
-        if (resolve_media(e, a.entries[j].path, e->sound_path, sizeof(e->sound_path)) == 0 &&
-            xf_player_open(&e->sound, e->sound_path, plat_ticks_ms()) == 0)
-            e->sound_open = 1;
-    e->sound_loop = strstr(a.logical, "/Loops/") != NULL;
-    xf_info("sound %s%s", a.logical, e->sound_open ? "" : ": no file on disk");
-    vc_run_triggers(&e->interp, a.triggers, 8);
-    return 1;
+    int k, i;
+    if (e->iface_serial == e->g->iface_serial)
+        return;
+    e->iface_serial = e->g->iface_serial;
+    free_iface_pictures(e);
+    for (k = 0; k < e->g->iface_count; k++)
+        for (i = 0; i < e->g->ifaces[k].count; i++)
+            load_item_picture(e, &e->g->ifaces[k].items[i], &e->iface_img[k][i]);
+}
+
+static void draw_ifaces(explorer *e)
+{
+    int k, i, y, order;
+    for (k = 0; k < e->g->iface_count; k++)
+        for (order = 0; order < 256; order++) /* back to front */
+            for (i = 0; i < e->g->ifaces[k].count; i++) {
+                const game_iface_item *it = &e->g->ifaces[k].items[i];
+                const xf_image *img = &e->iface_img[k][i];
+                int x0 = it->item.region.left, y0 = it->item.region.top, w, h;
+                if ((it->item.flags & 0xFF) != order || !img->pixels || !vc_is_enabled(&e->g->interp, it->id))
+                    continue;
+                w = XF_MIN(img->width, SCREEN_W - x0);
+                h = XF_MIN(img->height, SCREEN_H - y0);
+                if (x0 < 0 || y0 < 0 || w <= 0)
+                    continue;
+                for (y = 0; y < h; y++)
+                    memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], img->pixels + (size_t)y * img->width, (size_t)w * 4);
+            }
+}
+
+/* --- Clips and sounds ------------------------------------------------ */
+
+/* Starts the next queued clip. A clip missing on disk still runs its
+ * triggers, so the story goes on; if the location card belongs to it,
+ * the card is shown alone for its typing time plus two seconds. */
+static void start_next_media(explorer *e)
+{
+    game_media m;
+    while (!e->playing && game_media_start(e->g, &m)) {
+        vc_asset_ref a;
+        int j;
+        e->have_clip = 0;
+        if (vc_read_asset_ref(&e->g->db, m.asset, &a) == 0)
+            for (j = 0; j < a.entry_count && !e->have_clip; j++) {
+                char path[1024];
+                if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
+                    xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
+                    e->have_clip = 1;
+                    xf_info("playing %s (%s)", a.logical, a.entries[j].path);
+                }
+            }
+        e->card_active = m.card;
+        e->card_start = plat_ticks_ms();
+        if (e->have_clip) {
+            e->playing = 1;
+        } else if (m.card) {
+            e->playing = 1;
+            e->card_until = e->card_start + (u32)strlen(e->g->card) * 50 + 2000;
+        } else {
+            xf_info("media %s: no file on disk", a.logical);
+            game_media_end(e->g);
+        }
+    }
+}
+
+static void stop_media(explorer *e)
+{
+    if (e->have_clip)
+        xf_player_close(&e->player);
+    e->have_clip = e->playing = e->card_active = 0;
+    e->card_until = 0;
+}
+
+/* Ends the clip on screen and runs its end triggers. */
+static void finish_media(explorer *e)
+{
+    stop_media(e);
+    game_media_end(e->g);
 }
 
 static void update_sound(explorer *e)
 {
     u32 now = plat_ticks_ms();
+    if (e->sound_serial != e->g->sound_serial) {
+        vc_asset_ref a;
+        int j;
+        e->sound_serial = e->g->sound_serial;
+        stop_sound(e);
+        if (vc_read_asset_ref(&e->g->db, e->g->sound, &a) == 0) {
+            for (j = 0; j < a.entry_count && !e->sound_open; j++)
+                if (resolve_media(e, a.entries[j].path, e->sound_path, sizeof(e->sound_path)) == 0 &&
+                    xf_player_open(&e->sound, e->sound_path, now) == 0)
+                    e->sound_open = 1;
+            e->sound_loop = strstr(a.logical, "/Loops/") != NULL;
+            xf_info("sound %s%s", a.logical, e->sound_open ? "" : ": no file on disk");
+        }
+    }
     if (!e->sound_open || xf_player_update(&e->sound, now))
         return;
     xf_player_close(&e->sound);
@@ -404,497 +422,7 @@ static void stop_sound(explorer *e)
     e->sound_open = 0;
 }
 
-/* Loads the picture of an interface item: the first media of its list,
- * an image of a .pff bundle or a frame of a movie. */
-static void load_item_picture(explorer *e, iface_item *it)
-{
-    u32 ids[8];
-    int n = vc_read_list(&e->db, it->item.assets, ids, 8), i, j;
-    memset(&it->img, 0, sizeof(it->img));
-    for (i = 0; i < n && !it->img.pixels; i++) {
-        vc_asset_ref a;
-        if (vc_read_asset_ref(&e->db, ids[i], &a) != 0)
-            continue;
-        for (j = 0; j < a.entry_count && !it->img.pixels; j++) {
-            const vc_media_entry *m = &a.entries[j];
-            const char *ext = strrchr(m->path, '.');
-            char path[1024];
-            if (resolve_media(e, m->path, path, sizeof(path)) != 0)
-                continue;
-            if (ext && strcmp(ext, ".pff") == 0) {
-                u32 size;
-                u8 *data;
-                if (!e->pff_open)
-                    e->pff_open = xf_pff_open(&e->pff, path) == 0;
-                data = e->pff_open ? xf_pff_read(&e->pff, m->start, &size) : NULL;
-                if (data && xf_pict_decode(data, size, &it->img) != 0)
-                    memset(&it->img, 0, sizeof(it->img));
-                free(data);
-            } else {
-                int w = it->item.region.right - it->item.region.left;
-                int h = it->item.region.bottom - it->item.region.top;
-                if (open_nav_file(e, m->path) == 0 && w > 0 && h > 0) {
-                    it->img.pixels = calloc((size_t)w * h, 4);
-                    it->img.width = w;
-                    it->img.height = h;
-                    if (it->img.pixels && xf_movie_frame_at(&e->nav, m->start, it->img.pixels, w, h) != 0) {
-                        free(it->img.pixels);
-                        memset(&it->img, 0, sizeof(it->img));
-                    }
-                }
-            }
-        }
-    }
-}
-
-static void close_iface(explorer *e, int k)
-{
-    int i;
-    for (i = 0; i < e->ifaces[k].count; i++)
-        free(e->ifaces[k].items[i].img.pixels);
-    e->ifaces[k] = e->ifaces[--e->iface_count];
-}
-
-/* 0x44E760 act_interface: control 0 shows a VCIFaceLayout unless it is
- * already up, 1 closes it. */
-static void host_interface(void *user, u32 id, u8 control)
-{
-    explorer *e = user;
-    u32 ids[24];
-    int k, n, i;
-    for (k = 0; k < e->iface_count; k++)
-        if (e->ifaces[k].layout == id)
-            break;
-    if (control == 1) {
-        if (k < e->iface_count)
-            close_iface(e, k);
-        e->iface_hover = 0;
-        return;
-    }
-    if (control != 0 || k < e->iface_count || e->iface_count >= MAX_IFACES)
-        return;
-    n = vc_read_list(&e->db, id, ids, 24);
-    if (n <= 0)
-        return;
-    {
-        iface_display *d = &e->ifaces[e->iface_count++];
-        d->layout = id;
-        d->count = 0;
-        for (i = 0; i < n; i++) {
-            iface_item *it = &d->items[d->count];
-            if (vc_read_iface_item(&e->db, ids[i], &it->item) != 0)
-                continue;
-            it->id = ids[i];
-            load_item_picture(e, it);
-            d->count++;
-        }
-        xf_info("interface %u: %d items", id, d->count);
-    }
-}
-
-static int item_order(const iface_item *it) { return it->item.flags & 0xFF; }
-
-/* The front item under (x, y) of the top layout that has triggers. */
-static iface_item *iface_item_at(explorer *e, int x, int y)
-{
-    iface_item *best = NULL;
-    int i;
-    if (!e->iface_count)
-        return NULL;
-    {
-        iface_display *d = &e->ifaces[e->iface_count - 1];
-        for (i = 0; i < d->count; i++) {
-            iface_item *it = &d->items[i];
-            const vc_region *r = &it->item.region;
-            if (!it->item.triggers || !vc_is_enabled(&e->interp, it->id) || x < r->left || x >= r->right ||
-                y < r->top || y >= r->bottom)
-                continue;
-            if (!best || item_order(it) >= item_order(best))
-                best = it;
-        }
-    }
-    return best;
-}
-
-static void draw_ifaces(explorer *e)
-{
-    int k, i, y, order;
-    for (k = 0; k < e->iface_count; k++)
-        for (order = 0; order < 256; order++) /* back to front */
-            for (i = 0; i < e->ifaces[k].count; i++) {
-                const iface_item *it = &e->ifaces[k].items[i];
-                int x0 = it->item.region.left, y0 = it->item.region.top, w, h;
-                if (item_order(it) != order || !it->img.pixels || !vc_is_enabled(&e->interp, it->id))
-                    continue;
-                w = XF_MIN(it->img.width, SCREEN_W - x0);
-                h = XF_MIN(it->img.height, SCREEN_H - y0);
-                if (x0 < 0 || y0 < 0 || w <= 0)
-                    continue;
-                for (y = 0; y < h; y++)
-                    memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], it->img.pixels + (size_t)y * it->img.width,
-                           (size_t)w * 4);
-            }
-}
-
-/* Mouse over and off interface items run their kind 4 and 5 triggers. */
-static void iface_hover(explorer *e, int x, int y)
-{
-    iface_item *it = iface_item_at(e, x, y);
-    u32 id = it ? it->id : 0;
-    if (id == e->iface_hover)
-        return;
-    if (e->iface_hover) {
-        vc_iface_item old;
-        if (vc_read_iface_item(&e->db, e->iface_hover, &old) == 0)
-            vc_run_triggers(&e->interp, old.triggers, 5);
-    }
-    e->iface_hover = id;
-    if (it)
-        vc_run_triggers(&e->interp, it->item.triggers, 4);
-    after_triggers(e);
-}
-
-static void remove_timer(explorer *e, u8 id)
-{
-    int i;
-    for (i = 0; i < e->timer_count; i++)
-        if (e->timers[i].id == id)
-            e->timers[i--] = e->timers[--e->timer_count];
-}
-
-/* Starting a timer replaces any timer with the same number. */
-static void host_timer(void *user, u8 id, u32 ms, u8 control)
-{
-    explorer *e = user;
-    remove_timer(e, id);
-    if ((control & 0x7F) == 0 && e->timer_count < MAX_TIMERS) {
-        game_timer *t = &e->timers[e->timer_count++];
-        t->id = id;
-        t->due = plat_ticks_ms() + ms;
-        t->period = control & 0x80 ? XF_MAX(ms, 1) : 0;
-    }
-}
-
-/* Runs the timer triggers of everything on screen for each timer that
- * fired: the view and the places around it, and the media playing. */
-static void update_timers(explorer *e)
-{
-    u32 now = plat_ticks_ms();
-    int i;
-    for (i = 0; i < e->timer_count; i++) {
-        game_timer *t = &e->timers[i];
-        const vc_place *p;
-        u8 id = t->id;
-        if ((i32)(now - t->due) < 0)
-            continue;
-        if (t->period)
-            t->due += t->period;
-        else
-            e->timers[i--] = e->timers[--e->timer_count];
-        xf_debug("timer %u fired", id);
-        p = e->view ? vc_place_of(&e->places, e->view) : NULL;
-        if (p) {
-            vc_run_timer_triggers(&e->interp, p->node_triggers, id);
-            vc_run_timer_triggers(&e->interp, p->location_triggers, id);
-            vc_run_timer_triggers(&e->interp, p->viewpoint_triggers, id);
-        }
-        vc_run_timer_triggers(&e->interp, e->view_triggers, id);
-        if (e->playing_triggers)
-            vc_run_timer_triggers(&e->interp, e->playing_triggers, id);
-        after_triggers(e);
-    }
-}
-
-/* Media actions name a media list; its first entry is played. */
-static void host_play_media(void *user, u32 list, u8 selector)
-{
-    explorer *e = user;
-    u32 ids[8];
-    int n = vc_read_list(&e->db, list, ids, 8);
-    if (n <= 0) {
-        xf_info("play media list #%u: empty or missing", list);
-        return;
-    }
-    if (!play_sound(e, ids[0]))
-        queue_media(e, ids[0]);
-    (void)selector;
-}
-
-/* Queues one media reference to play next. */
-static void queue_media(explorer *e, u32 asset)
-{
-    if ((e->media_tail + 1) % 32 != e->media_head) {
-        e->media_queue[e->media_tail] = asset;
-        e->media_tail = (e->media_tail + 1) % 32;
-    }
-}
-
-/* 0x471820 play_intro_sequence: Fox logo, HyperBole logo, teaser and
- * title, each skippable with a click. The DVD build plays its own DVD
- * titles instead of the last two; we use the QuickTime files. */
-static void queue_intro(explorer *e)
-{
-    static const u32 intro[] = { 56003, 56002, 19668, 56001 };
-    size_t i;
-    if (getenv("XF_SKIP_INTRO"))
-        return;
-    for (i = 0; i < XF_COUNT(intro); i++)
-        queue_media(e, intro[i]);
-}
-
-/* Starts the next queued clip. Media can carry a trigger list: kind 8
- * runs when the media starts and kind 9 when it ends (finish_media). A
- * clip missing on disk still runs both, so the story goes on; if the
- * location card belongs to it, the card is shown alone for a while. */
-static void start_next_media(explorer *e)
-{
-    while (!e->playing && !e->card_until && e->media_head != e->media_tail) {
-        vc_asset_ref a;
-        u32 id = e->media_queue[e->media_head];
-        int j, card;
-        e->playing_slot = e->media_head;
-        e->media_head = (e->media_head + 1) % 32;
-        if (vc_read_asset_ref(&e->db, id, &a) != 0)
-            continue;
-        e->playing_triggers = a.triggers;
-        vc_run_triggers(&e->interp, a.triggers, 8);
-        for (j = 0; j < a.entry_count && !e->playing; j++) {
-            char path[1024];
-            if (resolve_media(e, a.entries[j].path, path, sizeof(path)) != 0)
-                continue;
-            if (xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
-                e->playing = 1;
-                xf_info("playing %s (%s)", a.logical, a.entries[j].path);
-            }
-        }
-        card = e->card_pending && e->playing_slot == e->card_slot;
-        if (card) {
-            e->card_pending = 0;
-            e->card_active = 1;
-            e->card_start = plat_ticks_ms();
-        }
-        if (!e->playing) {
-            xf_info("media %s: no file on disk", a.logical);
-            if (card) /* typed out, then held for two seconds */
-                e->card_until = e->card_start + (u32)strlen(e->card) * 50 + 2000;
-            else
-                finish_media(e);
-        }
-    }
-}
-
-/* Ends the current media and runs its kind 9 triggers. */
-static void finish_media(explorer *e)
-{
-    u32 triggers = e->playing_triggers;
-    stop_media(e);
-    if (triggers) {
-        vc_run_triggers(&e->interp, triggers, 9);
-        after_triggers(e);
-    }
-}
-
-static void stop_media(explorer *e)
-{
-    if (e->playing)
-        xf_player_close(&e->player);
-    e->playing = 0;
-    e->card_active = 0;
-    e->card_until = 0;
-    e->playing_triggers = 0;
-}
-
-/* Variables the game data registers with the engine at start-up through
- * the Reg* functions, by function name and argument index. */
-typedef struct {
-    char name[16];
-    int argc;
-    u32 vars[VC_MAX_ARGS];
-} registration;
-
-static registration g_regs[32];
-static int g_reg_count;
-
-/* Day of the week for a date in the Gregorian calendar (0 = Sunday). */
-static int weekday(int y, int m, int d)
-{
-    static const int t[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
-    if (m < 3)
-        y--;
-    return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
-}
-
-/* 0x4DB580: location label, then the date from iDayNight, then the time
- * from iCurrTime (HHMM) when `with_time` is set. The original formats the
- * date and time with the Windows locale; this is the US English form. */
-static void format_location_card(explorer *e, u32 label_ref, i32 day_night, i32 hhmm, int with_time)
-{
-    static const int days[8] = { 29, 2, 3, 4, 5, 6, 7, 8 }; /* 0x659C80 */
-    static const char *const wd[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
-                                       "Friday", "Saturday" };
-    static const char *const mon[13] = { "", "January", "February", "March", "April", "May", "June",
-                                         "July", "August", "September", "October", "November",
-                                         "December" };
-    char label[128] = "";
-    vc_asset_ref a;
-    int idx = day_night > 10 ? day_night - 10 : day_night, month, day, n;
-
-    idx = XF_CLAMP(idx, 0, 7);
-    month = idx == 0 ? 3 : 4;
-    day = days[idx];
-    {
-        xf_neo_reader r;
-        if (vc_class(&e->db, label_ref) == VC_ASSET_REF && xf_neo_object(&e->db, label_ref, &r, NULL, NULL) == 0) {
-            xf_neo_blob(&e->db, &r);
-            vc_read_name(&e->db, xf_neo_u32(&r), label, sizeof(label));
-        }
-    }
-    (void)a;
-    n = snprintf(e->card, sizeof(e->card), "%s\n%s, %s %d, 1996", label, wd[weekday(1996, month, day)],
-                 mon[month], day);
-    if (with_time && n > 0 && (size_t)n < sizeof(e->card)) {
-        int h = hhmm / 100, m = hhmm % 100;
-        snprintf(e->card + n, sizeof(e->card) - (size_t)n, "\n%d:%02d %s", h % 12 ? h % 12 : 12, m,
-                 h < 12 ? "AM" : "PM");
-    }
-}
-
-static i32 arg_value(explorer *e, const vc_operand *o)
-{
-    return o->kind == VC_OPND_VARIABLE ? vc_get_var(&e->interp, o->value) : (i32)o->value;
-}
-
-static int host_call_function(void *user, const vc_action *a)
-{
-    explorer *e = user;
-    const char *name = a->u.function.name;
-    int i;
-
-    /* 0x482E40 fn_StartVideoText: label media, day/night, time, show time */
-    if (strcmp(name, "StartVideoText") == 0 && a->u.function.argc == 4) {
-        format_location_card(e, a->u.function.args[0].value, arg_value(e, &a->u.function.args[1]),
-                             arg_value(e, &a->u.function.args[2]), arg_value(e, &a->u.function.args[3]) != 0);
-        e->card_pending = 1;
-        e->card_slot = (e->media_tail + 31) % 32; /* the clip queued just before */
-        xf_info("location card: %s", e->card);
-        return 1;
-    }
-
-    /* 0x486030 fn_SetStartView: node, location, viewpoint, view */
-    if (strcmp(name, "SetStartView") == 0 && a->u.function.argc == 4) {
-        e->pending_view = a->u.function.args[3].value;
-        return 1;
-    }
-    /* 0x4BC930 fn_StopAllTimers */
-    if (strcmp(name, "StopAllTimers") == 0) {
-        e->timer_count = 0;
-        return 1;
-    }
-    if (strncmp(name, "Reg", 3) == 0 && g_reg_count < (int)XF_COUNT(g_regs)) {
-        registration *r = &g_regs[g_reg_count++];
-        memcpy(r->name, name, sizeof(r->name));
-        r->argc = a->u.function.argc;
-        for (i = 0; i < a->u.function.argc; i++)
-            r->vars[i] = a->u.function.args[i].value;
-        return 1;
-    }
-    xf_info("function %s (not implemented)", name);
-    return 1;
-}
-
-/* Runs the start-up triggers of the title object: they register the
- * engine variables and call SetStartView. Returns the start view. */
-static u32 new_game(explorer *e)
-{
-    u32 i, title = 0;
-    xf_neo_reader r;
-    for (i = 0; i < e->db.count && !title; i++)
-        if (e->db.entries[i].class_id == VC_TITLE)
-            title = e->db.entries[i].id;
-    if (!title || xf_neo_object(&e->db, title, &r, NULL, NULL) != 0)
-        return 0;
-    /* VCTitle: list, string, date, string, string, u32, trigger list, ... */
-    xf_neo_read_list(&r);
-    xf_neo_blob(&e->db, &r);
-    xf_neo_u32(&r);
-    xf_neo_blob(&e->db, &r);
-    xf_neo_blob(&e->db, &r);
-    xf_neo_u32(&r);
-    e->pending_view = 0;
-    vc_run_triggers(&e->interp, xf_neo_u32(&r), 8);
-    xf_info("new game: %d engine registrations, start view %u", g_reg_count, e->pending_view);
-    i = e->pending_view;
-    e->pending_view = 0;
-    return i;
-}
-
-static void build_spots(explorer *e, const vc_view *v)
-{
-    int i;
-    e->spot_count = 0;
-    add_spots(e, v->navs, SPOT_NAV);
-    add_spots(e, v->explorables, SPOT_EXPLORE);
-    add_spots(e, v->characters, SPOT_CHARACTER);
-    for (i = 0; i < e->spot_count; i++)
-        xf_debug("spot %u kind %d (%d,%d)-(%d,%d)", e->spots[i].target, e->spots[i].kind, e->spots[i].region.left,
-                 e->spots[i].region.top, e->spots[i].region.right, e->spots[i].region.bottom);
-}
-
-static int enter_view(explorer *e, u32 id)
-{
-    vc_view v;
-    if (vc_read_view(&e->db, id, &v) != 0) {
-        xf_warn("explore: %u is not a view", id);
-        return -1;
-    }
-    /* Kinds 8 and 9 are taken as entering and leaving (see
-     * scene-graph.md). Leave from the inside out, enter from the outside in. */
-    {
-        const vc_place *from = e->view ? vc_place_of(&e->places, e->view) : NULL;
-        const vc_place *to = vc_place_of(&e->places, id);
-        if (e->view)
-            vc_run_triggers(&e->interp, e->view_triggers, 9);
-        if (from && (!to || to->viewpoint != from->viewpoint))
-            vc_run_triggers(&e->interp, from->viewpoint_triggers, 9);
-        if (from && (!to || to->location != from->location))
-            vc_run_triggers(&e->interp, from->location_triggers, 9);
-        if (from && (!to || to->node != from->node))
-            vc_run_triggers(&e->interp, from->node_triggers, 9);
-        if (to && (!from || to->node != from->node))
-            vc_run_triggers(&e->interp, to->node_triggers, 8);
-        if (to && (!from || to->location != from->location))
-            vc_run_triggers(&e->interp, to->location_triggers, 8);
-        if (to && (!from || to->viewpoint != from->viewpoint))
-            vc_run_triggers(&e->interp, to->viewpoint_triggers, 8);
-    }
-    e->view = id;
-    e->view_triggers = v.triggers;
-    vc_run_triggers(&e->interp, v.triggers, 8);
-    if (e->pending_view && e->pending_view != id) {
-        u32 next = e->pending_view;
-        e->pending_view = 0;
-        return enter_view(e, next);
-    }
-    build_spots(e, &v);
-    load_picture(e, &v);
-    xf_info("view %u: %d hotspots, %s", id, e->spot_count, e->label);
-    return 0;
-}
-
-/* Triggers run outside a view change (media start and end) can enable
- * objects or set a view: rebuild the hotspots, then follow the view. */
-static void after_triggers(explorer *e)
-{
-    vc_view v;
-    if (e->pending_view) {
-        u32 next = e->pending_view;
-        e->pending_view = 0;
-        enter_view(e, next);
-    } else if (e->view && vc_read_view(&e->db, e->view, &v) == 0) {
-        build_spots(e, &v);
-        refresh_picture(e, &v);
-    }
-}
+/* --- Drawing --------------------------------------------------------- */
 
 static void frame_rect(explorer *e, const vc_region *r, u32 color)
 {
@@ -917,12 +445,13 @@ static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
     xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    const game *g = e->g;
     int i, y;
 
     memset(e->fb, 0, sizeof(e->fb));
-    if (e->playing || e->card_until) {
-        const u32 *f = e->playing ? xf_player_frame(&e->player) : NULL;
-        const char *sub = e->playing ? xf_player_subtitle(&e->player) : NULL;
+    if (e->playing) {
+        const u32 *f = e->have_clip ? xf_player_frame(&e->player) : NULL;
+        const char *sub = e->have_clip ? xf_player_subtitle(&e->player) : NULL;
         if (f) {
             /* Scene clips fill the picture area; other clips (logos, titles)
              * are centred on the screen. */
@@ -941,8 +470,8 @@ static void draw(explorer *e, int mx, int my)
         if (e->card_active && e->have_font) {
             char shown[256];
             size_t n = (plat_ticks_ms() - e->card_start) / 50;
-            n = XF_MIN(n, strlen(e->card));
-            memcpy(shown, e->card, n);
+            n = XF_MIN(n, strlen(g->card));
+            memcpy(shown, g->card, n);
             shown[n] = '\0';
             xf_text_draw_wrapped(&s, &e->font, 22, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 34, SCREEN_W - 40,
                                  shown, 0xFFFFFF, 0x000000);
@@ -962,37 +491,37 @@ static void draw(explorer *e, int mx, int my)
         for (y = 0; y < h; y++)
             memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], vd->frame + (size_t)y * vd->width, (size_t)w * 4);
     }
-    for (i = 0; i < e->spot_count; i++) {
-        const vc_region *r = &e->spots[i].region;
+    for (i = 0; i < g->spot_count; i++) {
+        const vc_region *r = &g->spots[i].region;
         int inside = mx >= r->left && mx < r->right && my >= r->top && my < r->bottom;
-        frame_rect(e, r, inside ? 0xFFFFFF : colors[e->spots[i].kind]);
+        frame_rect(e, r, inside ? 0xFFFFFF : colors[g->spots[i].kind]);
     }
     if (e->have_font) {
-        xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
         static const char help[] = "green: move  yellow: examine  cyan: character  right click: back";
+        xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
         xf_text_draw(&s, &e->font, 14, 8, 470, help, sizeof(help) - 1, 0x808080);
     }
     draw_ifaces(e);
 }
 
-/* Returns the move under the mouse, or NULL. The last matching spot wins,
- * so small spots inside the large turn areas can be clicked. */
-static const spot *spot_at(const explorer *e, int x, int y)
+/* 0x471820 play_intro_sequence: Fox logo, HyperBole logo, teaser and
+ * title, each skippable with a click. The DVD build plays its own DVD
+ * titles instead of the last two; we use the QuickTime files. */
+static void queue_intro(explorer *e)
 {
-    int i;
-    for (i = e->spot_count - 1; i >= 0; i--) {
-        const vc_region *r = &e->spots[i].region;
-        if (x >= r->left && x < r->right && y >= r->top && y < r->bottom)
-            return &e->spots[i];
-    }
-    return NULL;
+    static const u32 intro[] = { 56003, 56002, 19668, 56001 };
+    size_t i;
+    if (getenv("XF_SKIP_INTRO"))
+        return;
+    for (i = 0; i < XF_COUNT(intro); i++)
+        game_queue_media(e->g, intro[i]);
 }
 
 static int open_asset_player(explorer *e, u32 asset, xf_player *p)
 {
     vc_asset_ref a;
     int j;
-    if (vc_read_asset_ref(&e->db, asset, &a) != 0)
+    if (vc_read_asset_ref(&e->g->db, asset, &a) != 0)
         return -1;
     for (j = 0; j < a.entry_count; j++) {
         char path[1024];
@@ -1031,7 +560,7 @@ static void menu_enter(explorer *e)
     {
         vc_asset_ref a;
         char path[1024];
-        if (vc_read_asset_ref(&e->db, g_menu_parts[MENU_RIGHT].asset, &a) == 0 && a.entry_count &&
+        if (vc_read_asset_ref(&e->g->db, g_menu_parts[MENU_RIGHT].asset, &a) == 0 && a.entry_count &&
             resolve_media(e, a.entries[0].path, path, sizeof(path)) == 0 &&
             xf_mov_open(&e->right_mov, path) == 0) {
             xf_mov_track *t = xf_mov_find(&e->right_mov, XF_TRACK_VIDEO);
@@ -1133,30 +662,15 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     char path[1024];
     int running = 1, mx = 0, my = 0;
 
-    if (!e)
-        return 1;
-    e->data_dir = data_dir;
-    e->media_dirs = media_dirs;
-    e->disc = disc;
-    if (xf_path_resolve(data_dir, "XFILES.HDB", path, sizeof(path)) != 0 || xf_neo_open(&e->db, path) != 0) {
-        xf_error("explore: cannot open XFILES.HDB in %s", data_dir);
+    if (!e || !(e->g = malloc(sizeof(game))) || game_open(e->g, data_dir) != 0) {
+        if (e)
+            free(e->g);
         free(e);
         return 1;
     }
-    {
-        vc_host host = { NULL, host_go_to_view, host_play_media, host_timer, host_interface, host_call_function };
-        host.user = e;
-        if (xf_path_resolve(data_dir, "XFILES.GAM", path, sizeof(path)) != 0 ||
-            xf_neo_open(&e->gam, path) != 0 || vc_interp_init(&e->interp, &e->db, &e->gam, &host) != 0) {
-            xf_error("explore: cannot load XFILES.GAM in %s", data_dir);
-            xf_neo_close(&e->db);
-            free(e);
-            return 1;
-        }
-        e->interp.trace = getenv("XF_TRACE") != NULL;
-        vc_place_map_build(&e->db, &e->places);
-        xf_info("%u views placed in the hierarchy", e->places.count);
-    }
+    e->data_dir = data_dir;
+    e->media_dirs = media_dirs;
+    e->disc = disc;
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
         e->have_font = xf_font_load(&e->font, path) == 0;
@@ -1164,13 +678,12 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         /* Like the original: intro, then the main menu. */
         queue_intro(e);
         e->in_menu = -1; /* open the menu once the intro has played */
-    } else if (enter_view(e, start_view) != 0) {
-        xf_neo_close(&e->db);
-        free(e);
-        return 1;
+    } else if (game_enter_view(e->g, start_view) != 0) {
+        running = 0;
     }
     while (running) {
         plat_event ev;
+        game_tick(e->g, plat_ticks_ms());
         while (plat_poll(&ev)) {
             if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
                 running = 0;
@@ -1181,66 +694,40 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
                 if (item >= 0)
                     xf_info("menu: %s", g_menu_items[item].name);
                 if (item == 0) { /* New */
-                    u32 v;
                     menu_close(e);
-                    v = new_game(e);
-                    if (v)
-                        enter_view(e, v);
+                    game_new(e->g);
                 } else if (item == 6) { /* Quit */
                     running = 0;
                 }
-            }
-            else if (ev.type == PLAT_EV_MOUSE_MOVE) {
+            } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
                 mx = ev.x;
                 my = ev.y;
-                if (e->iface_count && !e->playing)
-                    iface_hover(e, mx, my);
-            } else if ((e->playing || e->card_until) && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
+                if (!e->playing)
+                    game_hover(e->g, mx, my);
+            } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
                 if (!e->card_active)
                     finish_media(e); /* skip the clip; the location card cannot be skipped */
-            } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && e->iface_count) {
-                /* An interface takes every click while it is up. */
-                iface_item *it = iface_item_at(e, ev.x, ev.y);
-                if (it) {
-                    xf_info("click interface item %u", it->id);
-                    vc_run_triggers(&e->interp, it->item.triggers, 0);
-                    e->iface_hover = 0;
-                    after_triggers(e);
-                }
             } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
-                const spot *s = spot_at(e, ev.x, ev.y);
-                if (s) {
-                    u32 from = e->view, target = s->kind == SPOT_NAV ? s->target : 0;
-                    xf_info("click %s %u", s->kind == SPOT_NAV ? "move to view" : "object", s->target);
-                    e->pending_view = 0;
-                    vc_run_triggers(&e->interp, s->triggers, 0);
-                    if (e->pending_view)
-                        target = e->pending_view;
-                    e->pending_view = 0;
-                    if (target && enter_view(e, target) == 0 && e->history_len < HISTORY)
-                        e->history[e->history_len++] = from;
-                    else if (!target)
-                        after_triggers(e);
-                }
+                game_click(e->g, ev.x, ev.y);
             } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
                        (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
-                if (e->history_len > 0)
-                    enter_view(e, e->history[--e->history_len]);
+                game_back(e->g);
             }
         }
-        if ((e->playing && !xf_player_update(&e->player, plat_ticks_ms())) ||
+        if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
             (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
             finish_media(e);
         start_next_media(e);
         update_sound(e);
-        if (e->in_menu == 0)
-            update_timers(e);
-        if (e->in_menu == -1 && !e->playing && !e->card_until && e->media_head == e->media_tail)
+        if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g))
             menu_enter(e);
         if (e->in_menu == 1) {
             menu_update(e);
             menu_draw(e);
         } else {
+            if (e->g->view)
+                refresh_picture(e);
+            refresh_iface_pictures(e);
             draw(e, mx, my);
         }
         plat_present(e->fb, SCREEN_W, SCREEN_H, SCREEN_W);
@@ -1249,8 +736,7 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     stop_media(e);
     stop_sound(e);
     close_anims(e);
-    while (e->iface_count)
-        close_iface(e, 0);
+    free_iface_pictures(e);
     if (e->pff_open)
         xf_pff_close(&e->pff);
     menu_close(e);
@@ -1260,10 +746,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         xf_text_cache_clear();
         xf_font_free(&e->font);
     }
-    vc_place_map_free(&e->places);
-    vc_interp_free(&e->interp);
-    xf_neo_close(&e->gam);
-    xf_neo_close(&e->db);
+    game_close(e->g);
+    free(e->g);
     free(e);
     return 0;
 }
