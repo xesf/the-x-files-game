@@ -116,6 +116,12 @@ static void operand_text(const vc_operand *o, char *out, size_t size)
     case VC_OPND_VARIABLE: snprintf(out, size, "var%u", o->value); break;
     case VC_OPND_PARAMETER: snprintf(out, size, "param%u", o->value); break;
     case VC_OPND_LITERAL: snprintf(out, size, "%d", (i32)o->value); break;
+    case VC_OPND_CHAR:
+        if (o->value >= 32 && o->value < 127)
+            snprintf(out, size, "'%c'", (char)o->value);
+        else
+            snprintf(out, size, "char %u", o->value);
+        break;
     case VC_OPND_CONTEXT: snprintf(out, size, "ctx%u", o->value); break;
     default: snprintf(out, size, "?%u:%u", o->kind, o->value); break;
     }
@@ -155,8 +161,8 @@ void vc_action_text(const vc_action *a, char *out, size_t size)
                      a->u.timer.control);
             break;
         case VC_ACT_ENABLE:
-            snprintf(body, sizeof(body), "enable #%u value %u control %u", a->u.enable.id,
-                     a->u.enable.value, a->u.enable.control);
+            snprintf(body, sizeof(body), "%s #%u", a->u.enable.control ? "enable" : "disable",
+                     a->u.enable.id);
             break;
         case VC_ACT_SET_VIEW:
             snprintf(body, sizeof(body), "go to view #%u (node #%u location #%u viewpoint #%u)",

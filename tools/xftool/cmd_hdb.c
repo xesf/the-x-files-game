@@ -3,6 +3,8 @@
 
 #include "data/neo.h"
 #include "vc/action.h"
+#include "vc/interp.h"
+#include "xf_log.h"
 #include "vc/vc.h"
 #include "xftool.h"
 
@@ -243,7 +245,34 @@ static int cmd_actions(int argc, char **argv)
     return 0;
 }
 
+/* Runs an action list or a trigger list against the initial game state. */
+static int cmd_run(int argc, char **argv)
+{
+    xf_neo_db hdb, gam;
+    vc_interp in;
+    u32 id;
+
+    if (argc != 4 && argc != 5) {
+        fputs("usage: xftool hdb-run <file.hdb> <file.gam> <action list | trigger list> [kind]\n", stderr);
+        return 2;
+    }
+    if (xf_neo_open(&hdb, argv[1]) != 0 || xf_neo_open(&gam, argv[2]) != 0)
+        return 1;
+    vc_interp_init(&in, &hdb, &gam, NULL);
+    in.trace = 1;
+    id = (u32)strtoul(argv[3], NULL, 0);
+    if (vc_class(&hdb, id) == VC_TRIGGER_LIST)
+        vc_run_triggers(&in, id, argc == 5 ? atoi(argv[4]) : 0);
+    else
+        vc_run_action_list(&in, id);
+    vc_interp_free(&in);
+    xf_neo_close(&gam);
+    xf_neo_close(&hdb);
+    return 0;
+}
+
 const xftool_cmd xftool_hdb_cmds[] = {
+    { "hdb-run", "<hdb> <gam> <list> [kind]  run an action or trigger list with tracing", cmd_run },
     { "hdb-actions", "<file.hdb> [list id]  decode actions, or count them by type", cmd_actions },
     { "hdb-walk", "<file.hdb> <view> [disc]  follow every move from a view", cmd_walk },
     { "hdb-asset", "<file.hdb> <id>...  decode media references", cmd_asset },

@@ -16,7 +16,13 @@ enum {
 };
 
 /* Operand kinds */
-enum { VC_OPND_VARIABLE = 0, VC_OPND_PARAMETER = 1, VC_OPND_LITERAL = 2, VC_OPND_CONTEXT = 4 };
+enum {
+    VC_OPND_VARIABLE = 0,  /* GAM variable id */
+    VC_OPND_PARAMETER = 1, /* local of the running list: 0-7, 10000-10011, 20000-20003 */
+    VC_OPND_LITERAL = 2,   /* number */
+    VC_OPND_CHAR = 3,      /* character, for example 'A' */
+    VC_OPND_CONTEXT = 4    /* value from the trigger that runs the list */
+};
 
 typedef struct {
     u32 value;
@@ -39,7 +45,7 @@ typedef struct {
         vc_expression statement;
         struct { u32 id; u8 selector; } media;
         struct { u32 duration; u8 id, control; } timer;
-        struct { u32 id, value; u8 control; } enable;
+        struct { u32 id, value; u8 control; } enable; /* control: new state; value is always 0 */
         struct { u32 view, node, location, viewpoint; } set_view;
         struct { u32 id; u8 control; } iface;
         struct { char name[16]; int argc; vc_operand args[VC_MAX_ARGS]; } function;

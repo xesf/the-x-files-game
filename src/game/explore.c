@@ -8,6 +8,7 @@
 #include "media/mov.h"
 #include "media/video.h"
 #include "platform/plat.h"
+#include "vc/interp.h"
 #include "vc/vc.h"
 #include "xf_file.h"
 #include "xf_log.h"
@@ -26,13 +27,17 @@ enum { SPOT_NAV, SPOT_EXPLORE, SPOT_CHARACTER };
 typedef struct {
     int kind;
     vc_region region;
-    u32 target; /* view for moves, object id otherwise */
+    u32 target;   /* view for moves, object id otherwise */
+    u32 triggers; /* trigger list run on click, or 0 */
 } spot;
 
 typedef struct {
     const char *data_dir;
     int disc;
     xf_neo_db db;
+    xf_neo_db gam;
+    vc_interp interp;
+    u32 pending_view;
     xf_font font;
     int have_font;
     u32 fb[SCREEN_W * SCREEN_H];
@@ -108,12 +113,15 @@ static void add_spots(explorer *e, u32 list, int kind)
             vc_hotspot h;
             if (vc_read_nav(&e->db, ids[i], &nav) != 0 || vc_read_hotspot(&e->db, nav.hotspot, &h) != 0)
                 continue;
+            if (!vc_is_enabled(&e->interp, ids[i]))
+                continue;
             s->region = h.region;
             s->target = nav.target;
+            s->triggers = nav.extra;
         } else {
             /* Explorables and character views start with a region; character
              * views have one 4-byte field before it. */
-            if (xf_neo_object(&e->db, ids[i], &r, NULL, NULL) != 0)
+            if (!vc_is_enabled(&e->interp, ids[i]) || xf_neo_object(&e->db, ids[i], &r, NULL, NULL) != 0)
                 continue;
             if (kind == SPOT_CHARACTER)
                 xf_neo_u32(&r);
@@ -123,12 +131,36 @@ static void add_spots(explorer *e, u32 list, int kind)
             s->region.right = (i16)xf_neo_u16(&r);
             s->region.bottom = (i16)xf_neo_u16(&r);
             s->target = ids[i];
+            /* Explorables keep their trigger list right after the region. */
+            s->triggers = kind == SPOT_EXPLORE ? xf_neo_u32(&r) : 0;
             if (r.error)
                 continue;
         }
         s->kind = kind;
         e->spot_count++;
     }
+}
+
+static void host_go_to_view(void *user, u32 view)
+{
+    ((explorer *)user)->pending_view = view;
+}
+
+static void host_play_media(void *user, u32 asset, u8 selector)
+{
+    explorer *e = user;
+    vc_asset_ref a;
+    if (vc_read_asset_ref(&e->db, asset, &a) == 0)
+        xf_info("play media #%u (%s), selector %u", asset, a.logical, selector);
+    else
+        xf_info("play media #%u, selector %u", asset, selector);
+}
+
+static int host_call_function(void *user, const vc_action *a)
+{
+    (void)user;
+    xf_info("function %s (not implemented)", a->u.function.name);
+    return 1;
 }
 
 static int enter_view(explorer *e, u32 id)
@@ -139,6 +171,13 @@ static int enter_view(explorer *e, u32 id)
         return -1;
     }
     e->view = id;
+    /* Kind 8 is our working guess for "entering"; see scene-graph.md. */
+    vc_run_triggers(&e->interp, v.triggers, 8);
+    if (e->pending_view && e->pending_view != id) {
+        u32 next = e->pending_view;
+        e->pending_view = 0;
+        return enter_view(e, next);
+    }
     e->spot_count = 0;
     add_spots(e, v.navs, SPOT_NAV);
     add_spots(e, v.explorables, SPOT_EXPLORE);
@@ -216,6 +255,18 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         free(e);
         return 1;
     }
+    {
+        vc_host host = { NULL, host_go_to_view, host_play_media, host_call_function };
+        host.user = e;
+        if (xf_path_resolve(data_dir, "XFILES.GAM", path, sizeof(path)) != 0 ||
+            xf_neo_open(&e->gam, path) != 0 || vc_interp_init(&e->interp, &e->db, &e->gam, &host) != 0) {
+            xf_error("explore: cannot load XFILES.GAM in %s", data_dir);
+            xf_neo_close(&e->db);
+            free(e);
+            return 1;
+        }
+        e->interp.trace = getenv("XF_TRACE") != NULL;
+    }
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
         e->have_font = xf_font_load(&e->font, path) == 0;
@@ -234,12 +285,16 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
                 my = ev.y;
             } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
                 const spot *s = spot_at(e, ev.x, ev.y);
-                if (s && s->kind == SPOT_NAV) {
-                    u32 from = e->view;
-                    if (enter_view(e, s->target) == 0 && e->history_len < HISTORY)
+                if (s) {
+                    u32 from = e->view, target = s->kind == SPOT_NAV ? s->target : 0;
+                    xf_info("click %s %u", s->kind == SPOT_NAV ? "move to view" : "object", s->target);
+                    e->pending_view = 0;
+                    vc_run_triggers(&e->interp, s->triggers, 0);
+                    if (e->pending_view)
+                        target = e->pending_view;
+                    e->pending_view = 0;
+                    if (target && enter_view(e, target) == 0 && e->history_len < HISTORY)
                         e->history[e->history_len++] = from;
-                } else if (s) {
-                    xf_info("clicked object %u", s->target);
                 }
             } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
                        (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
@@ -257,6 +312,8 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         xf_text_cache_clear();
         xf_font_free(&e->font);
     }
+    vc_interp_free(&e->interp);
+    xf_neo_close(&e->gam);
     xf_neo_close(&e->db);
     free(e);
     return 0;

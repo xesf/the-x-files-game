@@ -70,6 +70,7 @@ Operand kinds:
 | 0 | A game variable, by ID |
 | 1 | A parameter of the current action list: 0–7 integers, 10000–10011 booleans, 20000–20003 bytes |
 | 2 | A literal number |
+| 3 | A character, for example `'A'`; compared with character variables such as `cSubNode` |
 | 4 | A value from the context of the trigger that runs the list |
 
 Operations in conditions: `==`, `!=`, `>`, `<`, `>=`, `<=`, `and`, `or`
@@ -85,7 +86,7 @@ After the optional condition, the data depends on the type (low 7 bits):
 | 0 | Variable statement | An expression (11 bytes) | 2,354 |
 | 1 | Play media | Media object ID (4), selector (1) | 1,859 |
 | 2 | Timer | Duration (4), timer number (1), control (1) | 510 |
-| 3 | Enable or disable | Object ID (4), value (4), control (1) | 5,265 |
+| 3 | Enable or disable | GAM `VCEnabled` ID (4), value (4, always 0), new state (1: 1 enable, 0 disable) | 5,265 |
 | 4 | Go to view | View, node, location and viewpoint IDs (4 each) | 347 |
 | 5 | Interface | Interface object ID (4), control (1) | 1,888 |
 | 6 | Call a built-in function | Name (15 bytes), argument count (1), argument values (4 each), argument kinds (1 each) | 2,368 |
@@ -119,6 +120,38 @@ SendEmail(1) ×322, DoActionList(2) ×190, RelocateIFace(5) ×118, SetAIGlow(1) 
 The four functions in the table that the data never calls are
 `IsoChamberStat`, `RegPreferences`, `RegShanksNode2` and
 `RegShanksNode3`.
+
+## Our interpreter
+
+`src/vc/interp.c` runs action lists against the state loaded from
+`XFILES.GAM`. It already handles:
+
+- conditions, with all eight comparisons;
+- variable statements, on GAM variables and on list locals (parameters);
+- enable and disable;
+- go to view;
+- `DoActionList`, passing its second argument as integer local 0 of the
+  called list (still to be confirmed).
+
+It passes media actions and other built-in functions to the game, which
+for now only logs them. It runs actions at once instead of queuing them,
+and it does not yet read trigger context values (operand kind 4).
+
+```sh
+xftool hdb-run XFILES.HDB XFILES.GAM 28618 8   # run the kind-8 triggers of list 28618
+XF_TRACE=1 build/xfiles --explore <game> 1236   # explorer with an action trace
+```
+
+Example trace when view 1236 is entered:
+
+```
+#72533 interface #72504 control 0
+#72534 SetIFLAsView(72504)
+#84975 var1057 = 1236
+```
+
+The last action stores the current view in variable 1057. This supports
+the guess that trigger kind 8 means entering.
 
 ## Tools
 
