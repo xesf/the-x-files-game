@@ -69,6 +69,12 @@
 0x44E990 MainMenu_on_command   slot 29: passes the command code to MainMenu_show
 0x44DB40 MainMenu_show         shows or hides the menu players and adds them to the display list at manager+0x7D4
 0x482500 media_player_create   creates a player object for a VCAssetRef
+0x471820 play_intro_sequence   called from VCEngineApp_init before the main menu
+0x4E5E30 dvd_play_title        plays a DVD title by name ("ddigital1", "teaser", "intro")
+0x461680 media_resolve_path_install
+0x4616F0 media_resolve_path_cd
+0x44CEA0 clip_open
+0x44E610 prefs_skip_intro      true when the preferences skip the intro
 0x408AE0 media_play_until_done_or_click  plays a clip; left/right click skips, Alt+X stops
 0x47B8B0 window_register_class
 0x433320 ev_activate_load      event type 12: register, slot 9, slot 22

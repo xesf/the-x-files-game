@@ -77,6 +77,27 @@ events work like messages:
 | 11 | slot 29 (command, with a code) |
 | 12 | register by kind, then slot 9 (activate) and slot 22 (load) |
 
+## Intro
+
+`VCEngineApp_init` calls `play_intro_sequence` (`0x471820`) just before
+it posts the main menu. Unless the preferences skip the intro
+(`0x44E610`), it plays, one after the other and each skippable with a
+click (see below):
+
+| Order | Media ID | Media |
+|---|---|---|
+| 1 | 56003 | `Video:Game:Foxlogo.mov` (`XV/56003.xmv`) |
+| 2 | 56002 | `Video:Game:HBlogo.mov` (`XV/56002.xmv`) |
+| 3 | 19668 | `Video:Game:Teaser.mov` (`XV/19668.xmv`) |
+| 4 | 56001 | `Video:Game:xtitle.mov` (`XV/56001.xmv`) |
+
+On the DVD release, after the two logos the engine checks for the DVD
+title `ddigital1`; when it exists, it plays the DVD titles `teaser` and
+`intro` (`dvd_play_title`, `0x4E5E30`) instead of steps 3 and 4.
+
+Each media file is looked up in the install folder first and on the CD
+second (`0x461680`, `0x4616F0`).
+
 ## Main menu
 
 The start-up event posted by `VCEngineApp_init` is the main menu

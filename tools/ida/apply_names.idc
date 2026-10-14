@@ -71,6 +71,12 @@ static main()
     set_name(0x44E990, "MainMenu_on_command", SN_NOWARN);
     set_name(0x44DB40, "MainMenu_show", SN_NOWARN);
     set_name(0x482500, "media_player_create", SN_NOWARN);
+    set_name(0x471820, "play_intro_sequence", SN_NOWARN);
+    set_name(0x4E5E30, "dvd_play_title", SN_NOWARN);
+    set_name(0x461680, "media_resolve_path_install", SN_NOWARN);
+    set_name(0x4616F0, "media_resolve_path_cd", SN_NOWARN);
+    set_name(0x44CEA0, "clip_open", SN_NOWARN);
+    set_name(0x44E610, "prefs_skip_intro", SN_NOWARN);
     set_name(0x408AE0, "media_play_until_done_or_click", SN_NOWARN);
     set_name(0x47B8B0, "window_register_class", SN_NOWARN);
     set_name(0x433320, "ev_activate_load", SN_NOWARN);
