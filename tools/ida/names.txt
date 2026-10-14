@@ -29,6 +29,19 @@
 0x458780 action_queue_push
 0x47CE30 fn_get_argument       argument i of a built-in function call
 0x5E42C0 operand_to_int        evaluates an operand
+0x433060 QueuedAction_execute  slot 11 of the queued action: test condition, dispatch on type
+0x43DB70 VCAction_test_condition  1 when there is no condition; else compares two operands
+0x43DDE0 VCAction_condition_left
+0x410F80 VCAction_condition_right
+0x4328F0 VCAction_type
+0x432AA0 QueuedAction_context
+0x432850 QueuedAction_finish
+0x4756D0 act_expression        action type 0
+0x479BA0 act_media             action types 1 and 7
+0x4285A0 act_timer             action type 2
+0x420000 act_enable            action type 3
+0x46A0D0 act_set_view          action type 4
+0x44E760 act_interface         action type 5
 # Class factories (class ID in the comment)
 0x606EB0 VCTitle_create  class 0x27
 0x4660D0 VCNode_create  class 0x28
@@ -81,7 +94,7 @@
 0x5EE560 VCEmail_create  class 0x5A
 0x5F0CB0 VCEmailRead_create  class 0x5B
 0x5F0650 VCEmailPending_create  class 0x5C
-0x472310 vc_register_functions  fills the table of built-in functions
+0x472310 act_call_function     action type 6: builds the function table on first use, then calls by name
 # Built-in functions called by name from actions (type 6)
 0x4B5680 fn_AddIFLExcept  entry 0x6BD820
 0x4B5700 fn_AddrSelPDA  entry 0x6BD834

@@ -27,7 +27,28 @@ and calls `0x47BD40 vc_queue_action_list`. That function fetches the
 action list and the trigger, then wraps each action in a 0x140-byte
 queued-action object (`0x40C2B0`, vtable `0x65DBA8`) and pushes it on a
 queue. Actions therefore do not run at once; a later step processes the
-queue. Where that happens is not yet traced.
+queue.
+
+Each queued action runs through `0x433060 QueuedAction_execute`, slot 11
+of its vtable:
+
+1. Test the condition with `0x43DB70 VCAction_test_condition`. It returns
+   true when the action has no condition; otherwise it evaluates both
+   operands and compares them with the operation (0 to 7). When the test
+   fails, the action is finished without effect.
+2. Dispatch on the type:
+
+| Type | Handler |
+|---|---|
+| 0 | `0x4756D0 act_expression` |
+| 1, 7 | `0x479BA0 act_media` (media and sound share one handler) |
+| 2 | `0x4285A0 act_timer` |
+| 3 | `0x420000 act_enable` |
+| 4 | `0x46A0D0 act_set_view` |
+| 5 | `0x44E760 act_interface` |
+| 6 | `0x472310 act_call_function`: builds the function table on first use, then calls the handler by name |
+
+3. Finish the queued action (`0x432850`).
 
 ## Expressions
 
@@ -86,8 +107,8 @@ Example: action list 24226 holds five actions:
 ## Built-in functions
 
 Type 6 actions call a built-in engine function by name. The engine fills
-a table of 203 names and handlers at startup in
-`0x472310 vc_register_functions`. Our IDB names each handler `fn_<Name>`;
+a table of 203 names and handlers the first time a function is called,
+in `0x472310 act_call_function`. Our IDB names each handler `fn_<Name>`;
 `tools/ida/names.txt` lists them all with their addresses.
 
 The game data calls 199 of them (the number in parentheses is the

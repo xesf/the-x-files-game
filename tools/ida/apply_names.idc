@@ -32,6 +32,19 @@ static main()
     set_name(0x458780, "action_queue_push", SN_NOWARN);
     set_name(0x47CE30, "fn_get_argument", SN_NOWARN);
     set_name(0x5E42C0, "operand_to_int", SN_NOWARN);
+    set_name(0x433060, "QueuedAction_execute", SN_NOWARN);
+    set_name(0x43DB70, "VCAction_test_condition", SN_NOWARN);
+    set_name(0x43DDE0, "VCAction_condition_left", SN_NOWARN);
+    set_name(0x410F80, "VCAction_condition_right", SN_NOWARN);
+    set_name(0x4328F0, "VCAction_type", SN_NOWARN);
+    set_name(0x432AA0, "QueuedAction_context", SN_NOWARN);
+    set_name(0x432850, "QueuedAction_finish", SN_NOWARN);
+    set_name(0x4756D0, "act_expression", SN_NOWARN);
+    set_name(0x479BA0, "act_media", SN_NOWARN);
+    set_name(0x4285A0, "act_timer", SN_NOWARN);
+    set_name(0x420000, "act_enable", SN_NOWARN);
+    set_name(0x46A0D0, "act_set_view", SN_NOWARN);
+    set_name(0x44E760, "act_interface", SN_NOWARN);
     set_name(0x606EB0, "VCTitle_create", SN_NOWARN);
     set_name(0x4660D0, "VCNode_create", SN_NOWARN);
     set_name(0x42FB00, "VCLocaton_create", SN_NOWARN);
@@ -83,7 +96,7 @@ static main()
     set_name(0x5EE560, "VCEmail_create", SN_NOWARN);
     set_name(0x5F0CB0, "VCEmailRead_create", SN_NOWARN);
     set_name(0x5F0650, "VCEmailPending_create", SN_NOWARN);
-    set_name(0x472310, "vc_register_functions", SN_NOWARN);
+    set_name(0x472310, "act_call_function", SN_NOWARN);
     set_name(0x4B5680, "fn_AddIFLExcept", SN_NOWARN);
     set_name(0x4B5700, "fn_AddrSelPDA", SN_NOWARN);
     set_name(0x42F830, "fn_AddrSelected", SN_NOWARN);
