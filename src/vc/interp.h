@@ -21,6 +21,8 @@ typedef struct {
     void *user;
     void (*go_to_view)(void *user, u32 view);
     void (*play_media)(void *user, u32 asset_ref, u8 selector);
+    /* Timer action: control 0 starts timer `id` (bit 0x80: periodic), 1 stops it. */
+    void (*timer)(void *user, u8 id, u32 ms, u8 control);
     /* Returns 1 when the function was handled. */
     int (*call_function)(void *user, const vc_action *a);
 } vc_host;
@@ -33,6 +35,7 @@ typedef struct {
     u32 enable_count;
     u32 *enable_by_target;    /* indexes into enables, sorted by target */
     vc_host host;
+    i32 context;              /* number of the timer that fired (operand kind 4) */
     int depth;
     int trace;                /* print every action */
 } vc_interp;
@@ -50,5 +53,9 @@ int vc_is_enabled(const vc_interp *in, u32 hdb_object);
 void vc_run_action_list(vc_interp *in, u32 list);
 /* Runs the triggers of `kind` in a trigger list. */
 void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind);
+
+/* Runs the timer triggers (kind 7) of a trigger list for timer `timer`:
+ * only the actions whose condition reads the trigger context run. */
+void vc_run_timer_triggers(vc_interp *in, u32 trigger_list, int timer);
 
 #endif

@@ -122,7 +122,7 @@ static void operand_text(const vc_operand *o, char *out, size_t size)
         else
             snprintf(out, size, "char %u", o->value);
         break;
-    case VC_OPND_CONTEXT: snprintf(out, size, "ctx%u", o->value); break;
+    case VC_OPND_CONTEXT: snprintf(out, size, "fired_timer"); (void)o; break;
     default: snprintf(out, size, "?%u:%u", o->kind, o->value); break;
     }
 }
@@ -157,8 +157,11 @@ void vc_action_text(const vc_action *a, char *out, size_t size)
             snprintf(body, sizeof(body), "media #%u selector %u", a->u.media.id, a->u.media.selector);
             break;
         case VC_ACT_TIMER:
-            snprintf(body, sizeof(body), "timer %u: %u control %u", a->u.timer.id, a->u.timer.duration,
-                     a->u.timer.control);
+            if ((a->u.timer.control & 0x7F) == 1)
+                snprintf(body, sizeof(body), "stop timer %u", a->u.timer.id);
+            else
+                snprintf(body, sizeof(body), "start timer %u: %u ms%s", a->u.timer.id, a->u.timer.duration,
+                         a->u.timer.control & 0x80 ? " periodic" : "");
             break;
         case VC_ACT_ENABLE:
             snprintf(body, sizeof(body), "%s #%u", a->u.enable.control ? "enable" : "disable",

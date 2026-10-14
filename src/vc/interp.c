@@ -178,8 +178,9 @@ static i32 operand(const vc_interp *in, locals *l, const vc_operand *o)
     case VC_OPND_LITERAL:
     case VC_OPND_CHAR:
         return (i32)o->value;
+    case VC_OPND_CONTEXT:
+        return in->context;
     default:
-        /* Trigger context values are not wired up yet. */
         return 0;
     }
 }
@@ -258,6 +259,10 @@ static void run_action(vc_interp *in, locals *loc, u32 id)
             e->enabled = a.u.enable.control != 0;
         break;
     }
+    case VC_ACT_TIMER: /* 0x4285A0 act_timer */
+        if (in->host.timer)
+            in->host.timer(in->host.user, a.u.timer.id, a.u.timer.duration, a.u.timer.control);
+        break;
     case VC_ACT_SET_VIEW:
         if (in->host.go_to_view)
             in->host.go_to_view(in->host.user, a.u.set_view.view);
@@ -318,4 +323,34 @@ void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)
         if (k == kind && vc_is_enabled(in, ids[i]))
             vc_run_action_list(in, actions);
     }
+}
+
+/* 0x4163D0 registers each action of a kind 7 trigger whose condition
+ * compares the trigger context, keyed by the other operand; 0x42F8B0
+ * turns a fired timer into an event that runs the matching actions. */
+void vc_run_timer_triggers(vc_interp *in, u32 trigger_list, int timer)
+{
+    u32 ids[64], acts[MAX_LIST];
+    int n = vc_read_list(in->hdb, trigger_list, ids, 64), i, j, m;
+    i32 saved = in->context;
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        u32 actions;
+        locals loc;
+        if (vc_class(in->hdb, ids[i]) != VC_TRIGGER || xf_neo_object(in->hdb, ids[i], &r, NULL, NULL) != 0)
+            continue;
+        actions = xf_neo_u32(&r);
+        if (xf_neo_u8(&r) != 7 || !vc_is_enabled(in, ids[i]))
+            continue;
+        memset(&loc, 0, sizeof(loc));
+        in->context = timer;
+        m = vc_read_list(in->hdb, actions, acts, MAX_LIST);
+        for (j = 0; j < m; j++) {
+            vc_action a;
+            if (vc_read_action(in->hdb, acts[j], &a) == 0 && a.has_condition &&
+                (a.condition.left.kind == VC_OPND_CONTEXT || a.condition.right.kind == VC_OPND_CONTEXT))
+                run_action(in, &loc, acts[j]);
+        }
+    }
+    in->context = saved;
 }

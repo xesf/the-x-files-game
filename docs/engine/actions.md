@@ -71,7 +71,7 @@ Operand kinds:
 | 1 | A parameter of the current action list: 0–7 integers, 10000–10011 booleans, 20000–20003 bytes |
 | 2 | A literal number |
 | 3 | A character, for example `'A'`; compared with character variables such as `cSubNode` |
-| 4 | A value from the context of the trigger that runs the list |
+| 4 | The number of the timer that fired (see [Timers](#timers)) |
 
 Operations in conditions: `==`, `!=`, `>`, `<`, `>=`, `<=`, `and`, `or`
 (0 to 7). In statements: `=`, `++`, `--`, `+=`, `-=`, `*=`, `/=`, `%=`
@@ -105,6 +105,36 @@ Example: action list 24226 holds five actions:
 #67694 var3928 = var605
 ```
 
+## Timers
+
+A timer action starts or stops one of the game's numbered timers
+(`act_timer`, 0x4285A0):
+
+| Field | Meaning |
+|---|---|
+| Duration | Delay in milliseconds |
+| Timer number | 0 to 25 in the data |
+| Control | Low 7 bits: 0 starts the timer, 1 stops it. Bit 0x80 makes it periodic. |
+
+Starting a timer first removes any timer with the same number. The
+engine uses Windows multimedia timers (`GameTimer_start`, 0x428BF0).
+The timer callback (0x42FC90) records the timer number. Each tick,
+`timers_post_fired` (0x42F8B0) turns every recorded number into an
+event.
+
+Kind 7 triggers react to these events. When the engine loads a trigger
+list (`TriggerHandler_add_timer_trigger`, 0x4163D0), it looks at each
+action of a kind 7 trigger. An action whose condition compares operand
+kind 4 with a number is filed under that timer number. When the timer
+fires, only those actions run, and operand kind 4 reads as the timer
+number. Actions without such a condition never run from a kind 7
+trigger.
+
+Example: at the end of the opening scene, action list 40280 starts timer
+0 for 30,000 ms. If the player is still in view 691 when the timer
+fires, the kind 7 trigger of the view plays the second cup of coffee
+scene and rolls the opening credits.
+
 ## Built-in functions
 
 Type 6 actions call a built-in engine function by name. The engine fills
@@ -135,9 +165,11 @@ The four functions in the table that the data never calls are
 
 Media actions (types 1 and 7) name a `VCAssetRefList`; the explorer
 plays the first media reference of the list in the picture area, one
-clip after the other, and a click skips the clip. Other built-in
-functions are only logged so far. It runs actions at once instead of queuing them,
-and it does not yet read trigger context values (operand kind 4).
+clip after the other, and a click skips the clip. Timer actions
+start and stop explorer timers. A fired timer runs the kind 7 triggers
+of the view, of its viewpoint, location and node, and of the media that
+is playing. Other built-in functions are only logged so far. The
+interpreter runs actions at once instead of queuing them.
 
 ```sh
 xftool hdb-run XFILES.HDB XFILES.GAM 28618 8   # run the kind-8 triggers of list 28618

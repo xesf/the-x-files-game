@@ -348,6 +348,14 @@ static main()
     set_name(0x416800, "TriggerHandler_attach", SN_NOWARN);
     set_name(0x4676A0, "VCView_trigger_list", SN_NOWARN);
     set_name(0x4F6EA0, "triggers_run_kind", SN_NOWARN);
+    set_name(0x428410, "VCAction_timer_control", SN_NOWARN);
+    set_name(0x428BF0, "GameTimer_start", SN_NOWARN);
+    set_name(0x42F120, "TimerEvent_ctor", SN_NOWARN);
+    set_name(0x42F8B0, "timers_post_fired", SN_NOWARN);
+    set_name(0x42FC90, "timer_fired_callback", SN_NOWARN);
+    set_name(0x4163D0, "TriggerHandler_add_timer_trigger", SN_NOWARN);
+    set_name(0x480560, "TriggerHandler_watch_timer_action", SN_NOWARN);
+    set_name(0x6C14A8, "g_fired_timers", SN_NOWARN);
     set_name(0x6B6B10, "g_game_in_progress", SN_NOWARN);
     set_name(0x6B6FEC, "g_app", SN_NOWARN);
     set_name(0x6B7A14, "g_vc_root", SN_NOWARN);

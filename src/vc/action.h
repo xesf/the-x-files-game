@@ -21,7 +21,7 @@ enum {
     VC_OPND_PARAMETER = 1, /* local of the running list: 0-7, 10000-10011, 20000-20003 */
     VC_OPND_LITERAL = 2,   /* number */
     VC_OPND_CHAR = 3,      /* character, for example 'A' */
-    VC_OPND_CONTEXT = 4    /* value from the trigger that runs the list */
+    VC_OPND_CONTEXT = 4    /* number of the timer that fired (kind 7 triggers) */
 };
 
 typedef struct {
@@ -44,7 +44,7 @@ typedef struct {
     union {
         vc_expression statement;
         struct { u32 id; u8 selector; } media;
-        struct { u32 duration; u8 id, control; } timer;
+        struct { u32 duration; u8 id, control; } timer; /* ms; control 0 start, 1 stop, bit 0x80 periodic */
         struct { u32 id, value; u8 control; } enable; /* control: new state; value is always 0 */
         struct { u32 view, node, location, viewpoint; } set_view;
         struct { u32 id; u8 control; } iface;

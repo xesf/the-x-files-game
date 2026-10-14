@@ -81,6 +81,14 @@ typedef struct {
 
 #define MAX_ANIMS 4
 
+/* A timer started by a timer action (0x4285A0 act_timer). */
+typedef struct {
+    u8 id;
+    u32 due, period; /* period 0: fires once */
+} game_timer;
+
+#define MAX_TIMERS 32
+
 typedef struct {
     const char *data_dir;
     int disc;
@@ -127,6 +135,8 @@ typedef struct {
     int spot_count;
     u32 history[HISTORY];
     int history_len;
+    game_timer timers[MAX_TIMERS];
+    int timer_count;
     /* moving media of the view (loops, clips), drawn over the still */
     view_anim anims[MAX_ANIMS];
     int anim_count;
@@ -349,6 +359,57 @@ static void stop_sound(explorer *e)
     e->sound_open = 0;
 }
 
+static void remove_timer(explorer *e, u8 id)
+{
+    int i;
+    for (i = 0; i < e->timer_count; i++)
+        if (e->timers[i].id == id)
+            e->timers[i--] = e->timers[--e->timer_count];
+}
+
+/* Starting a timer replaces any timer with the same number. */
+static void host_timer(void *user, u8 id, u32 ms, u8 control)
+{
+    explorer *e = user;
+    remove_timer(e, id);
+    if ((control & 0x7F) == 0 && e->timer_count < MAX_TIMERS) {
+        game_timer *t = &e->timers[e->timer_count++];
+        t->id = id;
+        t->due = plat_ticks_ms() + ms;
+        t->period = control & 0x80 ? XF_MAX(ms, 1) : 0;
+    }
+}
+
+/* Runs the timer triggers of everything on screen for each timer that
+ * fired: the view and the places around it, and the media playing. */
+static void update_timers(explorer *e)
+{
+    u32 now = plat_ticks_ms();
+    int i;
+    for (i = 0; i < e->timer_count; i++) {
+        game_timer *t = &e->timers[i];
+        const vc_place *p;
+        u8 id = t->id;
+        if ((i32)(now - t->due) < 0)
+            continue;
+        if (t->period)
+            t->due += t->period;
+        else
+            e->timers[i--] = e->timers[--e->timer_count];
+        xf_debug("timer %u fired", id);
+        p = e->view ? vc_place_of(&e->places, e->view) : NULL;
+        if (p) {
+            vc_run_timer_triggers(&e->interp, p->node_triggers, id);
+            vc_run_timer_triggers(&e->interp, p->location_triggers, id);
+            vc_run_timer_triggers(&e->interp, p->viewpoint_triggers, id);
+        }
+        vc_run_timer_triggers(&e->interp, e->view_triggers, id);
+        if (e->playing_triggers)
+            vc_run_timer_triggers(&e->interp, e->playing_triggers, id);
+        after_triggers(e);
+    }
+}
+
 /* Media actions name a media list; its first entry is played. */
 static void host_play_media(void *user, u32 list, u8 selector)
 {
@@ -527,6 +588,11 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x486030 fn_SetStartView: node, location, viewpoint, view */
     if (strcmp(name, "SetStartView") == 0 && a->u.function.argc == 4) {
         e->pending_view = a->u.function.args[3].value;
+        return 1;
+    }
+    /* 0x4BC930 fn_StopAllTimers */
+    if (strcmp(name, "StopAllTimers") == 0) {
+        e->timer_count = 0;
         return 1;
     }
     if (strncmp(name, "Reg", 3) == 0 && g_reg_count < (int)XF_COUNT(g_regs)) {
@@ -877,7 +943,7 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         return 1;
     }
     {
-        vc_host host = { NULL, host_go_to_view, host_play_media, host_call_function };
+        vc_host host = { NULL, host_go_to_view, host_play_media, host_timer, host_call_function };
         host.user = e;
         if (xf_path_resolve(data_dir, "XFILES.GAM", path, sizeof(path)) != 0 ||
             xf_neo_open(&e->gam, path) != 0 || vc_interp_init(&e->interp, &e->db, &e->gam, &host) != 0) {
@@ -953,6 +1019,8 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
             finish_media(e);
         start_next_media(e);
         update_sound(e);
+        if (e->in_menu == 0)
+            update_timers(e);
         if (e->in_menu == -1 && !e->playing && !e->card_until && e->media_head == e->media_tail)
             menu_enter(e);
         if (e->in_menu == 1) {
