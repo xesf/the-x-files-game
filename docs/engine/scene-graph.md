@@ -41,6 +41,47 @@ Example: viewpoint 690 has position (0, 0), name 689 and four views.
 | u32 `i` | ID of the `VCExplorableList`, or 0 |
 | u32 `j` | ID of the `VCTriggerList`, or 0 |
 
+## Links to triggers and media
+
+Most objects point to a `VCTriggerList` and some to media lists. In the
+English DVD HDB:
+
+| Object | Field | Points to |
+|---|---|---|
+| `VCNode` | 1st u32 | `VCName` |
+| `VCNode` | 2nd u32 | `VCTriggerList` (6 of 13) |
+| `VCLocaton` | 1st u32 | `VCName` |
+| `VCLocaton` | 2nd u32 | `VCAssetRefList` (4 of 44) |
+| `VCLocaton` | 3rd u32 | `VCTriggerList` |
+| `VCViewPoint` | 1st u32 | `VCTriggerList` (50 of 347) |
+| `VCNav` | 3rd u32 | `VCTriggerList` (90 of 3,911) |
+| `VCExplorable` | u32 | `VCTriggerList` (400 of 401) |
+| `VCCharView` | u32 fields | `VCCharacter`, then `VCConversationList`, `VCIdeaMapList`, `VCAssetRefList`, `VCTriggerList` |
+| `VCInterfaceItem` | u32 fields | `VCAssetRefList`, then `VCTriggerList` |
+| `VCConversation` | u32 fields | `VCName`, `VCAssetRefList`, `VCAssetRefList`, `VCTriggerList` |
+| `VCTrigger` | u32 | `VCActionList` (5,335 of 5,429) |
+
+## Triggers
+
+A `VCTrigger` holds the ID of an action list and a kind byte that says
+when the list runs. The kinds by owner, counted in the English DVD HDB:
+
+| Owner | 0 | 1 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|
+| Interface item | 1,265 | 52 | 17 | 318 | 318 | 5 | 33 | 257 | 72 |
+| Explorable | 398 | 6 | | 1 | | | | 5 | 9 |
+| Move (`VCNav`) | 90 | | | | | | | 1 | |
+| Conversation | 248 | | | | | | | 43 | 15 |
+| Character view | 114 | 5 | | 4 | 4 | | 16 | 26 | 14 |
+| View | 50 | | | | | | 50 | 178 | 109 |
+| Viewpoint | 14 | | | | | 1 | 14 | 31 | 18 |
+| Location | 25 | 17 | 1 | 2 | 1 | | 8 | 20 | 20 |
+| Node | 1 | | | | | | | 5 | |
+
+Kinds 2 and 11 occur once each. Working guesses, not yet confirmed in
+the engine code: 0 is a click, 8 is entering and 9 is leaving the owner,
+4 and 5 are the mouse moving over and off an interface item.
+
 ## Navigation
 
 A `VCNav` connects a view to another view:
