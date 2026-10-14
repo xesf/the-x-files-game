@@ -10,4 +10,9 @@ u32 xf_cp1252_to_unicode(u8 c);
  * including the terminating zero. Returns the length written. */
 size_t xf_cp1252_to_utf8(char *dst, size_t dst_size, const u8 *src, size_t src_size);
 
+/* Returns the Unicode code point of a Mac Roman byte. */
+u32 xf_macroman_to_unicode(u8 c);
+/* Converts Mac Roman text to UTF-8, like xf_cp1252_to_utf8. */
+size_t xf_macroman_to_utf8(char *dst, size_t dst_size, const u8 *src, size_t src_size);
+
 #endif

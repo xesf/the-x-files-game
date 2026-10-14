@@ -69,3 +69,43 @@ const xftool_cmd xftool_audio_cmds[] = {
     { "audio", "<movie> <out.wav>  decode the sound track to a WAV file", cmd_audio },
     { 0 }
 };
+
+#include "media/subtitle.h"
+
+static void srt_time(u32 ms)
+{
+    printf("%02u:%02u:%02u,%03u", ms / 3600000, ms / 60000 % 60, ms / 1000 % 60, ms % 1000);
+}
+
+static int cmd_subs(int argc, char **argv)
+{
+    xf_mov mov;
+    xf_subtitles subs;
+    u32 i;
+
+    if (argc != 2) {
+        fputs("usage: xftool subs <movie>\n", stderr);
+        return 2;
+    }
+    if (xf_mov_open(&mov, argv[1]) != 0)
+        return 1;
+    if (xf_subtitles_load(&mov, &subs) != 0) {
+        xf_mov_close(&mov);
+        return 1;
+    }
+    for (i = 0; i < subs.count; i++) {
+        printf("%u\n", i + 1);
+        srt_time(subs.cues[i].start_ms);
+        fputs(" --> ", stdout);
+        srt_time(subs.cues[i].end_ms);
+        printf("\n%s\n\n", subs.cues[i].text);
+    }
+    xf_subtitles_free(&subs);
+    xf_mov_close(&mov);
+    return 0;
+}
+
+const xftool_cmd xftool_subs_cmds[] = {
+    { "subs", "<movie>  print the subtitles as SRT", cmd_subs },
+    { 0 }
+};

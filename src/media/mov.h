@@ -41,8 +41,8 @@ typedef struct {
     u32 samples_per_packet, bytes_per_packet, bytes_per_frame; /* version 1 sound */
     /* sample tables */
     u32 sample_count;
-    u32 sample_const_size; /* nonzero for constant-size samples (audio) */
-    /* Per-sample tables; only built when sample_const_size is 0. */
+    u32 sample_const_size; /* nonzero when all samples have the same size */
+    /* Per-sample tables; not built for audio tracks. */
     u32 *sample_size;
     u64 *sample_offset;
     u32 *sample_time;   /* start time in media units */

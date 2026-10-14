@@ -346,17 +346,24 @@ static int build_chunk_index(xf_mov_track *t)
     return 0;
 }
 
-/* For tracks with variable sample sizes (video, text), expands the chunk
- * tables into one offset and one start time per sample. Tracks with a
- * constant sample size (audio) are read by chunk instead. */
+/* For video and text tracks, expands the chunk tables into one offset and
+ * one start time per sample. Audio tracks, where every PCM frame counts
+ * as a sample, are read by chunk instead. */
 static int build_sample_index(xf_mov_track *t)
 {
     u32 s = 0, chunk, i, j, time = 0;
 
     if (build_chunk_index(t) != 0)
         return -1;
-    if (t->sample_count == 0 || t->sample_const_size)
+    if (t->sample_count == 0 || t->kind == XF_TRACK_AUDIO)
         return 0;
+    if (t->sample_const_size) {
+        t->sample_size = malloc(t->sample_count * sizeof(u32));
+        if (!t->sample_size)
+            return -1;
+        for (i = 0; i < t->sample_count; i++)
+            t->sample_size[i] = t->sample_const_size;
+    }
     t->sample_offset = malloc(t->sample_count * sizeof(u64));
     t->sample_time = malloc(t->sample_count * sizeof(u32));
     if (!t->sample_offset || !t->sample_time)

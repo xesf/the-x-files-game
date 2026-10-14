@@ -91,14 +91,38 @@ edit at media time 48, so the first 48 sound frames are not played. The
 reader stores the edit list of each track, and playback starts at the
 media time of the first edit that is not empty.
 
+## Subtitles
+
+Each text sample is a 2-byte big-endian length followed by the text. The
+text uses the Mac Roman character set (for example `0xD5` is a right
+single quote), unlike the XTX documents, which use Windows-1252. Bytes
+after the text (style atoms) are ignored.
+
+The text tracks have one or two samples each, and their edit lists put
+the lines on the movie timeline. An edit with media time −1 is a pause
+with no text. For example, `XV/19650.xmv` has three text tracks:
+
+| Track | Edits (in 1/600 s) | Shown |
+|---|---|---|
+| 3 | one edit starting at media time 300 | nothing: its only sample is shorter than 300 |
+| 4 | pause 6416, sample 1 for 1204, pause 210, sample 2 for 2270 | "Yeah. It's him." at 10.69 s, "Thank you." at 13.05 s |
+| 5 | pause 5550, sample 1 for 2110 | "Yeah. It's him." at 9.25 s |
+
+Tracks 4 and 5 both contain the first line at different times, and all
+text tracks are enabled with the same alternate group. Which track the
+game shows is not yet known from the engine code. The reader keeps all
+lines and tags each one with its track ID.
+
+```sh
+xftool subs XV/19650.xmv   # print all lines as SRT
+```
+
 ## Sample tables
 
 The reader in `src/media/mov.c` builds two indexes for each track:
 
-- For tracks with variable-size samples (video, text), one offset and one
-  start time per sample.
-- For tracks with a constant sample size (all audio), only per-chunk
-  tables. An `ima4` music track has more than two million samples (one per
+- For video and text tracks, one offset and one start time per sample.
+- For audio tracks, only per-chunk tables. An `ima4` music track has more than two million samples (one per
   PCM frame), so a per-sample index would waste memory.
 
 ## Tools
