@@ -70,7 +70,8 @@ The fields of each class in file order, after the 6-byte object header.
 All layouts were checked against every object in both versions of
 `XFILES.HDB`: strings and lists resolve, IDs exist, rectangles fit the
 screen, and no record runs into the next one. Classes with no objects in
-`XFILES.HDB` are stored in the game state database instead.
+`XFILES.HDB` (`VCVariable`, `VCGameState` and others) are probably created
+at run time or stored in the saved games; this is not yet confirmed.
 
 | ID | Class | Fields |
 |---|---|---|
