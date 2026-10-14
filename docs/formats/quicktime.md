@@ -53,6 +53,13 @@ the two tracks give 181 one-second images. How the game picks an image
 (by movie time or by sample number) is not yet confirmed from the engine
 code.
 
+A track can have more than one sample description, and the chunk table
+(`stsc`) chooses one per chunk. Track 2 of `NAV2.NMV` has four
+descriptions: `jpeg`, `cvid`, `jpeg`, `jpeg`. Its third sample is a
+Cinepak frame, while the samples around it are JPEG. A decoder must look
+up the codec for each sample. (ffmpeg uses only the first description and
+fails on that sample.)
+
 ## Unusual files
 
 - `XN/25949.xmv` stores its movie header compressed. The `moov` atom holds

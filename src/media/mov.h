@@ -24,6 +24,15 @@ typedef struct {
     u32 desc_index;
 } xf_mov_stc; /* sample-to-chunk run */
 
+#define XF_MOV_MAX_DESCS 8
+
+typedef struct {
+    u32 codec;        /* fourcc */
+    u8 *data;         /* raw description (without size and fourcc) */
+    u32 size;
+    u16 width, height, depth; /* video */
+} xf_mov_desc;
+
 typedef struct {
     int kind;         /* XF_TRACK_* */
     u32 id;
@@ -33,6 +42,9 @@ typedef struct {
     u32 codec;        /* fourcc of the first sample description */
     u8 *desc;         /* first sample description, raw (without size and fourcc) */
     u32 desc_size;
+    /* All sample descriptions. A track can switch codec between chunks. */
+    u32 desc_count;
+    xf_mov_desc descs[XF_MOV_MAX_DESCS];
     /* video */
     u16 width, height, depth;
     /* audio */
@@ -46,6 +58,7 @@ typedef struct {
     u32 *sample_size;
     u64 *sample_offset;
     u32 *sample_time;   /* start time in media units */
+    u8 *sample_desc;    /* index into descs for each sample */
     u32 tts_count;
     xf_mov_tts *tts;
     u32 sync_count;     /* 0 means every sample is a sync sample */

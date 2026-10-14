@@ -14,7 +14,12 @@ G=/path/to/game
 xftool pff-image $G/X.PFF all            # every image in a bundle
 xftool mov $G/XV/*.xmv                   # every movie header
 xftool frame $G/XV/19672.xmv 1 150 a.bmp # one decoded video frame
+xftool check $G/XV/*.xmv $G/XS/*.mus     # decode every frame and sound chunk
 ```
+
+On the English CD release, `xftool check` over all 1,198 movie files takes
+about a minute. Today it reports only the 15 files with `QDMC` sound
+(decoder not written yet) and the two `XG` files with no movie header.
 
 ## Comparing decoders with a reference
 

@@ -1,61 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "media/cinepak.h"
-#include "media/jpeg.h"
-#include "media/mov.h"
-#include "media/rpza.h"
+#include "media/audio.h"
+#include "media/video.h"
 #include "xftool.h"
-
-/* Decodes video sample `index`. Inter-coded codecs need the frames since
- * the previous key frame, so those are decoded first. */
-static int decode_sample(xf_mov *mov, const xf_mov_track *t, u32 index, u32 *out)
-{
-    u8 *data = malloc(t->sample_size[index]);
-    u32 size = t->sample_size[index];
-    int r = -1;
-
-    if (!data || xf_mov_read_sample(mov, t, index, data) != 0) {
-        free(data);
-        return -1;
-    }
-    switch (t->codec) {
-    case XF_FOURCC('c', 'v', 'i', 'd'):
-    case XF_FOURCC('r', 'p', 'z', 'a'): {
-        int cvid = t->codec == XF_FOURCC('c', 'v', 'i', 'd');
-        xf_cinepak *c = cvid ? xf_cinepak_create(t->width, t->height) : NULL;
-        u32 i = index;
-        while (i > 0 && !xf_mov_is_sync(t, i))
-            i--;
-        for (r = 0; (c || !cvid) && i <= index && r == 0; i++) {
-            u8 *d = malloc(t->sample_size[i]);
-            if (!d || xf_mov_read_sample(mov, t, i, d) != 0)
-                r = -1;
-            else if (cvid)
-                r = xf_cinepak_decode(c, d, t->sample_size[i], out);
-            else
-                r = xf_rpza_decode(d, t->sample_size[i], out, t->width, t->height);
-            free(d);
-        }
-        xf_cinepak_destroy(c);
-        break;
-    }
-    case XF_FOURCC('j', 'p', 'e', 'g'):
-        r = xf_jpeg_decode(data, size, out, t->width, t->height, t->width);
-        break;
-    case XF_FOURCC('m', 'j', 'p', 'a'):
-        r = xf_mjpa_decode(data, size, out, t->width, t->height, t->width);
-        break;
-    }
-    free(data);
-    return r;
-}
 
 static int cmd_frame(int argc, char **argv)
 {
     xf_mov mov;
-    xf_mov_track *t;
-    u32 index, *pixels;
+    xf_video v;
+    u32 track;
     int r = 1;
     char cc[5];
 
@@ -65,27 +19,17 @@ static int cmd_frame(int argc, char **argv)
     }
     if (xf_mov_open(&mov, argv[1]) != 0)
         return 1;
-    index = (u32)atoi(argv[2]);
-    if (index < 1 || index > mov.track_count || mov.tracks[index - 1].kind != XF_TRACK_VIDEO) {
-        fputs("not a video track\n", stderr);
+    track = (u32)atoi(argv[2]);
+    if (track < 1 || track > mov.track_count || xf_video_open(&v, &mov, &mov.tracks[track - 1]) != 0) {
+        fprintf(stderr, "track %u: not a supported video track\n", track);
         xf_mov_close(&mov);
         return 1;
     }
-    t = &mov.tracks[index - 1];
-    index = (u32)atoi(argv[3]);
-    if (index >= t->sample_count) {
-        fputs("no such sample\n", stderr);
-        xf_mov_close(&mov);
-        return 1;
-    }
-    pixels = calloc((size_t)t->width * t->height, 4);
-    if (pixels) {
-        if (decode_sample(&mov, t, index, pixels) == 0)
-            r = xftool_write_bmp(argv[4], pixels, t->width, t->height) == 0 ? 0 : 1;
-        else
-            fprintf(stderr, "cannot decode codec %s\n", xf_fourcc_str(t->codec, cc));
-    }
-    free(pixels);
+    if (xf_video_seek(&v, (u32)atoi(argv[3])) == 0)
+        r = xftool_write_bmp(argv[4], v.frame, v.width, v.height) == 0 ? 0 : 1;
+    else
+        fprintf(stderr, "cannot decode sample (codec %s)\n", xf_fourcc_str(v.track->codec, cc));
+    xf_video_close(&v);
     xf_mov_close(&mov);
     return r;
 }
@@ -121,8 +65,69 @@ static int cmd_sample(int argc, char **argv)
     return r;
 }
 
+/* Decodes every video frame and sound chunk of each file. */
+static int cmd_check(int argc, char **argv)
+{
+    int a, bad_files = 0;
+    char cc[5];
+
+    for (a = 1; a < argc; a++) {
+        xf_mov mov;
+        u32 k;
+        int bad = 0;
+        if (xf_mov_open(&mov, argv[a]) != 0) {
+            bad_files++;
+            continue;
+        }
+        for (k = 0; k < mov.track_count; k++) {
+            const xf_mov_track *t = &mov.tracks[k];
+            if (t->kind == XF_TRACK_VIDEO) {
+                xf_video v;
+                u32 i;
+                if (xf_video_open(&v, &mov, t) != 0) {
+                    printf("%s: track %u: unsupported video %s\n", argv[a], k + 1,
+                           xf_fourcc_str(t->codec, cc));
+                    bad = 1;
+                    continue;
+                }
+                for (i = 0; i < t->sample_count; i++)
+                    if (xf_video_next(&v) != 0) {
+                        printf("%s: track %u: frame %u fails\n", argv[a], k + 1, i);
+                        bad = 1;
+                        break;
+                    }
+                xf_video_close(&v);
+            } else if (t->kind == XF_TRACK_AUDIO) {
+                xf_audio_stream s;
+                i16 *pcm;
+                int n;
+                if (xf_audio_open(&s, &mov, t) != 0) {
+                    printf("%s: track %u: unsupported audio %s\n", argv[a], k + 1,
+                           xf_fourcc_str(t->codec, cc));
+                    bad = 1;
+                    continue;
+                }
+                pcm = malloc((size_t)xf_audio_max_chunk_frames(&s) * t->channels * 2 + 2);
+                while (pcm && (n = xf_audio_next(&s, pcm)) > 0)
+                    ;
+                if (!pcm || n < 0) {
+                    printf("%s: track %u: sound fails\n", argv[a], k + 1);
+                    bad = 1;
+                }
+                free(pcm);
+                xf_audio_close(&s);
+            }
+        }
+        bad_files += bad;
+        xf_mov_close(&mov);
+    }
+    printf("%d of %d files have problems\n", bad_files, argc - 1);
+    return bad_files ? 1 : 0;
+}
+
 const xftool_cmd xftool_frame_cmds[] = {
-    { "sample", "<movie> <track> <sample> <out.bin>  save one raw sample", cmd_sample },
     { "frame", "<movie> <track> <sample> <out.bmp>  decode one video frame", cmd_frame },
+    { "sample", "<movie> <track> <sample> <out.bin>  save one raw sample", cmd_sample },
+    { "check", "<movie>...  decode every frame and sound chunk, report failures", cmd_check },
     { 0 }
 };

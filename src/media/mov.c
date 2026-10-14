@@ -40,35 +40,54 @@ static u8 *read_payload(xf_file *f, u64 pos, u64 size)
 
 static int parse_stsd(xf_mov_track *t, const u8 *p, u64 n)
 {
-    u32 size;
-    const u8 *d;
+    u32 count, i;
+    u64 pos = 8;
 
-    if (n < 16 || xf_be32(p + 4) == 0)
-        return 0;
-    size = xf_be32(p + 8);
-    if (size < 16 || 8 + (u64)size > n)
+    if (n < 8)
         return -1;
-    t->codec = xf_be32(p + 12);
-    t->desc_size = size - 8;
-    t->desc = malloc(t->desc_size);
-    if (!t->desc)
-        return -1;
-    memcpy(t->desc, p + 16, t->desc_size);
-    d = t->desc; /* 6 reserved bytes, then data reference index */
-    if (t->kind == XF_TRACK_VIDEO && t->desc_size >= 78) {
-        t->width = xf_be16(d + 24);
-        t->height = xf_be16(d + 26);
-        t->depth = xf_be16(d + 74);
-    } else if (t->kind == XF_TRACK_AUDIO && t->desc_size >= 28) {
-        u16 version = xf_be16(d + 8);
-        t->channels = xf_be16(d + 16);
-        t->bits = xf_be16(d + 18);
-        t->sample_rate = xf_be32(d + 24) >> 16;
-        if (version == 1 && t->desc_size >= 44) {
-            t->samples_per_packet = xf_be32(d + 28);
-            t->bytes_per_packet = xf_be32(d + 32);
-            t->bytes_per_frame = xf_be32(d + 36);
+    count = XF_MIN(xf_be32(p + 4), XF_MOV_MAX_DESCS);
+    for (i = 0; i < count; i++) {
+        xf_mov_desc *e = &t->descs[i];
+        u32 size;
+        const u8 *d;
+        if (pos + 16 > n)
+            return -1;
+        size = xf_be32(p + pos);
+        if (size < 16 || pos + size > n)
+            return -1;
+        e->codec = xf_be32(p + pos + 4);
+        e->size = size - 8;
+        e->data = malloc(e->size);
+        if (!e->data)
+            return -1;
+        memcpy(e->data, p + pos + 8, e->size);
+        t->desc_count = i + 1;
+        d = e->data; /* 6 reserved bytes, then data reference index */
+        if (t->kind == XF_TRACK_VIDEO && e->size >= 78) {
+            e->width = xf_be16(d + 24);
+            e->height = xf_be16(d + 26);
+            e->depth = xf_be16(d + 74);
         }
+        if (i == 0 && t->kind == XF_TRACK_AUDIO && e->size >= 28) {
+            u16 version = xf_be16(d + 8);
+            t->channels = xf_be16(d + 16);
+            t->bits = xf_be16(d + 18);
+            t->sample_rate = xf_be32(d + 24) >> 16;
+            if (version == 1 && e->size >= 44) {
+                t->samples_per_packet = xf_be32(d + 28);
+                t->bytes_per_packet = xf_be32(d + 32);
+                t->bytes_per_frame = xf_be32(d + 36);
+            }
+        }
+        pos += size;
+    }
+    if (t->desc_count) {
+        t->codec = t->descs[0].codec;
+        t->desc = t->descs[0].data;
+        t->desc_size = t->descs[0].size;
+        t->width = t->descs[0].width;
+        t->height = t->descs[0].height;
+        t->depth = t->descs[0].depth;
     }
     return 0;
 }
@@ -346,6 +365,15 @@ static int build_chunk_index(xf_mov_track *t)
     return 0;
 }
 
+/* Returns the 0-based sample description index used by `chunk`. */
+static u32 chunk_desc(const xf_mov_track *t, u32 chunk)
+{
+    u32 run, d = 0;
+    for (run = 0; run < t->stc_count && t->stc[run].first_chunk <= chunk + 1; run++)
+        d = t->stc[run].desc_index;
+    return d >= 1 && d <= t->desc_count ? d - 1 : 0;
+}
+
 /* For video and text tracks, expands the chunk tables into one offset and
  * one start time per sample. Audio tracks, where every PCM frame counts
  * as a sample, are read by chunk instead. */
@@ -366,13 +394,16 @@ static int build_sample_index(xf_mov_track *t)
     }
     t->sample_offset = malloc(t->sample_count * sizeof(u64));
     t->sample_time = malloc(t->sample_count * sizeof(u32));
-    if (!t->sample_offset || !t->sample_time)
+    t->sample_desc = calloc(t->sample_count, 1);
+    if (!t->sample_offset || !t->sample_time || !t->sample_desc)
         return -1;
 
     for (chunk = 0; chunk < t->chunk_count && s < t->sample_count; chunk++) {
         u64 off = t->chunk_offset[chunk];
+        u32 desc = chunk_desc(t, chunk);
         for (j = 0; j < t->chunk_samples[chunk] && s < t->sample_count; j++, s++) {
             t->sample_offset[s] = off;
+            t->sample_desc[s] = (u8)desc;
             off += t->sample_size[s];
         }
     }
@@ -394,7 +425,10 @@ static int build_sample_index(xf_mov_track *t)
 
 static void free_track(xf_mov_track *t)
 {
-    free(t->desc);
+    u32 i;
+    for (i = 0; i < t->desc_count; i++)
+        free(t->descs[i].data);
+    free(t->sample_desc);
     free(t->sample_size);
     free(t->sample_offset);
     free(t->sample_time);
