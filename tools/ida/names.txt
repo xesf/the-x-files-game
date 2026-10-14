@@ -69,6 +69,8 @@
 0x44E990 MainMenu_on_command   slot 29: passes the command code to MainMenu_show
 0x44DB40 MainMenu_show         shows or hides the menu players and adds them to the display list at manager+0x7D4
 0x482500 media_player_create   creates a player object for a VCAssetRef
+0x408AE0 media_play_until_done_or_click  plays a clip; left/right click skips, Alt+X stops
+0x47B8B0 window_register_class
 0x433320 ev_activate_load      event type 12: register, slot 9, slot 22
 0x433240 ev_command            event type 11: slot 29
 # Class factories (class ID in the comment)

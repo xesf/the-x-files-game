@@ -102,6 +102,14 @@ the image index.
 `MainMenu_show` (`0x44DB40`) shows or hides these players and adds them
 to the display list at `manager + 0x7D4`.
 
+## Playing a clip with skip
+
+`media_play_until_done_or_click` (`0x408AE0`) plays a clip and waits. In
+its loop it peeks mouse messages: a left or right button press
+(`WM_LBUTTONDOWN`, `WM_RBUTTONDOWN`) skips the clip. Without a mouse
+press it peeks keyboard messages: Alt+X (`WM_SYSKEYDOWN` with `X`) also
+ends the clip, and then runs the quit path.
+
 ## Interface layouts
 
 `view_build_display` (`0x477000`) looks up the interface layout of the

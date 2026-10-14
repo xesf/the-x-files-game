@@ -71,6 +71,8 @@ static main()
     set_name(0x44E990, "MainMenu_on_command", SN_NOWARN);
     set_name(0x44DB40, "MainMenu_show", SN_NOWARN);
     set_name(0x482500, "media_player_create", SN_NOWARN);
+    set_name(0x408AE0, "media_play_until_done_or_click", SN_NOWARN);
+    set_name(0x47B8B0, "window_register_class", SN_NOWARN);
     set_name(0x433320, "ev_activate_load", SN_NOWARN);
     set_name(0x433240, "ev_command", SN_NOWARN);
     set_name(0x606EB0, "VCTitle_create", SN_NOWARN);
