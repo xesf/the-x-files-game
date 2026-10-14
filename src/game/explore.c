@@ -68,6 +68,19 @@ static const struct {
     { 90, 100 }, { 101, 109 }, { 110, 120 }, { 121, 130 }, { 131, 140 }, { 141, 150 }, { 151, 162 },
 };
 
+/* A moving picture of the view: a range of a movie, looped or held on
+ * its last frame. */
+typedef struct {
+    xf_mov mov;
+    xf_video video;
+    const xf_mov_track *track;
+    u32 start_ms, length_ms;
+    int loop;
+    u32 started;
+} view_anim;
+
+#define MAX_ANIMS 4
+
 typedef struct {
     const char *data_dir;
     int disc;
@@ -114,6 +127,11 @@ typedef struct {
     int spot_count;
     u32 history[HISTORY];
     int history_len;
+    /* moving media of the view (loops, clips), drawn over the still */
+    view_anim anims[MAX_ANIMS];
+    int anim_count;
+    u32 view_media[32];   /* enabled media of the view, to notice changes */
+    int view_media_count;
     /* one open navigation file */
     char nav_path[1024];
     xf_mov nav;
@@ -142,34 +160,110 @@ static int open_nav_file(explorer *e, const char *name)
     return e->nav_open ? 0 : -1;
 }
 
-/* Finds the navigation still of the view for the current disc, or for the
- * first disc whose file is installed. */
+static void close_anims(explorer *e)
+{
+    int i;
+    for (i = 0; i < e->anim_count; i++) {
+        xf_video_close(&e->anims[i].video);
+        xf_mov_close(&e->anims[i].mov);
+    }
+    e->anim_count = 0;
+}
+
+/* Opens a movie range as a view animation. Times are movie time in ms;
+ * 0..0 means the whole movie. */
+static int open_anim(explorer *e, const char *path, u32 start, u32 end, int loop)
+{
+    view_anim *an = &e->anims[e->anim_count];
+    u32 k;
+    if (e->anim_count >= MAX_ANIMS || xf_mov_open(&an->mov, path) != 0)
+        return -1;
+    an->track = NULL;
+    for (k = 0; k < an->mov.track_count && !an->track; k++)
+        if (an->mov.tracks[k].kind == XF_TRACK_VIDEO && xf_video_supported(&an->mov.tracks[k]))
+            an->track = &an->mov.tracks[k];
+    if (!an->track || xf_video_open(&an->video, &an->mov, an->track) != 0) {
+        xf_mov_close(&an->mov);
+        return -1;
+    }
+    if (end <= start) {
+        start = 0;
+        end = (u32)((u64)an->mov.duration * 1000 / an->mov.timescale);
+    }
+    an->start_ms = start;
+    an->length_ms = XF_MAX(end - start, 1);
+    an->loop = loop;
+    an->started = plat_ticks_ms();
+    e->anim_count++;
+    return 0;
+}
+
+/* Steps a view animation to the current time. */
+static void update_anim(view_anim *an, u32 now)
+{
+    u32 t = now - an->started;
+    u64 movie_time, media;
+    t = an->loop ? t % an->length_ms : XF_MIN(t, an->length_ms - 1);
+    movie_time = (u64)(an->start_ms + t) * an->mov.timescale / 1000;
+    if (xf_mov_edit_lookup(&an->mov, an->track, movie_time, &media) == 0)
+        xf_video_seek(&an->video, xf_mov_sample_at(an->track, (u32)media));
+}
+
+/* Loads the media of the view that are enabled: the navigation still
+ * (media type bit 0x40, a frame of a .nmv file) and moving pictures
+ * (a range of a movie; type bit 0x08 loops it). Uses the current disc,
+ * or the first disc whose file is installed. */
 static void load_picture(explorer *e, const vc_view *v)
 {
     u32 ids[32];
     int n = vc_read_list(&e->db, v->assets, ids, 32), i, j, pass;
 
     e->have_picture = 0;
-    for (pass = 0; pass < 2 && !e->have_picture; pass++)
-        for (i = 0; i < n && !e->have_picture; i++) {
-            vc_asset_ref a;
-            if (vc_read_asset_ref(&e->db, ids[i], &a) != 0 || a.kind != 67)
-                continue;
-            for (j = 0; j < a.entry_count; j++) {
+    e->view_media_count = 0;
+    close_anims(e);
+    snprintf(e->label, sizeof(e->label), "view %u  (no still)", e->view);
+    for (i = 0; i < n; i++) {
+        vc_asset_ref a;
+        int done = 0;
+        if (!vc_is_enabled(&e->interp, ids[i]) || vc_read_asset_ref(&e->db, ids[i], &a) != 0)
+            continue;
+        e->view_media[e->view_media_count++] = ids[i];
+        for (pass = 0; pass < 2 && !done; pass++)
+            for (j = 0; j < a.entry_count && !done; j++) {
                 const vc_media_entry *m = &a.entries[j];
+                char path[1024];
                 if (pass == 0 && m->disc != e->disc)
                     continue;
-                if (open_nav_file(e, m->path) == 0 &&
-                    xf_movie_frame_at(&e->nav, m->start, e->picture, PICTURE_W, PICTURE_H) == 0) {
-                    e->have_picture = 1;
-                    snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->view, m->disc,
-                             a.logical);
-                    break;
+                if (a.kind & 0x40) {
+                    if (!e->have_picture && open_nav_file(e, m->path) == 0 &&
+                        xf_movie_frame_at(&e->nav, m->start, e->picture, PICTURE_W, PICTURE_H) == 0) {
+                        e->have_picture = done = 1;
+                        snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->view, m->disc,
+                                 a.logical);
+                    }
+                } else if (xf_path_resolve(e->data_dir, m->path, path, sizeof(path)) == 0 &&
+                           open_anim(e, path, m->start, m->end, (a.kind & 0x08) != 0) == 0) {
+                    done = 1;
+                    if (!e->have_picture)
+                        snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->view, m->disc,
+                                 a.logical);
                 }
             }
-        }
-    if (!e->have_picture)
-        snprintf(e->label, sizeof(e->label), "view %u  (no still)", e->view);
+        if (!done)
+            xf_info("view %u: media %s not shown", e->view, a.logical);
+    }
+}
+
+/* Reloads the view media when actions enabled or disabled some of them. */
+static void refresh_picture(explorer *e, const vc_view *v)
+{
+    u32 ids[32];
+    int n = vc_read_list(&e->db, v->assets, ids, 32), i, k = 0, same = 1;
+    for (i = 0; i < n; i++)
+        if (vc_is_enabled(&e->interp, ids[i]))
+            same &= k < e->view_media_count && e->view_media[k++] == ids[i];
+    if (!same || k != e->view_media_count)
+        load_picture(e, v);
 }
 
 static void add_spots(explorer *e, u32 list, int kind)
@@ -533,6 +627,7 @@ static void after_triggers(explorer *e)
         enter_view(e, next);
     } else if (e->view && vc_read_view(&e->db, e->view, &v) == 0) {
         build_spots(e, &v);
+        refresh_picture(e, &v);
     }
 }
 
@@ -593,6 +688,15 @@ static void draw(explorer *e, int mx, int my)
         for (y = 0; y < PICTURE_H; y++)
             memcpy(&e->fb[(PICTURE_Y + y) * SCREEN_W + PICTURE_X], &e->picture[y * PICTURE_W],
                    PICTURE_W * 4);
+    for (i = 0; i < e->anim_count; i++) {
+        /* Centred in the picture area; full-size ones cover it. */
+        const xf_video *vd = &e->anims[i].video;
+        int w = XF_MIN(vd->width, PICTURE_W), h = XF_MIN(vd->height, PICTURE_H);
+        int x0 = PICTURE_X + (PICTURE_W - w) / 2, y0 = PICTURE_Y + (PICTURE_H - h) / 2;
+        update_anim(&e->anims[i], plat_ticks_ms());
+        for (y = 0; y < h; y++)
+            memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], vd->frame + (size_t)y * vd->width, (size_t)w * 4);
+    }
     for (i = 0; i < e->spot_count; i++) {
         const vc_region *r = &e->spots[i].region;
         int inside = mx >= r->left && mx < r->right && my >= r->top && my < r->bottom;
@@ -862,6 +966,7 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
     }
     stop_media(e);
     stop_sound(e);
+    close_anims(e);
     menu_close(e);
     if (e->nav_open)
         xf_mov_close(&e->nav);

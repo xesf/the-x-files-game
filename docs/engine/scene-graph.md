@@ -185,8 +185,22 @@ A `VCAssetRef` names one piece of media:
 | string | Packed media description (below) |
 | u32 | ID of a `VCName` with a short label |
 | u32 | Flags in the top byte; the ID of a `VCTriggerList` in the low 24 bits, or 0 |
-| u8 | Media type (meaning per value not yet confirmed; navigation stills use 67) |
+| u8 | Media type: bit flags (see below) |
 | u8 | Category: the number of a `VCAssetCategory` |
+
+The media type values found in view media lists are 1, 3, 9, 11, 17, 19,
+33, 41, 43, 65, 67 and 99. Bit 0x40 marks a still taken from a
+navigation file (`.nmv`). Bit 0x08 marks a loop, for example the
+characters idling in a room (`Navs:LoopsR:…`). The other bits are not
+yet understood.
+
+A view shows only the media in its list that are enabled. Many loops
+start disabled in the GAM and actions switch them on. For example, the
+opening clip of a new game enables the loop of Cook standing with his
+coffee in view 691 (`VCEnabled` 424). 584 views have no still at all:
+their picture is a loop or a range of a movie. The explorer draws the
+still first and then the moving media over it. It reloads the view
+media whenever actions change which ones are enabled.
 
 The 84 categories (`VCAssetCategory`: name, number) group the media by
 use and by place, for example 1 "Emotion Icons", 7 "Inventory", 8
