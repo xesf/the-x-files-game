@@ -46,6 +46,10 @@ typedef struct {
     int media_head, media_tail;
     xf_player player;
     int playing;
+    /* location card from StartVideoText, shown over the next clip */
+    char card[256];
+    int card_pending, card_active;
+    u32 card_start;
     xf_font font;
     int have_font;
     u32 fb[SCREEN_W * SCREEN_H];
@@ -189,6 +193,11 @@ static void start_next_media(explorer *e)
                 continue;
             if (xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
                 e->playing = 1;
+                if (e->card_pending) {
+                    e->card_pending = 0;
+                    e->card_active = 1;
+                    e->card_start = plat_ticks_ms();
+                }
                 xf_info("playing %s (%s)", a.logical, a.entries[j].path);
             }
         }
@@ -202,13 +211,125 @@ static void stop_media(explorer *e)
     if (e->playing)
         xf_player_close(&e->player);
     e->playing = 0;
+    e->card_active = 0;
+}
+
+/* Variables the game data registers with the engine at start-up through
+ * the Reg* functions, by function name and argument index. */
+typedef struct {
+    char name[16];
+    int argc;
+    u32 vars[VC_MAX_ARGS];
+} registration;
+
+static registration g_regs[32];
+static int g_reg_count;
+
+/* Day of the week for a date in the Gregorian calendar (0 = Sunday). */
+static int weekday(int y, int m, int d)
+{
+    static const int t[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
+    if (m < 3)
+        y--;
+    return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
+}
+
+/* 0x4DB580: location label, then the date from iDayNight, then the time
+ * from iCurrTime (HHMM) when `with_time` is set. The original formats the
+ * date and time with the Windows locale; this is the US English form. */
+static void format_location_card(explorer *e, u32 label_ref, i32 day_night, i32 hhmm, int with_time)
+{
+    static const int days[8] = { 29, 2, 3, 4, 5, 6, 7, 8 }; /* 0x659C80 */
+    static const char *const wd[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
+                                       "Friday", "Saturday" };
+    static const char *const mon[13] = { "", "January", "February", "March", "April", "May", "June",
+                                         "July", "August", "September", "October", "November",
+                                         "December" };
+    char label[128] = "";
+    vc_asset_ref a;
+    int idx = day_night > 10 ? day_night - 10 : day_night, month, day, n;
+
+    idx = XF_CLAMP(idx, 0, 7);
+    month = idx == 0 ? 3 : 4;
+    day = days[idx];
+    {
+        xf_neo_reader r;
+        if (vc_class(&e->db, label_ref) == VC_ASSET_REF && xf_neo_object(&e->db, label_ref, &r, NULL, NULL) == 0) {
+            xf_neo_blob(&e->db, &r);
+            vc_read_name(&e->db, xf_neo_u32(&r), label, sizeof(label));
+        }
+    }
+    (void)a;
+    n = snprintf(e->card, sizeof(e->card), "%s\n%s, %s %d, 1996", label, wd[weekday(1996, month, day)],
+                 mon[month], day);
+    if (with_time && n > 0 && (size_t)n < sizeof(e->card)) {
+        int h = hhmm / 100, m = hhmm % 100;
+        snprintf(e->card + n, sizeof(e->card) - (size_t)n, "\n%d:%02d %s", h % 12 ? h % 12 : 12, m,
+                 h < 12 ? "AM" : "PM");
+    }
+}
+
+static i32 arg_value(explorer *e, const vc_operand *o)
+{
+    return o->kind == VC_OPND_VARIABLE ? vc_get_var(&e->interp, o->value) : (i32)o->value;
 }
 
 static int host_call_function(void *user, const vc_action *a)
 {
-    (void)user;
-    xf_info("function %s (not implemented)", a->u.function.name);
+    explorer *e = user;
+    const char *name = a->u.function.name;
+    int i;
+
+    /* 0x482E40 fn_StartVideoText: label media, day/night, time, show time */
+    if (strcmp(name, "StartVideoText") == 0 && a->u.function.argc == 4) {
+        format_location_card(e, a->u.function.args[0].value, arg_value(e, &a->u.function.args[1]),
+                             arg_value(e, &a->u.function.args[2]), arg_value(e, &a->u.function.args[3]) != 0);
+        e->card_pending = 1;
+        xf_info("location card: %s", e->card);
+        return 1;
+    }
+
+    /* 0x486030 fn_SetStartView: node, location, viewpoint, view */
+    if (strcmp(name, "SetStartView") == 0 && a->u.function.argc == 4) {
+        e->pending_view = a->u.function.args[3].value;
+        return 1;
+    }
+    if (strncmp(name, "Reg", 3) == 0 && g_reg_count < (int)XF_COUNT(g_regs)) {
+        registration *r = &g_regs[g_reg_count++];
+        memcpy(r->name, name, sizeof(r->name));
+        r->argc = a->u.function.argc;
+        for (i = 0; i < a->u.function.argc; i++)
+            r->vars[i] = a->u.function.args[i].value;
+        return 1;
+    }
+    xf_info("function %s (not implemented)", name);
     return 1;
+}
+
+/* Runs the start-up triggers of the title object: they register the
+ * engine variables and call SetStartView. Returns the start view. */
+static u32 new_game(explorer *e)
+{
+    u32 i, title = 0;
+    xf_neo_reader r;
+    for (i = 0; i < e->db.count && !title; i++)
+        if (e->db.entries[i].class_id == VC_TITLE)
+            title = e->db.entries[i].id;
+    if (!title || xf_neo_object(&e->db, title, &r, NULL, NULL) != 0)
+        return 0;
+    /* VCTitle: list, string, date, string, string, u32, trigger list, ... */
+    xf_neo_read_list(&r);
+    xf_neo_blob(&e->db, &r);
+    xf_neo_u32(&r);
+    xf_neo_blob(&e->db, &r);
+    xf_neo_blob(&e->db, &r);
+    xf_neo_u32(&r);
+    e->pending_view = 0;
+    vc_run_triggers(&e->interp, xf_neo_u32(&r), 8);
+    xf_info("new game: %d engine registrations, start view %u", g_reg_count, e->pending_view);
+    i = e->pending_view;
+    e->pending_view = 0;
+    return i;
 }
 
 static int enter_view(explorer *e, u32 id)
@@ -289,6 +410,15 @@ static void draw(explorer *e, int mx, int my)
         if (sub && e->have_font)
             xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
                                  sub, 0xFFFFFF, 0x000000);
+        if (e->card_active && e->have_font) {
+            char shown[256];
+            size_t n = (plat_ticks_ms() - e->card_start) / 50;
+            n = XF_MIN(n, strlen(e->card));
+            memcpy(shown, e->card, n);
+            shown[n] = '\0';
+            xf_text_draw_wrapped(&s, &e->font, 22, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 34, SCREEN_W - 40,
+                                 shown, 0xFFFFFF, 0x000000);
+        }
         return;
     }
     if (e->have_picture)
@@ -352,6 +482,8 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
         e->have_font = xf_font_load(&e->font, path) == 0;
+    if (start_view == 0)
+        start_view = new_game(e);
     if (enter_view(e, start_view) != 0) {
         xf_neo_close(&e->db);
         free(e);
@@ -366,7 +498,8 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
                 mx = ev.x;
                 my = ev.y;
             } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
-                stop_media(e); /* skip the clip */
+                if (!e->card_active)
+                    stop_media(e); /* skip the clip; the location card cannot be skipped */
             } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
                 const spot *s = spot_at(e, ev.x, ev.y);
                 if (s) {

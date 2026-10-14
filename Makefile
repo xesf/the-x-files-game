@@ -56,8 +56,9 @@ test: $(BUILD)/xftest
 
 # Run against a game install. Override on the command line, for example:
 #   make run GAME_DIR=/path/to/game VIEW=1236 DISC=2
+# VIEW=0 starts a new game from the title object.
 GAME_DIR ?= ../Installations/x-files-en-dvd
-VIEW     ?= 1236
+VIEW     ?= 0
 DISC     ?= 1
 MOVIE    ?= ../Installations/x-files-en/xv/19650.xmv
 

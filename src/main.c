@@ -1,6 +1,7 @@
 /* Entry point.
  *   xfiles --play <movie> [--data <game folder>]   play one movie
- *   xfiles --explore <game folder> <view> [disc]   walk the scene graph
+ *   xfiles --explore <game folder> <view> [disc]   walk the scene graph;
+ *                                                   view 0 starts a new game
  * Without arguments it shows a test pattern. */
 #include <stdio.h>
 #include <stdlib.h>

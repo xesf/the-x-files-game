@@ -41,6 +41,56 @@ Example: viewpoint 690 has position (0, 0), name 689 and four views.
 | u32 `i` | ID of the `VCExplorableList`, or 0 |
 | u32 `j` | ID of the `VCTriggerList`, or 0 |
 
+## Starting a new game
+
+`VCTitle` (object 299) holds a trigger list in its last 4-byte field
+(list 23517). Its kind 8 trigger runs action list 26327, the start-up
+sequence:
+
+1. `Reg*` functions tell the engine which GAM variables hold its key
+   state: inventory (`RegCurrInvVar`), current node (`RegCurrNode`,
+   variable 1219 `iCurrNode`), day and night (`RegDayNight`, variable
+   3742 `iDayNight`), the uber variables (`RegUberVars`), the current view
+   (`RegViewSpecial`, variable 1057) and per-chapter variables.
+2. The first e-mails are sent and the language is set.
+3. `SetStartView(301, 303, 690, 691)` places the player: node 301,
+   location 303 (the Field Office), viewpoint 690, view 691.
+
+Entering view 691 the first time (`bFirstTimeInFieldOffice`) runs the
+location card and the opening scene.
+
+## Location card
+
+The game opens each place with a timed screen that takes no input: an
+establishing shot with the place, date and time typed over it. The data
+calls `StartVideoText(label, day variable, time variable, show time)`,
+for example `StartVideoText(57947, var3742, var2923, var605)`:
+
+- The label is a `VCAssetRef` whose name is the place, here
+  "FBI FIELD OFFICE, SEATTLE". The establishing shot itself is queued by
+  a media action in the same list.
+- The date comes from `iDayNight` (`0x4DB580`). Values above 10 count
+  from 10 (night); the result, clamped to 0–7, picks a day from a table
+  at `0x659C80`: 29 March 1996 for 0, then 2 to 8 April 1996. The engine
+  formats the date with the Windows long date format.
+- When the last argument is true, the time follows: `iCurrTime` holds
+  hours and minutes as a number (914 is 9:14), formatted with the Windows
+  time format.
+- Lines are separated by line breaks (`0x6B6538`). The text appears with
+  timers of 50 ms and 200 ms (`0x483A30`); the explorer reveals one
+  character every 50 ms.
+
+At the start of the game this gives:
+
+```
+FBI FIELD OFFICE, SEATTLE
+Tuesday, April 2, 1996
+9:14 AM
+```
+
+The font, position and colour of the text are not yet checked against
+the original.
+
 ## Links to triggers and media
 
 Most objects point to a `VCTriggerList` and some to media lists. In the
