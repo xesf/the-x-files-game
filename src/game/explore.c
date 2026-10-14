@@ -96,7 +96,13 @@ typedef struct {
     int right_open, right_frame, right_target;
     u32 right_next_ms;
     int playing_slot;     /* media queue slot now playing */
+    u32 playing_triggers; /* trigger list of the media now playing */
+    /* sounds play beside the clips, one at a time; loops repeat */
+    xf_player sound;
+    int sound_open, sound_loop;
+    char sound_path[1024];
     u32 card_start;
+    u32 card_until;       /* card shown without a clip: when it ends */
     xf_font font;
     int have_font;
     u32 fb[SCREEN_W * SCREEN_H];
@@ -115,7 +121,11 @@ typedef struct {
 } explorer;
 
 static void stop_media(explorer *e);
+static void finish_media(explorer *e);
 static void queue_media(explorer *e, u32 asset);
+static void after_triggers(explorer *e);
+static int play_sound(explorer *e, u32 asset);
+static void stop_sound(explorer *e);
 
 static int open_nav_file(explorer *e, const char *name)
 {
@@ -208,6 +218,43 @@ static void host_go_to_view(void *user, u32 view)
     ((explorer *)user)->pending_view = view;
 }
 
+/* Plays a sound asset (a path under Sounds/) beside the clips. Returns
+ * 0 when the asset is not a sound, so it goes to the clip queue. */
+static int play_sound(explorer *e, u32 asset)
+{
+    vc_asset_ref a;
+    int j;
+    if (vc_read_asset_ref(&e->db, asset, &a) != 0 || strncmp(a.logical, "Sounds/", 7) != 0)
+        return 0;
+    if (e->sound_open)
+        xf_player_close(&e->sound);
+    e->sound_open = 0;
+    for (j = 0; j < a.entry_count && !e->sound_open; j++)
+        if (xf_path_resolve(e->data_dir, a.entries[j].path, e->sound_path, sizeof(e->sound_path)) == 0 &&
+            xf_player_open(&e->sound, e->sound_path, plat_ticks_ms()) == 0)
+            e->sound_open = 1;
+    e->sound_loop = strstr(a.logical, "/Loops/") != NULL;
+    xf_info("sound %s%s", a.logical, e->sound_open ? "" : ": no file on disk");
+    vc_run_triggers(&e->interp, a.triggers, 8);
+    return 1;
+}
+
+static void update_sound(explorer *e)
+{
+    u32 now = plat_ticks_ms();
+    if (!e->sound_open || xf_player_update(&e->sound, now))
+        return;
+    xf_player_close(&e->sound);
+    e->sound_open = e->sound_loop && xf_player_open(&e->sound, e->sound_path, now) == 0;
+}
+
+static void stop_sound(explorer *e)
+{
+    if (e->sound_open)
+        xf_player_close(&e->sound);
+    e->sound_open = 0;
+}
+
 /* Media actions name a media list; its first entry is played. */
 static void host_play_media(void *user, u32 list, u8 selector)
 {
@@ -218,7 +265,8 @@ static void host_play_media(void *user, u32 list, u8 selector)
         xf_info("play media list #%u: empty or missing", list);
         return;
     }
-    queue_media(e, ids[0]);
+    if (!play_sound(e, ids[0]))
+        queue_media(e, ids[0]);
     (void)selector;
 }
 
@@ -244,33 +292,55 @@ static void queue_intro(explorer *e)
         queue_media(e, intro[i]);
 }
 
-/* Starts the next queued clip that exists on disk. */
+/* Starts the next queued clip. Media can carry a trigger list: kind 8
+ * runs when the media starts and kind 9 when it ends (finish_media). A
+ * clip missing on disk still runs both, so the story goes on; if the
+ * location card belongs to it, the card is shown alone for a while. */
 static void start_next_media(explorer *e)
 {
-    while (!e->playing && e->media_head != e->media_tail) {
+    while (!e->playing && !e->card_until && e->media_head != e->media_tail) {
         vc_asset_ref a;
         u32 id = e->media_queue[e->media_head];
-        int j;
+        int j, card;
         e->playing_slot = e->media_head;
         e->media_head = (e->media_head + 1) % 32;
         if (vc_read_asset_ref(&e->db, id, &a) != 0)
             continue;
+        e->playing_triggers = a.triggers;
+        vc_run_triggers(&e->interp, a.triggers, 8);
         for (j = 0; j < a.entry_count && !e->playing; j++) {
             char path[1024];
             if (xf_path_resolve(e->data_dir, a.entries[j].path, path, sizeof(path)) != 0)
                 continue;
             if (xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
                 e->playing = 1;
-                if (e->card_pending && e->playing_slot == e->card_slot) {
-                    e->card_pending = 0;
-                    e->card_active = 1;
-                    e->card_start = plat_ticks_ms();
-                }
                 xf_info("playing %s (%s)", a.logical, a.entries[j].path);
             }
         }
-        if (!e->playing)
+        card = e->card_pending && e->playing_slot == e->card_slot;
+        if (card) {
+            e->card_pending = 0;
+            e->card_active = 1;
+            e->card_start = plat_ticks_ms();
+        }
+        if (!e->playing) {
             xf_info("media %s: no file on disk", a.logical);
+            if (card) /* typed out, then held for two seconds */
+                e->card_until = e->card_start + (u32)strlen(e->card) * 50 + 2000;
+            else
+                finish_media(e);
+        }
+    }
+}
+
+/* Ends the current media and runs its kind 9 triggers. */
+static void finish_media(explorer *e)
+{
+    u32 triggers = e->playing_triggers;
+    stop_media(e);
+    if (triggers) {
+        vc_run_triggers(&e->interp, triggers, 9);
+        after_triggers(e);
     }
 }
 
@@ -280,6 +350,8 @@ static void stop_media(explorer *e)
         xf_player_close(&e->player);
     e->playing = 0;
     e->card_active = 0;
+    e->card_until = 0;
+    e->playing_triggers = 0;
 }
 
 /* Variables the game data registers with the engine at start-up through
@@ -401,6 +473,14 @@ static u32 new_game(explorer *e)
     return i;
 }
 
+static void build_spots(explorer *e, const vc_view *v)
+{
+    e->spot_count = 0;
+    add_spots(e, v->navs, SPOT_NAV);
+    add_spots(e, v->explorables, SPOT_EXPLORE);
+    add_spots(e, v->characters, SPOT_CHARACTER);
+}
+
 static int enter_view(explorer *e, u32 id)
 {
     vc_view v;
@@ -436,13 +516,24 @@ static int enter_view(explorer *e, u32 id)
         e->pending_view = 0;
         return enter_view(e, next);
     }
-    e->spot_count = 0;
-    add_spots(e, v.navs, SPOT_NAV);
-    add_spots(e, v.explorables, SPOT_EXPLORE);
-    add_spots(e, v.characters, SPOT_CHARACTER);
+    build_spots(e, &v);
     load_picture(e, &v);
     xf_info("view %u: %d hotspots, %s", id, e->spot_count, e->label);
     return 0;
+}
+
+/* Triggers run outside a view change (media start and end) can enable
+ * objects or set a view: rebuild the hotspots, then follow the view. */
+static void after_triggers(explorer *e)
+{
+    vc_view v;
+    if (e->pending_view) {
+        u32 next = e->pending_view;
+        e->pending_view = 0;
+        enter_view(e, next);
+    } else if (e->view && vc_read_view(&e->db, e->view, &v) == 0) {
+        build_spots(e, &v);
+    }
 }
 
 static void frame_rect(explorer *e, const vc_region *r, u32 color)
@@ -469,9 +560,9 @@ static void draw(explorer *e, int mx, int my)
     int i, y;
 
     memset(e->fb, 0, sizeof(e->fb));
-    if (e->playing) {
-        const u32 *f = xf_player_frame(&e->player);
-        const char *sub = xf_player_subtitle(&e->player);
+    if (e->playing || e->card_until) {
+        const u32 *f = e->playing ? xf_player_frame(&e->player) : NULL;
+        const char *sub = e->playing ? xf_player_subtitle(&e->player) : NULL;
         if (f) {
             /* Scene clips fill the picture area; other clips (logos, titles)
              * are centred on the screen. */
@@ -563,6 +654,7 @@ static void menu_enter(explorer *e)
 {
     int i;
     stop_media(e);
+    stop_sound(e);
     for (i = 0; i < MENU_PARTS; i++)
         if (i != MENU_RIGHT)
             e->menu_open[i] = open_asset_player(e, g_menu_parts[i].asset, &e->menu[i]) == 0;
@@ -730,9 +822,9 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
             else if (ev.type == PLAT_EV_MOUSE_MOVE) {
                 mx = ev.x;
                 my = ev.y;
-            } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
+            } else if ((e->playing || e->card_until) && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
                 if (!e->card_active)
-                    stop_media(e); /* skip the clip; the location card cannot be skipped */
+                    finish_media(e); /* skip the clip; the location card cannot be skipped */
             } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
                 const spot *s = spot_at(e, ev.x, ev.y);
                 if (s) {
@@ -752,10 +844,12 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
                     enter_view(e, e->history[--e->history_len]);
             }
         }
-        if (e->playing && !xf_player_update(&e->player, plat_ticks_ms()))
-            stop_media(e);
+        if ((e->playing && !xf_player_update(&e->player, plat_ticks_ms())) ||
+            (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
+            finish_media(e);
         start_next_media(e);
-        if (e->in_menu == -1 && !e->playing && e->media_head == e->media_tail)
+        update_sound(e);
+        if (e->in_menu == -1 && !e->playing && !e->card_until && e->media_head == e->media_tail)
             menu_enter(e);
         if (e->in_menu == 1) {
             menu_update(e);
@@ -767,6 +861,7 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         plat_sleep_ms(e->playing ? 5 : 16);
     }
     stop_media(e);
+    stop_sound(e);
     menu_close(e);
     if (e->nav_open)
         xf_mov_close(&e->nav);
