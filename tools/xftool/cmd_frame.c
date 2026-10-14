@@ -41,8 +41,10 @@ static int decode_sample(xf_mov *mov, const xf_mov_track *t, u32 index, u32 *out
         break;
     }
     case XF_FOURCC('j', 'p', 'e', 'g'):
-    case XF_FOURCC('m', 'j', 'p', 'a'):
         r = xf_jpeg_decode(data, size, out, t->width, t->height, t->width);
+        break;
+    case XF_FOURCC('m', 'j', 'p', 'a'):
+        r = xf_mjpa_decode(data, size, out, t->width, t->height, t->width);
         break;
     }
     free(data);

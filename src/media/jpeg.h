@@ -11,4 +11,8 @@ int xf_jpeg_info(const u8 *data, size_t size, int *width, int *height);
  * to `out_w` x `out_h`. Returns 0 on success. */
 int xf_jpeg_decode(const u8 *data, size_t size, u32 *out, int out_w, int out_h, int pitch);
 
+/* Decodes a Motion-JPEG A frame. An interlaced frame holds two JPEG
+ * fields; the first one gives the even lines, the second the odd lines. */
+int xf_mjpa_decode(const u8 *data, size_t size, u32 *out, int out_w, int out_h, int pitch);
+
 #endif

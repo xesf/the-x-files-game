@@ -51,4 +51,5 @@ Current results:
 | RPZA | ffmpeg | Bit-exact, first and last frames of three clips |
 | IMA ADPCM (`ima4`) | ffmpeg | Bit-exact on music, ambient sound and scene audio |
 | PCM (`twos`) | ffmpeg | Bit-exact |
+| Motion JPEG A | ffmpeg | Maximum difference 4, mean 0.71 |
 | JPEG | macOS ImageIO | Mean difference 0.13 to 0.31 per channel; ImageIO interpolates chroma, we use nearest neighbour |

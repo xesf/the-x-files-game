@@ -27,7 +27,7 @@ Counts are tracks in the English CD release (1,198 files).
 | Video | `cvid` (Cinepak) | Most scenes in `XV/`, some in `XN/` and `XG/` | 600×240 for scenes. A few are 600×400, 560×400 or other sizes. |
 | Video | `jpeg` (Photo JPEG) | Navigation (`XN/`, `.nmv`), some `XG/` | Every frame is a key frame. |
 | Video | `rpza` (Apple Video, "Road Pizza") | `XG/` | 16-bit, small icons (80×60). |
-| Video | `mjpa` (Motion JPEG A) | One file in `XG/` | |
+| Video | `mjpa` (Motion JPEG A) | One file in `XG/` | Interlaced: two JPEG fields per frame (see below). |
 | Audio | `ima4` (IMA ADPCM, Apple variant) | Most sound | 11025, 22050 or 44100 Hz; mono or stereo. |
 | Audio | `twos` (signed PCM, big-endian) | Some `.amv`, `.mus`, `.xmv` | 8-bit or 16-bit. |
 | Audio | `QDMC` (QDesign Music 1) | 18 `.xmv`, 4 `.mus`, 1 `.amv`, 1 `.dmv` | Music and a few scenes. Not QDesign Music 2 (`QDM2`). |
@@ -62,6 +62,22 @@ code.
 - `XG/94122.xmv` and `XG/94215.xmv` hold only an `mdat` atom of size 0 with
   JPEG data, and no movie header. On the Mac the header probably came from
   the resource fork. The game may not use these two files.
+
+## Motion JPEG A
+
+`XG/54200.xmv` (340×140) stores each frame as two JPEG images of 340×70,
+one per field. The first JPEG starts with an `APP1` segment tagged `mjpg`:
+
+| Offset in segment data | Size | Field |
+|---|---|---|
+| 0 | 4 | Reserved, 0 |
+| 4 | 4 | Tag `mjpg` |
+| 8 | 4 | Field size |
+| 12 | 4 | Padded field size |
+| 16 | 4 | Offset to the next field, from the start of the frame |
+
+The first field gives the even lines (0, 2, 4, …), the second the odd
+lines.
 
 ## IMA ADPCM in QuickTime
 

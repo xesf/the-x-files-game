@@ -537,3 +537,32 @@ int xf_jpeg_decode(const u8 *data, size_t size, u32 *out, int out_w, int out_h, 
     free(d);
     return r;
 }
+
+/* Finds the 'mjpg' APP1 segment of the first field and returns the offset
+ * of the next field, or 0 for a frame with one field. */
+static u32 mjpa_next_field(const u8 *data, size_t size)
+{
+    const u8 *p = data + 2, *end = data + size;
+    while (p + 4 <= end && p[0] == 0xFF && p[1] != 0xDA) {
+        int len = xf_be16(p + 2);
+        if (p[1] == 0xE1 && len >= 2 + 4 + 4 * 4 && memcmp(p + 8, "mjpg", 4) == 0)
+            return xf_be32(p + 20); /* after tag, field size and padded size */
+        p += 2 + len;
+    }
+    return 0;
+}
+
+int xf_mjpa_decode(const u8 *data, size_t size, u32 *out, int out_w, int out_h, int pitch)
+{
+    u32 next = mjpa_next_field(data, size);
+    int fw, fh;
+
+    if (!next || next >= size)
+        return xf_jpeg_decode(data, size, out, out_w, out_h, pitch);
+    if (xf_jpeg_info(data, size, &fw, &fh) != 0)
+        return -1;
+    /* Each field fills every other line: double the pitch. */
+    if (xf_jpeg_decode(data, next, out, out_w, (out_h + 1) / 2, pitch * 2) != 0)
+        return -1;
+    return xf_jpeg_decode(data + next, size - next, out + pitch, out_w, out_h / 2, pitch * 2);
+}
