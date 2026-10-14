@@ -21,6 +21,23 @@ On the English CD release, `xftool check` over all 1,198 movie files takes
 about a minute. Today it reports only the 15 files with `QDMC` sound
 (decoder not written yet) and the two `XG` files with no movie header.
 
+## Ground truth from the original game
+
+The original game, with the X-Files PC enhancement patch, runs under
+Wine:
+
+```sh
+cd "$HOME/.wine/drive_c/Games/The X-Files" && wine XFilesPlay.exe
+```
+
+- Window captures (`screencapture -l <window id>`) give screen layouts.
+  Matching decoded movie frames against a capture gives exact positions
+  (this is how the main menu layout was measured).
+- `logs/quicktime.log` lists every QuickTime call the game makes, with
+  the calling address in the CD build.
+- The patch's developer tools (Ctrl+F11) show game variables and their
+  history, and browse the database.
+
 ## Comparing decoders with a reference
 
 During development we compare our decoders with an independent one. These

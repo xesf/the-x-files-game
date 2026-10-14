@@ -137,12 +137,47 @@ and tables at `0x6C3F38`–`0x6C3FB8` passed to the players (method
 `0xF8`) hold rising 16-bit values, which look like segment start times.
 
 The menu is not described in the game data: no media list or interface
-item refers to its movies. The movies carry no position either (their
-track matrices are all zero). Their sizes fit a 640×480 screen: the left
-movie is 472×480 and the right one 168×480 (together 640 wide); the
-middle loop is 388×310 and the top rollover 352×60. The players are
-created with a canvas object (`menu + 0x44`) as parent; where that
-canvas places them is the next thing to read.
+item refers to its movies, and the movies carry no position (their track
+matrices are all zero). We measured the layout on the original game
+running under Wine with the enhancement patch, by matching decoded
+movie frames against a screenshot of the menu:
+
+| Movie | Size | Position | Match error per pixel |
+|---|---|---|---|
+| `LEFTmain.mov` | 472×480 | (0, 0) | low |
+| `RIGHT.mov` | 168×480 | (472, 0) | low |
+| `MIDloop.mov` | 388×310 | (60, 102) | 7 of 255 |
+| `TOPro.mov` | 352×60 | probably (56, 0) | 13 of 255; not visible in the capture |
+
+The players are created with a canvas object (`menu + 0x44`) as parent;
+reading where that canvas places them would confirm these positions.
+
+### The item column
+
+`RIGHT.mov` (169 JPEG frames over 12 s) holds the item labels and their
+rollovers, as frame ranges:
+
+| Frames | Content |
+|---|---|
+| 0–65 | The labels appear one after the other |
+| 66–89 | All labels, nothing highlighted |
+| 90–100 | New: "Start a new investigation" |
+| 101–109 | Load: "Return to an investigation that is already underway" |
+| 110–120 | Save: "Store the status of your current investigation" |
+| 121–130 | Previous |
+| 131–140 | Options |
+| 141–150 | Help |
+| 151–162 | Quit |
+| 163–168 | All labels again |
+
+Each rollover is a short animation in which the label turns into its
+description. The movie also has a sound track, presumably with the
+rollover sounds. Our engine steps the movie by frame: it plays 0–66 once,
+then plays an item's range on hover and goes back to frame 66 when the
+mouse leaves. The item rows (New 80–115, Load 128–162, Save 178–210,
+Previous 228–260, Options 277–312, Help 329–366, Quit 387–420, for
+x ≥ 472) are measured from the frames; the engine's own hit areas and
+segment tables are still to be read.
 
 ## Playing a clip with skip
 

@@ -32,6 +32,42 @@ typedef struct {
     u32 triggers; /* trigger list run on click, or 0 */
 } spot;
 
+/* Main menu (0x48EE40 MainMenu_ctor): media IDs are fixed in the engine
+ * (0x482FE0 MainMenu_load_media). Positions measured from the original
+ * running under Wine; see docs/engine/runtime.md. */
+enum { MENU_LEFT, MENU_RIGHT, MENU_MID, MENU_SOUND, MENU_PARTS };
+
+typedef struct {
+    u32 asset;
+    int x, y, loop;
+} menu_part;
+
+static const menu_part g_menu_parts[MENU_PARTS] = {
+    { 49583, 0, 0, 0 },    /* LEFTmain.mov, 472x480 */
+    { 49587, 472, 0, 0 },  /* RIGHT.mov, 168x480, item labels */
+    { 49585, 60, 102, 1 }, /* MIDloop.mov, 388x310 */
+    { 94320, 0, 0, 1 },    /* MIDloop.amv, the loop's sound */
+};
+
+/* Item rows in screen coordinates, measured from the last frame of
+ * RIGHT.mov. The exact hit rectangles in the engine are not read yet. */
+static const struct {
+    const char *name;
+    int top, bottom;
+} g_menu_items[] = {
+    { "New", 80, 115 },      { "Load", 128, 162 }, { "Save", 178, 210 }, { "Previous", 228, 260 },
+    { "Options", 277, 312 }, { "Help", 329, 366 }, { "Quit", 387, 420 },
+};
+
+/* Frame ranges in RIGHT.mov: 0-65 labels animate in, 66-89 plain menu,
+ * then one rollover animation per item (measured frame by frame). */
+#define RIGHT_INTRO_END 66
+static const struct {
+    int first, last;
+} g_menu_rollover[] = {
+    { 90, 100 }, { 101, 109 }, { 110, 120 }, { 121, 130 }, { 131, 140 }, { 141, 150 }, { 151, 162 },
+};
+
 typedef struct {
     const char *data_dir;
     int disc;
@@ -50,6 +86,15 @@ typedef struct {
     char card[256];
     int card_pending, card_active;
     int card_slot;        /* media queue slot the card belongs to */
+    int in_menu;
+    xf_player menu[MENU_PARTS];
+    int menu_open[MENU_PARTS];
+    int menu_hover;
+    /* RIGHT.mov is stepped by frame instead of played through */
+    xf_mov right_mov;
+    xf_video right;
+    int right_open, right_frame, right_target;
+    u32 right_next_ms;
     int playing_slot;     /* media queue slot now playing */
     u32 card_start;
     xf_font font;
@@ -482,6 +527,144 @@ static const spot *spot_at(const explorer *e, int x, int y)
     return NULL;
 }
 
+static int open_asset_player(explorer *e, u32 asset, xf_player *p)
+{
+    vc_asset_ref a;
+    int j;
+    if (vc_read_asset_ref(&e->db, asset, &a) != 0)
+        return -1;
+    for (j = 0; j < a.entry_count; j++) {
+        char path[1024];
+        if (xf_path_resolve(e->data_dir, a.entries[j].path, path, sizeof(path)) == 0 &&
+            xf_player_open(p, path, plat_ticks_ms()) == 0)
+            return 0;
+    }
+    xf_warn("menu: cannot open media %u", asset);
+    return -1;
+}
+
+static void menu_close(explorer *e)
+{
+    int i;
+    if (e->right_open) {
+        xf_video_close(&e->right);
+        xf_mov_close(&e->right_mov);
+        e->right_open = 0;
+    }
+    for (i = 0; i < MENU_PARTS; i++)
+        if (e->menu_open[i]) {
+            xf_player_close(&e->menu[i]);
+            e->menu_open[i] = 0;
+        }
+    e->in_menu = 0;
+}
+
+static void menu_enter(explorer *e)
+{
+    int i;
+    stop_media(e);
+    for (i = 0; i < MENU_PARTS; i++)
+        if (i != MENU_RIGHT)
+            e->menu_open[i] = open_asset_player(e, g_menu_parts[i].asset, &e->menu[i]) == 0;
+    {
+        vc_asset_ref a;
+        char path[1024];
+        if (vc_read_asset_ref(&e->db, g_menu_parts[MENU_RIGHT].asset, &a) == 0 && a.entry_count &&
+            xf_path_resolve(e->data_dir, a.entries[0].path, path, sizeof(path)) == 0 &&
+            xf_mov_open(&e->right_mov, path) == 0) {
+            xf_mov_track *t = xf_mov_find(&e->right_mov, XF_TRACK_VIDEO);
+            e->right_open = t && xf_video_open(&e->right, &e->right_mov, t) == 0;
+        }
+        e->right_frame = -1;
+        e->right_target = RIGHT_INTRO_END;
+        e->right_next_ms = plat_ticks_ms();
+    }
+    e->in_menu = 1;
+    e->menu_hover = -1;
+}
+
+/* Steps RIGHT.mov one frame at a time towards right_target, at the
+ * movie's own frame durations. */
+static void menu_step_right(explorer *e)
+{
+    const xf_mov_track *t;
+    u32 now = plat_ticks_ms();
+    if (!e->right_open || e->right_frame == e->right_target || now < e->right_next_ms)
+        return;
+    t = e->right.track;
+    e->right_frame = e->right_frame < e->right_target ? e->right_frame + 1 : e->right_target;
+    if (xf_video_seek(&e->right, (u32)e->right_frame) != 0)
+        return;
+    {
+        u32 i = (u32)e->right_frame;
+        u32 dur = i + 1 < t->sample_count ? t->sample_time[i + 1] - t->sample_time[i] : 40;
+        e->right_next_ms = now + dur * 1000 / t->timescale;
+    }
+}
+
+static void menu_set_hover(explorer *e, int item)
+{
+    if (item == e->menu_hover)
+        return;
+    e->menu_hover = item;
+    if (e->right_frame < RIGHT_INTRO_END)
+        return; /* labels still animating in */
+    if (item >= 0) {
+        e->right_frame = g_menu_rollover[item].first - 1;
+        e->right_target = g_menu_rollover[item].last;
+    } else {
+        e->right_frame = RIGHT_INTRO_END - 1;
+        e->right_target = RIGHT_INTRO_END;
+    }
+    e->right_next_ms = plat_ticks_ms();
+}
+
+static void menu_update(explorer *e)
+{
+    int i;
+    for (i = 0; i < MENU_PARTS; i++) {
+        if (!e->menu_open[i])
+            continue;
+        if (!xf_player_update(&e->menu[i], plat_ticks_ms()) && g_menu_parts[i].loop) {
+            /* Loops restart from the beginning. */
+            xf_player_close(&e->menu[i]);
+            e->menu_open[i] = open_asset_player(e, g_menu_parts[i].asset, &e->menu[i]) == 0;
+        }
+        /* Finished parts keep showing their last frame. */
+    }
+    menu_step_right(e);
+}
+
+static void menu_draw(explorer *e)
+{
+    int i, y;
+    memset(e->fb, 0, sizeof(e->fb));
+    for (i = 0; i < MENU_PARTS; i++) {
+        const u32 *f = e->menu_open[i] ? xf_player_frame(&e->menu[i]) : NULL;
+        int w, h, x0 = g_menu_parts[i].x, y0 = g_menu_parts[i].y;
+        if (!f)
+            continue;
+        w = XF_MIN(e->menu[i].video.width, SCREEN_W - x0);
+        h = XF_MIN(e->menu[i].video.height, SCREEN_H - y0);
+        for (y = 0; y < h; y++)
+            memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], f + y * e->menu[i].video.width, (size_t)w * 4);
+    }
+    if (e->right_open && e->right_frame >= 0)
+        for (y = 0; y < e->right.height; y++)
+            memcpy(&e->fb[y * SCREEN_W + 472], e->right.frame + y * e->right.width, (size_t)e->right.width * 4);
+}
+
+static int menu_item_at(int x, int y)
+{
+    size_t i;
+    if (x < 472)
+        return -1;
+    for (i = 0; i < XF_COUNT(g_menu_items); i++)
+        if (y >= g_menu_items[i].top && y < g_menu_items[i].bottom)
+            return (int)i;
+    return -1;
+}
+
 int xf_explore(const char *data_dir, u32 start_view, int disc)
 {
     explorer *e = calloc(1, sizeof(*e));
@@ -515,10 +698,10 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
         e->have_font = xf_font_load(&e->font, path) == 0;
     if (start_view == 0) {
+        /* Like the original: intro, then the main menu. */
         queue_intro(e);
-        start_view = new_game(e);
-    }
-    if (enter_view(e, start_view) != 0) {
+        e->in_menu = -1; /* open the menu once the intro has played */
+    } else if (enter_view(e, start_view) != 0) {
         xf_neo_close(&e->db);
         free(e);
         return 1;
@@ -528,6 +711,22 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         while (plat_poll(&ev)) {
             if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
                 running = 0;
+            else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE)
+                menu_set_hover(e, menu_item_at(ev.x, ev.y));
+            else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
+                int item = menu_item_at(ev.x, ev.y);
+                if (item >= 0)
+                    xf_info("menu: %s", g_menu_items[item].name);
+                if (item == 0) { /* New */
+                    u32 v;
+                    menu_close(e);
+                    v = new_game(e);
+                    if (v)
+                        enter_view(e, v);
+                } else if (item == 6) { /* Quit */
+                    running = 0;
+                }
+            }
             else if (ev.type == PLAT_EV_MOUSE_MOVE) {
                 mx = ev.x;
                 my = ev.y;
@@ -556,11 +755,19 @@ int xf_explore(const char *data_dir, u32 start_view, int disc)
         if (e->playing && !xf_player_update(&e->player, plat_ticks_ms()))
             stop_media(e);
         start_next_media(e);
-        draw(e, mx, my);
+        if (e->in_menu == -1 && !e->playing && e->media_head == e->media_tail)
+            menu_enter(e);
+        if (e->in_menu == 1) {
+            menu_update(e);
+            menu_draw(e);
+        } else {
+            draw(e, mx, my);
+        }
         plat_present(e->fb, SCREEN_W, SCREEN_H, SCREEN_W);
         plat_sleep_ms(e->playing ? 5 : 16);
     }
     stop_media(e);
+    menu_close(e);
     if (e->nav_open)
         xf_mov_close(&e->nav);
     if (e->have_font) {
