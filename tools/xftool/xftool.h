@@ -10,6 +10,7 @@ typedef struct {
 
 extern const xftool_cmd xftool_pff_cmds[];
 extern const xftool_cmd xftool_hot_cmds[];
+extern const xftool_cmd xftool_mov_cmds[];
 
 int xftool_write_file(const char *path, const void *data, unsigned long size);
 

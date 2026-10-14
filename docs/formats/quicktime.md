@@ -1,0 +1,74 @@
+# QuickTime movies
+
+All video, music, ambient sound and navigation files are QuickTime movies.
+Only the file extension tells them apart:
+
+| Extension | Folder | Content |
+|---|---|---|
+| `.xmv` | `XV/` | Full-motion video scenes, with sound and subtitle tracks |
+| `.xmv` | `XN/` | Navigation clips: walking and turning between viewpoints |
+| `.xmv` | `XG/` | Small animations: icons, cursors and interface effects |
+| `.nmv` | install folder | Navigation stills: one still image per viewpoint (see below) |
+| `.mus` | `XS/` | Music |
+| `.amv` | `XS/` | Ambient sound and sound effects |
+| `.dmv` | `XS/` | Device sounds: phone, computer, doors |
+| `.mov` | `XV/` | One leftover movie, same content as `.xmv` |
+
+The files follow the classic QuickTime file format. All numbers are
+big-endian. The movie header (`moov`) comes before the media data
+(`mdat`) in every file we checked.
+
+## Codecs
+
+Counts are tracks in the English CD release (1,198 files).
+
+| Track | Codec | Where | Notes |
+|---|---|---|---|
+| Video | `cvid` (Cinepak) | Most scenes in `XV/`, some in `XN/` and `XG/` | 600×240 for scenes. A few are 600×400, 560×400 or other sizes. |
+| Video | `jpeg` (Photo JPEG) | Navigation (`XN/`, `.nmv`), some `XG/` | Every frame is a key frame. |
+| Video | `rpza` (Apple Video, "Road Pizza") | `XG/` | 16-bit, small icons (80×60). |
+| Video | `mjpa` (Motion JPEG A) | One file in `XG/` | |
+| Audio | `ima4` (IMA ADPCM, Apple variant) | Most sound | 11025, 22050 or 44100 Hz; mono or stereo. |
+| Audio | `twos` (signed PCM, big-endian) | Some `.amv`, `.mus`, `.xmv` | 8-bit or 16-bit. |
+| Audio | `QDMC` (QDesign Music 1) | 18 `.xmv`, 4 `.mus`, 1 `.amv`, 1 `.dmv` | Music and a few scenes. Not QDesign Music 2 (`QDM2`). |
+| Text | `text` | Most `XV/` scenes | Subtitles. A scene can have several text tracks. |
+
+Scenes in `XV/` have one video track, one sound track and one or more text
+tracks. The text tracks whose sample description has no codec name are
+also subtitle tracks.
+
+## Navigation stills (`.nmv`)
+
+Each `NAV*.NMV` file has two JPEG video tracks of 600×240:
+
+- Track 1 has time scale 1 and one sample per viewpoint.
+- Track 2 has time scale 600 and few samples.
+
+The game shows one sample of track 1 as the still background of the
+current viewpoint.
+
+## Unusual files
+
+- `XN/25949.xmv` stores its movie header compressed. The `moov` atom holds
+  a `cmov` atom with a `dcom` atom (method `zlib`) and a `cmvd` atom
+  (4-byte uncompressed size, then the zlib data). The uncompressed data is a
+  complete `moov` atom.
+- `XG/94122.xmv` and `XG/94215.xmv` hold only an `mdat` atom of size 0 with
+  JPEG data, and no movie header. On the Mac the header probably came from
+  the resource fork. The game may not use these two files.
+
+## Sample tables
+
+The reader in `src/media/mov.c` builds two indexes for each track:
+
+- For tracks with variable-size samples (video, text), one offset and one
+  start time per sample.
+- For tracks with a constant sample size (all audio), only per-chunk
+  tables. An `ima4` music track has more than two million samples (one per
+  PCM frame), so a per-sample index would waste memory.
+
+## Tools
+
+```sh
+xftool mov XV/19672.xmv NAV1.NMV XS/30401.mus
+```
