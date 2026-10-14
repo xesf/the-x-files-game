@@ -133,9 +133,20 @@ when the list runs. The kinds by owner, counted in the English DVD HDB:
 | Location | 25 | 17 | 1 | 2 | 1 | | 8 | 20 | 20 |
 | Node | 1 | | | | | | | 5 | |
 
-Kinds 2 and 11 occur once each. Working guesses, not yet confirmed in
-the engine code: 0 is a click, 8 is entering and 9 is leaving the owner,
-4 and 5 are the mouse moving over and off an interface item.
+Kinds 2 and 11 occur once each. What the kinds mean, with the evidence:
+
+| Kind | Meaning | Evidence |
+|---|---|---|
+| 0 | Click | The click handlers call `triggers_run_kind` (0x4F6EA0) with kind 0. |
+| 3 | Key press | The actions pass the event value (operand kind 4) to `LoginKeyPress` and `INGKeyPressed`. |
+| 4 | Mouse over | The pointer handlers (0x4EEB90, 0x442B70) run kind 4. The 318 kind 4 triggers on interface items pair with 318 kind 5 triggers: 4 enables a highlight and 5 disables it again. |
+| 5 | Mouse off | See kind 4. |
+| 7 | Timer | See [Timers](actions.md#timers). Confirmed in the engine code. |
+| 8 | Enter | The owner appears: view entry, media start. |
+| 9 | Leave | The owner goes away: view exit, media end. |
+
+Kinds 1 and 6 are still open. Kind 1 lists show and hide interfaces;
+kind 6 lists play media.
 
 The data supports 8 and 9: kind 8 lists on views store the current view
 in variable 1057, and kind 9 lists disable hotspots and stop timers. The

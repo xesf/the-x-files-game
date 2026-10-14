@@ -122,7 +122,7 @@ static void operand_text(const vc_operand *o, char *out, size_t size)
         else
             snprintf(out, size, "char %u", o->value);
         break;
-    case VC_OPND_CONTEXT: snprintf(out, size, "fired_timer"); (void)o; break;
+    case VC_OPND_CONTEXT: snprintf(out, size, "event"); (void)o; break;
     default: snprintf(out, size, "?%u:%u", o->kind, o->value); break;
     }
 }

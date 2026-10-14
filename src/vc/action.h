@@ -21,7 +21,7 @@ enum {
     VC_OPND_PARAMETER = 1, /* local of the running list: 0-7, 10000-10011, 20000-20003 */
     VC_OPND_LITERAL = 2,   /* number */
     VC_OPND_CHAR = 3,      /* character, for example 'A' */
-    VC_OPND_CONTEXT = 4    /* number of the timer that fired (kind 7 triggers) */
+    VC_OPND_CONTEXT = 4    /* value of the event: timer number (kind 7), key (kind 3) */
 };
 
 typedef struct {

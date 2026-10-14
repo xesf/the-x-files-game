@@ -71,7 +71,7 @@ Operand kinds:
 | 1 | A parameter of the current action list: 0–7 integers, 10000–10011 booleans, 20000–20003 bytes |
 | 2 | A literal number |
 | 3 | A character, for example `'A'`; compared with character variables such as `cSubNode` |
-| 4 | The number of the timer that fired (see [Timers](#timers)) |
+| 4 | The value of the event that runs the trigger: the timer number for a timer (see [Timers](#timers)), the key for a key press |
 
 Operations in conditions: `==`, `!=`, `>`, `<`, `>=`, `<=`, `and`, `or`
 (0 to 7). In statements: `=`, `++`, `--`, `+=`, `-=`, `*=`, `/=`, `%=`

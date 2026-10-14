@@ -35,7 +35,7 @@ typedef struct {
     u32 enable_count;
     u32 *enable_by_target;    /* indexes into enables, sorted by target */
     vc_host host;
-    i32 context;              /* number of the timer that fired (operand kind 4) */
+    i32 context;              /* value of the event that runs the triggers (operand kind 4) */
     int depth;
     int trace;                /* print every action */
 } vc_interp;
