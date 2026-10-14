@@ -1,9 +1,11 @@
-/* Entry point. For now it opens the window, draws a test pattern and
- * plays a short tone, to prove the platform layer works. */
-#include <math.h>
+/* Entry point. `xfiles --play <movie>` plays one movie; without arguments
+ * it shows a test pattern, to prove the platform layer works. */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "audio/mixer.h"
+#include "media/player.h"
 #include "platform/plat.h"
 #include "xf_log.h"
 
@@ -12,48 +14,57 @@
 #define AUDIO_RATE 22050
 
 static u32 g_fb[SCREEN_W * SCREEN_H];
-static double g_phase;
-static int g_tone_frames = AUDIO_RATE / 2;
 
-static void tone(void *user, i16 *out, int frames)
+static void blit_centered(const u32 *src, int w, int h)
 {
-    int i;
-    for (i = 0; i < frames; i++) {
-        i16 s = 0;
-        if (g_tone_frames > 0) {
-            s = (i16)(sin(g_phase) * 6000);
-            g_phase += 2 * M_PI * 440.0 / AUDIO_RATE;
-            g_tone_frames--;
-        }
-        out[i * 2] = out[i * 2 + 1] = s;
+    int x0 = (SCREEN_W - w) / 2, y0 = (SCREEN_H - h) / 2, y;
+    for (y = 0; y < h; y++) {
+        int sy = y + y0;
+        if (sy < 0 || sy >= SCREEN_H)
+            continue;
+        if (x0 >= 0 && x0 + w <= SCREEN_W)
+            memcpy(&g_fb[sy * SCREEN_W + x0], &src[y * w], (size_t)w * 4);
     }
 }
 
-static void draw_pattern(int t, int mx, int my)
+static int play_movie(const char *path)
 {
-    int x, y;
-    for (y = 0; y < SCREEN_H; y++)
-        for (x = 0; x < SCREEN_W; x++)
-            g_fb[y * SCREEN_W + x] = (u32)((x + t) & 0xff) << 16 | (u32)(y & 0xff) << 8 | 0x40;
-    for (y = my - 4; y <= my + 4; y++)
-        for (x = mx - 4; x <= mx + 4; x++)
-            if (x >= 0 && y >= 0 && x < SCREEN_W && y < SCREEN_H)
-                g_fb[y * SCREEN_W + x] = 0xffffff;
+    xf_player player;
+    const char *last_sub = NULL;
+    int running = 1;
+
+    if (xf_player_open(&player, path, plat_ticks_ms()) != 0)
+        return 1;
+    while (running) {
+        plat_event ev;
+        const char *sub;
+        while (plat_poll(&ev))
+            if (ev.type == PLAT_EV_QUIT || ev.type == PLAT_EV_KEY_DOWN)
+                running = 0;
+        if (!xf_player_update(&player, plat_ticks_ms()))
+            running = 0;
+        memset(g_fb, 0, sizeof(g_fb));
+        if (xf_player_frame(&player))
+            blit_centered(xf_player_frame(&player), player.video.width, player.video.height);
+        /* Subtitles go to the console until the font renderer exists. */
+        sub = xf_player_subtitle(&player);
+        if (sub && sub != last_sub)
+            printf("[%u ms] %s\n", player.now_ms, sub);
+        last_sub = sub;
+        plat_present(g_fb, SCREEN_W, SCREEN_H, SCREEN_W);
+        plat_sleep_ms(5);
+    }
+    xf_player_close(&player);
+    return 0;
 }
 
-int main(int argc, char **argv)
+static void test_pattern(u32 quit_at)
 {
     int running = 1, mx = 0, my = 0;
-    u32 quit_at = argc > 1 ? (u32)atoi(argv[1]) : 0;
-
-    if (plat_init("The X-Files", SCREEN_W, SCREEN_H) != 0)
-        xf_fatal("cannot open window");
-    if (plat_audio_open(AUDIO_RATE, tone, NULL) != 0)
-        xf_warn("no audio output");
-
     while (running) {
         plat_event ev;
         u32 now = plat_ticks_ms();
+        int x, y;
         while (plat_poll(&ev)) {
             if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
                 running = 0;
@@ -64,10 +75,34 @@ int main(int argc, char **argv)
         }
         if (quit_at && now >= quit_at)
             running = 0;
-        draw_pattern((int)(now / 10), mx, my);
+        for (y = 0; y < SCREEN_H; y++)
+            for (x = 0; x < SCREEN_W; x++)
+                g_fb[y * SCREEN_W + x] = (u32)((x + (int)now / 10) & 0xff) << 16 | (u32)(y & 0xff) << 8 | 0x40;
+        for (y = my - 4; y <= my + 4; y++)
+            for (x = mx - 4; x <= mx + 4; x++)
+                if (x >= 0 && y >= 0 && x < SCREEN_W && y < SCREEN_H)
+                    g_fb[y * SCREEN_W + x] = 0xffffff;
         plat_present(g_fb, SCREEN_W, SCREEN_H, SCREEN_W);
         plat_sleep_ms(16);
     }
+}
+
+int main(int argc, char **argv)
+{
+    int r = 0;
+
+    if (getenv("XF_DEBUG"))
+        xf_log_set_level(XF_LOG_DEBUG);
+    if (plat_init("The X-Files", SCREEN_W, SCREEN_H) != 0)
+        xf_fatal("cannot open window");
+    xf_mixer_init(AUDIO_RATE, plat_audio_lock, plat_audio_unlock);
+    if (plat_audio_open(AUDIO_RATE, xf_mixer_render, NULL) != 0)
+        xf_warn("no audio output");
+
+    if (argc > 2 && strcmp(argv[1], "--play") == 0)
+        r = play_movie(argv[2]);
+    else
+        test_pattern(argc > 1 ? (u32)atoi(argv[1]) : 0);
     plat_shutdown();
-    return 0;
+    return r;
 }
