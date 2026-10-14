@@ -102,7 +102,7 @@ tests/       format round-trips and decoder golden frames
    each RE session. If the session started without it, reconnect with
    `/mcp`.
 2. **Repair the initial auto-analysis.** Done when
-   `tools/ida/fix_noreturn.py` has run and its "noreturn" list is reviewed.
+   `tools/ida/fix_noreturn.idc` has run and its "noreturn" list is reviewed.
    - FLIRT matched the allocator wrapper at `0x521d20` as `_exit`. It is
      `operator new`: size 0 becomes 1, it calls the heap allocator and
      retries through the new-handler. IDA flagged it as no-return, so every
