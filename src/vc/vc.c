@@ -156,12 +156,16 @@ int vc_parse_media(const u8 *data, size_t size, vc_asset_ref *a)
 int vc_read_asset_ref(const xf_neo_db *db, u32 id, vc_asset_ref *a)
 {
     xf_neo_reader r, blob;
+    u32 packed;
     memset(a, 0, sizeof(*a));
     if (open_obj(db, id, VC_ASSET_REF, &r) != 0)
         return -1;
     blob = xf_neo_blob(db, &r);
     a->name = xf_neo_u32(&r);
-    a->flags = xf_neo_u32(&r);
+    /* One u32: flags in the top byte, the media's trigger list below. */
+    packed = xf_neo_u32(&r);
+    a->flags = (u8)(packed >> 24);
+    a->triggers = packed & 0xFFFFFF;
     a->kind = xf_neo_u8(&r);
     a->extra = xf_neo_u8(&r);
     if (r.error || !blob.p)

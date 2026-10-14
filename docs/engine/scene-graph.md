@@ -59,6 +59,11 @@ sequence:
 Entering view 691 the first time (`bFirstTimeInFieldOffice`) runs the
 location card and the opening scene.
 
+The four moves of view 691 start disabled in the GAM. The opening clip
+`SC03C.mov` (media 19812) carries trigger list 28612. Its kind 9 trigger
+runs when the clip ends and enables the moves, so the player can only
+walk around the office after the opening scene.
+
 ## Location card
 
 The game opens each place with a timed screen that takes no input: an
@@ -141,6 +146,15 @@ that change), then kind 8 of the new node, location, viewpoint and view
 establishing shot of the FBI building and the scene where Willmore
 enters, as in the original game.
 
+Media also carries triggers. The third field of a `VCAssetRef` holds a
+trigger list (see [Media references](#media-references)). 733 media
+references in the English DVD HDB have one. Its kind 8 triggers run when
+the media starts and its kind 9 triggers run when the media ends or the
+player skips it. The engine attaches trigger lists through
+`TriggerHandler_attach` (0x416800) and runs one kind with
+`triggers_run_kind` (0x4F6EA0). When a clip is missing on disk, the
+explorer still runs both kinds, so the story goes on.
+
 ## Navigation
 
 A `VCNav` connects a view to another view:
@@ -170,7 +184,7 @@ A `VCAssetRef` names one piece of media:
 |---|---|
 | string | Packed media description (below) |
 | u32 | ID of a `VCName` with a short label |
-| u32 | Flags |
+| u32 | Flags in the top byte; the ID of a `VCTriggerList` in the low 24 bits, or 0 |
 | u8 | Media type (meaning per value not yet confirmed; navigation stills use 67) |
 | u8 | Category: the number of a `VCAssetCategory` |
 

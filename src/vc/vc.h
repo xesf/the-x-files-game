@@ -62,8 +62,9 @@ typedef struct {
 
 typedef struct {
     char logical[VC_PATH_MAX];
-    u32 name;  /* VCName id */
-    u32 flags;
+    u32 name;     /* VCName id */
+    u8 flags;     /* top byte of the packed field */
+    u32 triggers; /* trigger list run when the media starts (8) and ends (9) */
     u8 kind;   /* 3 video, 9 navigation loop, 67 navigation still */
     u8 extra;
     int entry_count;

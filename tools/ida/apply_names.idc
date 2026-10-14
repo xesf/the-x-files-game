@@ -344,6 +344,10 @@ static main()
     set_name(0x4BCCC0, "fn_TakePhoto", SN_NOWARN);
     set_name(0x4BCD40, "fn_TextOn", SN_NOWARN);
     set_name(0x4BCE10, "fn_WillmoreSleeps", SN_NOWARN);
+    set_name(0x4165F0, "TriggerHandler_load_list", SN_NOWARN);
+    set_name(0x416800, "TriggerHandler_attach", SN_NOWARN);
+    set_name(0x4676A0, "VCView_trigger_list", SN_NOWARN);
+    set_name(0x4F6EA0, "triggers_run_kind", SN_NOWARN);
     set_name(0x6B6B10, "g_game_in_progress", SN_NOWARN);
     set_name(0x6B6FEC, "g_app", SN_NOWARN);
     set_name(0x6B7A14, "g_vc_root", SN_NOWARN);
