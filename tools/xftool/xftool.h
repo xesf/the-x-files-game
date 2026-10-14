@@ -12,7 +12,9 @@ extern const xftool_cmd xftool_pff_cmds[];
 extern const xftool_cmd xftool_hot_cmds[];
 extern const xftool_cmd xftool_mov_cmds[];
 extern const xftool_cmd xftool_text_cmds[];
+extern const xftool_cmd xftool_frame_cmds[];
 
 int xftool_write_file(const char *path, const void *data, unsigned long size);
+int xftool_write_bmp(const char *path, const unsigned *pixels, int w, int h);
 
 #endif
