@@ -41,8 +41,10 @@ The movie ends when its duration has passed and the sound has drained.
 ## Trying it
 
 ```sh
-build/xfiles --play /path/to/game/XV/19650.xmv
+build/xfiles --play /path/to/game/XV/19650.xmv --data /path/to/game
 ```
 
-Any key closes the movie. Subtitles print to the console until the font
-renderer is written.
+Any key closes the movie. With `--data`, subtitles are drawn below the
+picture in the dialogue font (`DLG.TTR`). Without it they print to the
+console. The position and size of the subtitles are a first guess and
+must still be checked against the original game.

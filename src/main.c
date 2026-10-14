@@ -1,12 +1,15 @@
-/* Entry point. `xfiles --play <movie>` plays one movie; without arguments
- * it shows a test pattern, to prove the platform layer works. */
+/* Entry point. `xfiles --play <movie> [--data <game folder>]` plays one
+ * movie; without arguments it shows a test pattern, to prove the platform
+ * layer works. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "audio/mixer.h"
+#include "gfx/text.h"
 #include "media/player.h"
 #include "platform/plat.h"
+#include "xf_file.h"
 #include "xf_log.h"
 
 #define SCREEN_W 640
@@ -27,12 +30,30 @@ static void blit_centered(const u32 *src, int w, int h)
     }
 }
 
-static int play_movie(const char *path)
+/* Loads the dialogue font from the game folder. Installs name it
+ * DLG.TTR or dlg.ttf. */
+static int load_dialogue_font(const char *data_dir, xf_font *font)
+{
+    static const char *const names[] = { "DLG.TTR", "DLG.TTF" };
+    char path[1024];
+    size_t i;
+    for (i = 0; i < XF_COUNT(names); i++)
+        if (xf_path_resolve(data_dir, names[i], path, sizeof(path)) == 0 && xf_font_load(font, path) == 0)
+            return 0;
+    xf_warn("no dialogue font in %s; subtitles go to the console", data_dir);
+    return -1;
+}
+
+static int play_movie(const char *path, const char *data_dir)
 {
     xf_player player;
+    xf_font font;
+    xf_surface screen = { g_fb, SCREEN_W, SCREEN_H, SCREEN_W };
     const char *last_sub = NULL;
-    int running = 1;
+    int running = 1, have_font = 0;
 
+    if (data_dir)
+        have_font = load_dialogue_font(data_dir, &font) == 0;
     if (xf_player_open(&player, path, plat_ticks_ms()) != 0)
         return 1;
     while (running) {
@@ -46,15 +67,23 @@ static int play_movie(const char *path)
         memset(g_fb, 0, sizeof(g_fb));
         if (xf_player_frame(&player))
             blit_centered(xf_player_frame(&player), player.video.width, player.video.height);
-        /* Subtitles go to the console until the font renderer exists. */
         sub = xf_player_subtitle(&player);
-        if (sub && sub != last_sub)
+        if (sub && have_font) {
+            int bottom = (SCREEN_H + (xf_player_frame(&player) ? player.video.height : 0)) / 2;
+            xf_text_draw_wrapped(&screen, &font, 20, SCREEN_W / 2, bottom + 30, SCREEN_W - 40, sub,
+                                 0xFFFFFF, 0x000000);
+        } else if (sub && sub != last_sub) {
             printf("[%u ms] %s\n", player.now_ms, sub);
+        }
         last_sub = sub;
         plat_present(g_fb, SCREEN_W, SCREEN_H, SCREEN_W);
         plat_sleep_ms(5);
     }
     xf_player_close(&player);
+    if (have_font) {
+        xf_text_cache_clear();
+        xf_font_free(&font);
+    }
     return 0;
 }
 
@@ -100,7 +129,7 @@ int main(int argc, char **argv)
         xf_warn("no audio output");
 
     if (argc > 2 && strcmp(argv[1], "--play") == 0)
-        r = play_movie(argv[2]);
+        r = play_movie(argv[2], argc > 4 && strcmp(argv[3], "--data") == 0 ? argv[4] : NULL);
     else
         test_pattern(argc > 1 ? (u32)atoi(argv[1]) : 0);
     plat_shutdown();
