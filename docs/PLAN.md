@@ -166,19 +166,18 @@ tests/       format round-trips and decoder golden frames
 
 ## 5. Milestones
 
-| # | Milestone | Done when |
-|---|---|---|
-| M0 | Repo skeleton, LICENSE, CMake + Makefile, macOS backend shows a window and plays a WAV tone | Builds with `clang` only, no external dependencies |
-| M1 | `xftool` + format readers: HDB/GAM (NeoPersist), PFF, HOT, XTX, MOV atoms | Byte-exact round-trip on HDB/GAM. All assets in `../Installations/data` listed and mapped |
-| M2 | Codecs: JPEG baseline, Cinepak, RPZA, IMA4, text track, then QDM2 | Every `.xmv`/`.nmv`/`.amv` decodes. Frame hashes match FFmpeg reference dumps (dev-only) |
-| M3 | Media player: A/V sync, looping, NMV dual-stream nav, subtitles, TTF text | One FMV with subtitles plays correctly in the macOS app |
-| M4 | VC model + script VM from the HDB; navigation, hotspots, cursor | Walk the CD1 opening (Mulder's apartment / Seattle) with the mouse |
-| M5 | Inventory, PDA, phone, computer, conversations, UberStates, timers, save/load (`.x`) | Original `start*.x` saves load and continue. State traces match the original |
-| M6 | Full game on all 7 CDs + DVD `.vob` (MPEG-2 decoder; may be optional), all languages | Complete playthrough on every major branch, verified by state traces |
-| M7 | Ports: Steam Deck → Vita → Windows/Linux → iOS/Android → Web → PSP | See §6 |
+| # | Milestone | Done when | Status |
+|---|---|---|---|
+| M0 | Repo skeleton, LICENSE, Makefile, macOS backend shows a window and plays sound | Builds with `clang` only, no external dependencies | Done |
+| M1 | `xftool` + format readers: HDB/GAM (NeoPersist), PFF, HOT, XTX, MOV atoms | Byte-exact round-trip on HDB/GAM. All assets in `../Installations/data` listed and mapped | PFF, HOT, XTX, MOV done. HDB/GAM in progress (needs RE) |
+| M2 | Codecs: JPEG, Cinepak, RPZA, Motion JPEG A, IMA4, PCM, text track, then QDMC | Every `.xmv`/`.nmv`/`.amv` decodes; output matches a reference decoder | Done except QDMC (24 files) |
+| M3 | Media player: A/V sync, subtitles, TTF text | One FMV with subtitles plays correctly in the macOS app | Done (`xfiles --play`) |
+| M4 | VC model + script VM from the HDB; navigation, hotspots, cursor | Walk the CD1 opening (Mulder's apartment / Seattle) with the mouse | Next |
+| M5 | Inventory, PDA, phone, computer, conversations, UberStates, timers, save/load (`.x`) | Original `start*.x` saves load and continue. State traces match the original | |
+| M6 | Full game on all 7 CDs + DVD `.vob` (MPEG-2 decoder; may be optional), all languages | Complete playthrough on every major branch, verified by state traces | |
+| M7 | Ports: Steam Deck → Vita → Windows/Linux → iOS/Android → Web → PSP | See §6 | |
 
-M1 and M2 do not need IDA. They can start right away, in parallel with the
-naming pass for M4.
+M1 and M2 did not need IDA, except for the HDB, which M4 also needs.
 
 ## 6. Platforms
 
@@ -203,8 +202,9 @@ without a redesign.
 
 ## 7. Risks
 
-- **QDM2 audio** is the hardest codec. Port the decoder logic from ScummVM's
-  `qdm2` (GPL-compatible) and check it against reference output.
+- **QDMC audio** (QDesign Music 1, not QDM2) is the hardest codec. It is
+  used by 24 files (music and a few scenes). ScummVM only has QDM2; check
+  against ffmpeg output.
 - **MPEG-2 for DVD `.vob`:** this is a large job. Ship CD assets first and
   treat DVD video as optional.
 - **HDB semantics:** the bytes are decoded, but what the fields mean comes
