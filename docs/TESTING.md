@@ -39,4 +39,5 @@ Current results:
 | Decoder | Reference | Result |
 |---|---|---|
 | Cinepak | ffmpeg | Bit-exact on the frames tested |
+| RPZA | ffmpeg | Bit-exact, first and last frames of three clips |
 | JPEG | macOS ImageIO | Mean difference 0.13 to 0.31 per channel; ImageIO interpolates chroma, we use nearest neighbour |

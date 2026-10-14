@@ -4,6 +4,7 @@
 #include "media/cinepak.h"
 #include "media/jpeg.h"
 #include "media/mov.h"
+#include "media/rpza.h"
 #include "xftool.h"
 
 /* Decodes video sample `index`. Inter-coded codecs need the frames since
@@ -19,15 +20,21 @@ static int decode_sample(xf_mov *mov, const xf_mov_track *t, u32 index, u32 *out
         return -1;
     }
     switch (t->codec) {
-    case XF_FOURCC('c', 'v', 'i', 'd'): {
-        xf_cinepak *c = xf_cinepak_create(t->width, t->height);
+    case XF_FOURCC('c', 'v', 'i', 'd'):
+    case XF_FOURCC('r', 'p', 'z', 'a'): {
+        int cvid = t->codec == XF_FOURCC('c', 'v', 'i', 'd');
+        xf_cinepak *c = cvid ? xf_cinepak_create(t->width, t->height) : NULL;
         u32 i = index;
         while (i > 0 && !xf_mov_is_sync(t, i))
             i--;
-        for (r = 0; c && i <= index && r == 0; i++) {
+        for (r = 0; (c || !cvid) && i <= index && r == 0; i++) {
             u8 *d = malloc(t->sample_size[i]);
-            r = d && xf_mov_read_sample(mov, t, i, d) == 0
-                    ? xf_cinepak_decode(c, d, t->sample_size[i], out) : -1;
+            if (!d || xf_mov_read_sample(mov, t, i, d) != 0)
+                r = -1;
+            else if (cvid)
+                r = xf_cinepak_decode(c, d, t->sample_size[i], out);
+            else
+                r = xf_rpza_decode(d, t->sample_size[i], out, t->width, t->height);
             free(d);
         }
         xf_cinepak_destroy(c);
