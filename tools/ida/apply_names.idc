@@ -355,6 +355,9 @@ static main()
     set_name(0x42FC90, "timer_fired_callback", SN_NOWARN);
     set_name(0x4163D0, "TriggerHandler_add_timer_trigger", SN_NOWARN);
     set_name(0x480560, "TriggerHandler_watch_timer_action", SN_NOWARN);
+    set_name(0x40C540, "TriggerHandler_ctor", SN_NOWARN);
+    set_name(0x4F71E0, "TriggerHandler_fire_kind", SN_NOWARN);
+    set_name(0x4F76C0, "TriggerHandler_fire", SN_NOWARN);
     set_name(0x6C14A8, "g_fired_timers", SN_NOWARN);
     set_name(0x6B6B10, "g_game_in_progress", SN_NOWARN);
     set_name(0x6B6FEC, "g_app", SN_NOWARN);

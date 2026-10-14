@@ -355,6 +355,9 @@
 0x42FC90 timer_fired_callback  records the number of a fired timer in g_fired_timers
 0x4163D0 TriggerHandler_add_timer_trigger  files the actions of a kind 7 trigger by timer number
 0x480560 TriggerHandler_watch_timer_action  files one action whose condition reads the fired timer
+0x40C540 TriggerHandler_ctor   base of objects with triggers: 12 lists of triggers by kind at +0x1C (0x14 each)
+0x4F71E0 TriggerHandler_fire_kind  runs the triggers of one kind bucket
+0x4F76C0 TriggerHandler_fire   runs the triggers of a kind bucket for an event, setting the event value
 data 0x6C14A8 g_fired_timers  numbers of the timers that fired since the last tick (10 slots, -1 free)
 data 0x6B6B10 g_game_in_progress  1 when a game runs; the menu then shows "return"
 data 0x6B6FEC g_app  the application object
