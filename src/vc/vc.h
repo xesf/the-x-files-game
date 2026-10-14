@@ -1,0 +1,86 @@
+/* VirtualCinema game model: typed views of the objects in XFILES.HDB
+ * (see docs/engine/scene-graph.md). */
+#ifndef XF_VC_H
+#define XF_VC_H
+
+#include "data/neo.h"
+
+enum {
+    VC_TITLE = 0x27,
+    VC_NODE = 0x28,
+    VC_LOCATON = 0x29,
+    VC_VIEWPOINT = 0x2A,
+    VC_VIEW = 0x2B,
+    VC_NAME = 0x2F,
+    VC_NAV = 0x33,
+    VC_NAV_LIST = 0x34,
+    VC_ASSET_REF = 0x35,
+    VC_ASSET_REF_LIST = 0x36,
+    VC_EXPLORABLE = 0x37,
+    VC_EXPLORABLE_LIST = 0x38,
+    VC_HOTSPOT = 0x39,
+    VC_ACTION = 0x41,
+    VC_ACTION_LIST = 0x42,
+    VC_TRIGGER = 0x51,
+    VC_TRIGGER_LIST = 0x52,
+};
+
+typedef struct {
+    i16 left, top, right, bottom;
+    u32 cursor; /* VCCursor id */
+} vc_region;
+
+typedef struct {
+    u32 direction;  /* 1, 3, 5, 7, or a name id */
+    u32 assets;     /* VCAssetRefList */
+    u32 characters; /* VCCharViewList */
+    u32 navs;       /* VCNav_List */
+    u32 explorables;/* VCExplorableList */
+    u32 triggers;   /* VCTriggerList */
+} vc_view;
+
+typedef struct {
+    u32 target;  /* VCView */
+    u32 hotspot; /* VCHotSpot */
+    u32 extra;
+} vc_nav;
+
+typedef struct {
+    vc_region region;
+    u32 extra;
+} vc_hotspot;
+
+#define VC_MAX_DISC_ENTRIES 8
+#define VC_PATH_MAX 128
+
+typedef struct {
+    int disc;
+    char path[VC_PATH_MAX]; /* shipped file, '/' separators, e.g. "XV/19820.xmv" */
+    u32 start, end;
+} vc_media_entry;
+
+typedef struct {
+    char logical[VC_PATH_MAX];
+    u32 name;  /* VCName id */
+    u32 flags;
+    u8 kind;   /* 3 video, 9 navigation loop, 67 navigation still */
+    u8 extra;
+    int entry_count;
+    vc_media_entry entries[VC_MAX_DISC_ENTRIES];
+} vc_asset_ref;
+
+int vc_class(const xf_neo_db *db, u32 id);
+int vc_read_view(const xf_neo_db *db, u32 id, vc_view *v);
+int vc_read_nav(const xf_neo_db *db, u32 id, vc_nav *n);
+int vc_read_hotspot(const xf_neo_db *db, u32 id, vc_hotspot *h);
+int vc_read_asset_ref(const xf_neo_db *db, u32 id, vc_asset_ref *a);
+/* Copies the first string of a VCName into `out`. */
+int vc_read_name(const xf_neo_db *db, u32 id, char *out, size_t size);
+/* Reads the IDs of a list object (any class whose first field is a list).
+ * Returns the number of IDs written, up to `max`, or -1. */
+int vc_read_list(const xf_neo_db *db, u32 id, u32 *ids, int max);
+
+/* Parses a packed media description (see the scene graph page). */
+int vc_parse_media(const u8 *data, size_t size, vc_asset_ref *a);
+
+#endif

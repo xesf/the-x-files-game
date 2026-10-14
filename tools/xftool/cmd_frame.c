@@ -65,6 +65,28 @@ static int cmd_sample(int argc, char **argv)
     return r;
 }
 
+static int cmd_still(int argc, char **argv)
+{
+    xf_mov mov;
+    u32 *pixels;
+    int r = 1, w = 600, h = 240;
+
+    if (argc != 4) {
+        fputs("usage: xftool still <movie> <ms> <out.bmp>\n", stderr);
+        return 2;
+    }
+    if (xf_mov_open(&mov, argv[1]) != 0)
+        return 1;
+    pixels = calloc((size_t)w * h, 4);
+    if (pixels && xf_movie_frame_at(&mov, (u32)strtoul(argv[2], NULL, 10), pixels, w, h) == 0)
+        r = xftool_write_bmp(argv[3], pixels, w, h) ? 1 : 0;
+    else
+        fputs("no picture at that time\n", stderr);
+    free(pixels);
+    xf_mov_close(&mov);
+    return r;
+}
+
 /* Decodes every video frame and sound chunk of each file. */
 static int cmd_check(int argc, char **argv)
 {
@@ -128,6 +150,7 @@ static int cmd_check(int argc, char **argv)
 const xftool_cmd xftool_frame_cmds[] = {
     { "frame", "<movie> <track> <sample> <out.bmp>  decode one video frame", cmd_frame },
     { "sample", "<movie> <track> <sample> <out.bin>  save one raw sample", cmd_sample },
+    { "still", "<movie> <ms> <out.bmp>  decode the picture shown at a movie time", cmd_still },
     { "check", "<movie>...  decode every frame and sound chunk, report failures", cmd_check },
     { 0 }
 };

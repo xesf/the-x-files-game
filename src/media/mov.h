@@ -88,6 +88,10 @@ xf_mov_track *xf_mov_find(xf_mov *mov, int kind);
 /* Returns the index of the sample shown at `time` (media units). */
 u32 xf_mov_sample_at(const xf_mov_track *t, u32 time);
 int xf_mov_is_sync(const xf_mov_track *t, u32 sample);
+/* Maps movie time (movie units) to the media time of track `t` through
+ * its edit list. Returns 0 and sets *media when the track shows media at
+ * that time, -1 during an empty edit or after the end. */
+int xf_mov_edit_lookup(const xf_mov *mov, const xf_mov_track *t, u64 movie_time, u64 *media);
 /* Media time at which playback starts, from the first non-empty edit. */
 u32 xf_mov_media_start(const xf_mov_track *t);
 /* Returns the chunk that holds `sample`. */

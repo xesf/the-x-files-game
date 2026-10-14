@@ -546,3 +546,25 @@ u32 xf_mov_media_start(const xf_mov_track *t)
             return (u32)t->edits[i].media_time;
     return 0;
 }
+
+int xf_mov_edit_lookup(const xf_mov *mov, const xf_mov_track *t, u64 movie_time, u64 *media)
+{
+    u64 start = 0;
+    u32 i;
+
+    if (t->edit_count == 0) {
+        *media = movie_time * t->timescale / mov->timescale;
+        return *media < t->duration ? 0 : -1;
+    }
+    for (i = 0; i < t->edit_count; i++) {
+        const xf_mov_edit *e = &t->edits[i];
+        if (movie_time < start + e->duration) {
+            if (e->media_time < 0)
+                return -1;
+            *media = (u64)e->media_time + (movie_time - start) * t->timescale / mov->timescale;
+            return 0;
+        }
+        start += e->duration;
+    }
+    return -1;
+}

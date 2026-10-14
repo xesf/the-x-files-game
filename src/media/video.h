@@ -26,4 +26,10 @@ int xf_video_next(xf_video *v);
  * frame when needed. Returns 0, or -1 on error. */
 int xf_video_seek(xf_video *v, u32 index);
 
+/* Decodes the picture a movie shows at `ms` milliseconds of movie time,
+ * following the edit lists of all video tracks, into `out`
+ * (0x00RRGGBB, `width` x `height`). Returns 0, or -1 when no track shows a
+ * picture at that time. */
+int xf_movie_frame_at(xf_mov *mov, u32 ms, u32 *out, int width, int height);
+
 #endif

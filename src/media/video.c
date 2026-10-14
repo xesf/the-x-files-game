@@ -110,3 +110,27 @@ int xf_video_seek(xf_video *v, u32 index)
             return -1;
     return 0;
 }
+
+int xf_movie_frame_at(xf_mov *mov, u32 ms, u32 *out, int width, int height)
+{
+    u64 movie_time = (u64)ms * mov->timescale / 1000, media;
+    u32 k;
+
+    for (k = 0; k < mov->track_count; k++) {
+        const xf_mov_track *t = &mov->tracks[k];
+        xf_video v;
+        int r, y;
+        if (t->kind != XF_TRACK_VIDEO || xf_mov_edit_lookup(mov, t, movie_time, &media) != 0)
+            continue;
+        if (xf_video_open(&v, mov, t) != 0)
+            return -1;
+        r = xf_video_seek(&v, xf_mov_sample_at(t, (u32)media));
+        if (r == 0)
+            for (y = 0; y < XF_MIN(height, v.height); y++)
+                memcpy(out + (size_t)y * width, v.frame + (size_t)y * v.width,
+                       (size_t)XF_MIN(width, v.width) * 4);
+        xf_video_close(&v);
+        return r;
+    }
+    return -1;
+}

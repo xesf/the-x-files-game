@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "data/neo.h"
+#include "vc/vc.h"
 #include "xftool.h"
 
 static int cmd_hdb(int argc, char **argv)
@@ -113,7 +114,37 @@ static int cmd_check_lists(int argc, char **argv)
     return bad ? 1 : 0;
 }
 
+static int cmd_asset(int argc, char **argv)
+{
+    xf_neo_db db;
+    int a, i;
+
+    if (argc < 3) {
+        fputs("usage: xftool hdb-asset <file.hdb> <id>...\n", stderr);
+        return 2;
+    }
+    if (xf_neo_open(&db, argv[1]) != 0)
+        return 1;
+    for (a = 2; a < argc; a++) {
+        vc_asset_ref r;
+        char name[128];
+        u32 id = (u32)strtoul(argv[a], NULL, 0);
+        if (vc_read_asset_ref(&db, id, &r) != 0) {
+            printf("%u: not a media reference\n", id);
+            continue;
+        }
+        vc_read_name(&db, r.name, name, sizeof(name));
+        printf("%u: kind %u, \"%s\" (%s)\n", id, r.kind, r.logical, name);
+        for (i = 0; i < r.entry_count; i++)
+            printf("    disc %d: %s %u..%u\n", r.entries[i].disc, r.entries[i].path, r.entries[i].start,
+                   r.entries[i].end);
+    }
+    xf_neo_close(&db);
+    return 0;
+}
+
 const xftool_cmd xftool_hdb_cmds[] = {
+    { "hdb-asset", "<file.hdb> <id>...  decode media references", cmd_asset },
     { "hdb", "<file.hdb>  count the objects of each class", cmd_hdb },
     { "hdb-obj", "<file.hdb> <id> [list]  dump one object, and its list", cmd_obj },
     { "hdb-check", "<file.hdb>  read every list and check its length", cmd_check_lists },

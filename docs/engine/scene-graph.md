@@ -57,9 +57,10 @@ Hotspot 274 covers the left edge, (0, 90) to (140, 330), with cursor 284.
 A move forward uses a hotspot in the middle of the picture, with cursor
 286.
 
-The picture is 600×240 pixels, but hotspot rectangles use screen
-coordinates (up to 640 wide), so the picture is drawn at an offset. The
-exact offset is not yet confirmed.
+Hotspot rectangles use screen coordinates. The 600×240 picture is drawn
+with its top-left corner at (20, 90): the explorable rectangle
+(228, 114)–(408, 249) of view 1236 then covers the bulletin board in the
+picture, and the turn hotspots cover the picture's left and right edges.
 
 ## Media references
 
@@ -92,7 +93,14 @@ Navs:Field OfficeR:01:1n empty placeholder.mov | 0 | 0 | 0 | 1 | nav1.nmv | 0 | 
 ```
 
 The navigation stills are listed once per disc, because each disc has its
-own `NAV*.NMV`. The meaning of every number is not yet confirmed.
+own `NAV*.NMV`. For stills the start and end numbers are the movie time
+of the picture in milliseconds, plus 1: `nav1.nmv | 112001 | 112001` is
+the picture shown at 112.001 s. The movie's edit lists decide which video
+track shows the picture at that time (see
+[../formats/quicktime.md](../formats/quicktime.md)). ffmpeg seeking to
+112.001 s gives the same picture.
+
+The meaning of the other numbers is not yet confirmed.
 
 ## Tools
 
