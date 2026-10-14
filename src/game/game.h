@@ -39,6 +39,7 @@ typedef struct {
 /* An interface layout on screen (0x44D8B0 IFaceLayoutDisplay_ctor). */
 typedef struct {
     u32 layout;
+    int as_view;          /* SetIFLAsView: part of the view, closed on leaving it */
     int count;
     game_iface_item items[GAME_MAX_IFACE_ITEMS];
 } game_iface;
@@ -63,6 +64,7 @@ typedef struct {
     u32 now;              /* game clock in ms, set by game_tick */
 
     u32 view, view_triggers, pending_view;
+    u32 view_epoch;       /* counts view changes, to notice nested ones */
     game_spot spots[GAME_MAX_SPOTS];
     int spot_count;
     u32 history[GAME_HISTORY];

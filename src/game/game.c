@@ -110,6 +110,20 @@ int game_view_media(game *g, u32 *ids, int max)
 
 /* --- Views ----------------------------------------------------------- */
 
+/* Layouts marked with SetIFLAsView belong to the view they were opened
+ * in (0x41B150 sets the flag at +0x178 of the layout display). */
+static void close_view_layouts(game *g)
+{
+    int k;
+    for (k = 0; k < g->iface_count; k++)
+        if (g->ifaces[k].as_view) {
+            memmove(&g->ifaces[k], &g->ifaces[k + 1], sizeof(g->ifaces[0]) * (size_t)(g->iface_count - k - 1));
+            g->iface_count--;
+            g->iface_serial++;
+            k--;
+        }
+}
+
 int game_enter_view(game *g, u32 id)
 {
     vc_view v;
@@ -122,6 +136,7 @@ int game_enter_view(game *g, u32 id)
     {
         const vc_place *from = g->view ? vc_place_of(&g->places, g->view) : NULL;
         const vc_place *to = vc_place_of(&g->places, id);
+        u32 epoch = g->view_epoch;
         if (g->view)
             vc_run_triggers(&g->interp, g->view_triggers, 9);
         if (from && (!to || to->viewpoint != from->viewpoint))
@@ -136,8 +151,12 @@ int game_enter_view(game *g, u32 id)
             vc_run_triggers(&g->interp, to->location_triggers, 8);
         if (to && (!from || to->viewpoint != from->viewpoint))
             vc_run_triggers(&g->interp, to->viewpoint_triggers, 8);
+        if (g->view_epoch != epoch)
+            return 0; /* a trigger already went to another view */
     }
+    close_view_layouts(g);
     g->view = id;
+    g->view_epoch++;
     g->view_triggers = v.triggers;
     vc_run_triggers(&g->interp, v.triggers, 8);
     if (g->pending_view && g->pending_view != id) {
@@ -234,7 +253,15 @@ static void host_play_media(void *user, u32 list, u8 selector)
     game_queue_media(g, ids[0]);
 }
 
-static void host_go_to_view(void *user, u32 view) { ((game *)user)->pending_view = view; }
+/* 0x46A0D0 act_set_view: the engine runs queued actions in order, so the
+ * view changes before the next action of the list runs. */
+static void host_go_to_view(void *user, u32 view)
+{
+    game *g = user;
+    u32 from = g->view;
+    if (game_enter_view(g, view) == 0 && from && from != view && g->history_len < GAME_HISTORY)
+        g->history[g->history_len++] = from;
+}
 
 /* --- Timers ---------------------------------------------------------- */
 
@@ -321,6 +348,7 @@ static void host_interface(void *user, u32 id, u8 control)
     {
         game_iface *d = &g->ifaces[g->iface_count++];
         d->layout = id;
+        d->as_view = 0;
         d->count = 0;
         for (i = 0; i < n; i++) {
             game_iface_item *it = &d->items[d->count];
@@ -336,15 +364,16 @@ static void host_interface(void *user, u32 id, u8 control)
 
 static int item_order(const game_iface_item *it) { return it->item.flags & 0xFF; }
 
-/* The front item under (x, y) of the top layout that has triggers. */
+/* The front item with triggers under (x, y), searching the layouts from
+ * the top one down. A close-up has a full-screen item behind its picture,
+ * so it takes every click; the inventory bar only takes clicks on its
+ * items. */
 const game_iface_item *game_iface_item_at(game *g, int x, int y)
 {
-    const game_iface_item *best = NULL;
-    int i;
-    if (!g->iface_count)
-        return NULL;
-    {
-        const game_iface *d = &g->ifaces[g->iface_count - 1];
+    int k, i;
+    for (k = g->iface_count - 1; k >= 0; k--) {
+        const game_iface *d = &g->ifaces[k];
+        const game_iface_item *best = NULL;
         for (i = 0; i < d->count; i++) {
             const game_iface_item *it = &d->items[i];
             const vc_region *r = &it->item.region;
@@ -354,8 +383,10 @@ const game_iface_item *game_iface_item_at(game *g, int x, int y)
             if (!best || item_order(it) >= item_order(best))
                 best = it;
         }
+        if (best)
+            return best;
     }
-    return best;
+    return NULL;
 }
 
 /* Mouse over and off interface items run their kind 4 and 5 triggers. */
@@ -390,12 +421,11 @@ static void click_iface_item(game *g, const game_iface_item *it)
 static void click_spot(game *g, const game_spot *s)
 {
     u32 from = g->view, target = s->kind == SPOT_NAV ? s->target : 0, triggers = s->triggers;
+    u32 epoch = g->view_epoch;
     xf_info("click %s %u", s->kind == SPOT_NAV ? "move" : s->kind == SPOT_EXPLORE ? "object" : "character", s->id);
-    g->pending_view = 0;
     vc_run_triggers(&g->interp, triggers, 0);
-    if (g->pending_view)
-        target = g->pending_view;
-    g->pending_view = 0;
+    if (g->view_epoch != epoch) /* the click went to another view */
+        target = 0;
     if (target) {
         if (game_enter_view(g, target) == 0 && g->history_len < GAME_HISTORY)
             g->history[g->history_len++] = from;
@@ -406,12 +436,10 @@ static void click_spot(game *g, const game_spot *s)
 
 int game_click(game *g, int x, int y)
 {
-    if (g->iface_count) {
-        /* An interface takes every click while it is up. */
-        const game_iface_item *it = game_iface_item_at(g, x, y);
-        if (!it)
-            return 0;
-        click_iface_item(g, it);
+    const game_iface_item *it = game_iface_item_at(g, x, y);
+    if (it) {
+        game_iface_item copy = *it;
+        click_iface_item(g, &copy);
         return 1;
     }
     {
@@ -509,6 +537,13 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x486030 fn_SetStartView: node, location, viewpoint, view */
     if (strcmp(name, "SetStartView") == 0 && argc == 4) {
         g->pending_view = args[3].value;
+        return 1;
+    }
+    /* 0x41AE20 fn_SetIFLAsView: the layout becomes part of the view */
+    if (strcmp(name, "SetIFLAsView") == 0 && argc == 1) {
+        for (i = 0; i < g->iface_count; i++)
+            if (g->ifaces[i].layout == (u32)arg_value(g, &args[0]))
+                g->ifaces[i].as_view = 1;
         return 1;
     }
     /* 0x4BC930 fn_StopAllTimers */
