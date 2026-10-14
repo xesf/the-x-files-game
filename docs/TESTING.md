@@ -31,6 +31,15 @@ tools are not needed to build or run the engine.
   python3 -I tools/re/bmpdiff.py ref.bmp our.bmp
   ```
 
+- **Audio:** `xftool audio` writes a WAV file, ffmpeg writes raw
+  samples, and `tools/re/pcmdiff.py` compares them:
+
+  ```sh
+  xftool audio $G/XS/30401.mus our.wav
+  ffmpeg -i $G/XS/30401.mus -map 0:a:0 -f s16le ref.raw
+  python3 -I tools/re/pcmdiff.py our.wav ref.raw
+  ```
+
 - **JPEG:** `xftool sample` saves the raw frame, and `sips` (macOS)
   decodes it as a reference.
 
@@ -40,4 +49,6 @@ Current results:
 |---|---|---|
 | Cinepak | ffmpeg | Bit-exact on the frames tested |
 | RPZA | ffmpeg | Bit-exact, first and last frames of three clips |
+| IMA ADPCM (`ima4`) | ffmpeg | Bit-exact on music, ambient sound and scene audio |
+| PCM (`twos`) | ffmpeg | Bit-exact |
 | JPEG | macOS ImageIO | Mean difference 0.13 to 0.31 per channel; ImageIO interpolates chroma, we use nearest neighbour |

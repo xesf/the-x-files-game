@@ -63,6 +63,34 @@ code.
   JPEG data, and no movie header. On the Mac the header probably came from
   the resource fork. The game may not use these two files.
 
+## IMA ADPCM in QuickTime
+
+`ima4` sound is stored in packets of 34 bytes per channel. Each packet
+holds 64 samples:
+
+| Offset | Size | Content |
+|---|---|---|
+| 0 | 2 | Header: predictor in the top 9 bits, step index in the low 7 bits |
+| 2 | 32 | 64 four-bit codes, low nibble first |
+
+- Stereo packets alternate: one left packet, then one right packet.
+- The sample table counts PCM frames, so one packet is 64 samples in
+  `stsz`. A chunk of `n` samples holds `n / 64 × 34 × channels` bytes.
+- Each code adds or subtracts a difference built from shifted step sizes:
+  `step / 8`, plus `step` for bit 2, `step / 2` for bit 1 and `step / 4`
+  for bit 0. Bit 3 is the sign.
+- A decoder keeps its running predictor when the packet header has the
+  same step index and a predictor within 127 of it. This avoids a small
+  jump at each packet boundary.
+
+## Edit lists
+
+Scene sound tracks often start a little after the start of their media.
+In `XV/19672.xmv` the video edit starts at media time 0 and the sound
+edit at media time 48, so the first 48 sound frames are not played. The
+reader stores the edit list of each track, and playback starts at the
+media time of the first edit that is not empty.
+
 ## Sample tables
 
 The reader in `src/media/mov.c` builds two indexes for each track:

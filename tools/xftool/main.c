@@ -12,6 +12,7 @@ static const xftool_cmd *const g_groups[] = {
     xftool_mov_cmds,
     xftool_text_cmds,
     xftool_frame_cmds,
+    xftool_audio_cmds,
 };
 
 int xftool_write_file(const char *path, const void *data, unsigned long size)
