@@ -86,6 +86,7 @@ typedef struct {
 #define GAME_MAX_EVIDENCE 32
 /* The Artificial Intuition icon (a VCEvidenceIcon) in the inventory row. */
 #define GAME_AI_ICON 56185
+#define GAME_PLAYED 32
 #define GAME_MAX_EMAILS 64
 #define GAME_EMAIL_ROWS 8
 
@@ -165,7 +166,9 @@ typedef struct {
     int smol_clear[3], smol_visits[3], smol_area;
     u32 shot_media, shot_view, shot_epoch;
     int woods_down;
-    int game_over;        /* EndGame: 1 to the menu, 2 offer to restore */       /* NSA agents down in the woods: bits 1 and 2 */ /* the gun shot clip playing, and what follows */
+    int game_over;
+    u32 played[GAME_PLAYED]; /* the last clips started, for tests */
+    u32 played_count;        /* EndGame: 1 to the menu, 2 offer to restore */       /* NSA agents down in the woods: bits 1 and 2 */ /* the gun shot clip playing, and what follows */
     int flight_mode;      /* SetFLightProps: 1 day, 2 dark */
     char flight_place;    /* 'I' inside, 'O' outside */
 

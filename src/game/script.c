@@ -767,6 +767,13 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
     }
     if (strcmp(what, "view") == 0)
         return g->view == (u32)a;
+    if (strcmp(what, "played") == 0) {
+        u32 i;
+        for (i = 0; i < GAME_PLAYED && i < g->played_count; i++)
+            if (g->played[i] == (u32)a)
+                return 1;
+        return 0;
+    }
     if (strcmp(what, "over") == 0)
         return (g->game_over != 0) == (a != 0);
     if (strcmp(what, "var") == 0 && have_b)

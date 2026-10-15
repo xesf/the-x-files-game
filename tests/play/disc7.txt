@@ -62,3 +62,67 @@ hold none
 wait 2000
 expect var 1689 1
 expect over 0
+
+# Scully in the red room: a guard behind her.
+walk 13846
+click 70590
+skip
+walk 26313
+askall 47199                    # "I think he's looking for what's stored here"
+skip
+hold Gun
+shoot 421                       # the guard
+skip
+hold none
+wait 3000
+expect over 0
+
+# Power and lights for the isolation chamber, then both doors.
+walk 14637
+askall 58036                    # Scully at the control room
+skip
+walk 29331
+click 94185                     # the main power
+skip
+click 94184
+skip
+walk 14176
+click 93875                     # life support
+skip
+click 93873
+skip
+walk 14726
+click 44470                     # the first chamber door
+skip
+walk 14827
+click 44464                     # the second
+skip
+walk 16131
+askall 58052                    # Scully: the plan
+skip
+
+# Mulder and a guard at the blast door: shoot the guard, take his key.
+hold Gun
+walk 43896
+shoot 431
+skip
+hold none
+wait 2000
+expect over 0
+click 44286                     # the key
+skip
+click 14468
+icon 24574                      # lure Mulder into the chamber
+skip
+expect view 45888               # the alien leaves Mulder for Cook
+
+# Cook: "Turn the key." Throw the stiletto to Scully.
+hold Stiletto
+shoot 462
+skip
+hold none
+expect played 23434             # Scully kills Cook
+expect played 23440             # the wrap-up with Shanks
+expect played 21760             # X outside the apartment
+expect played 19666             # the credits
+expect over 1                   # the end

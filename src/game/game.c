@@ -423,6 +423,7 @@ int game_media_start(game *g, game_media *m)
         if (vc_read_asset_ref(&g->db, m->asset, &a) != 0)
             continue;
         g->current = *m;
+        g->played[g->played_count++ % GAME_PLAYED] = m->asset;
         vc_run_triggers(&g->interp, a.triggers, 8);
         return 1;
     }
@@ -556,6 +557,8 @@ void game_tick(game *g, u32 now_ms)
 {
     int i;
     g->now = now_ms;
+    if (g->game_over)
+        return; /* the game has ended: nothing runs on */
     for (i = 0; i < g->timer_count; i++) {
         game_timer *t = &g->timers[i];
         const vc_place *p;
