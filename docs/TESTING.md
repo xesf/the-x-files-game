@@ -104,13 +104,14 @@ A script has one command per line; `#` starts a comment.
 | `askall <character>` | Talks to a character and asks every new question, until none is left |
 | `hold <item>` / `hold none` | Takes an inventory item in hand by name (`CaseFiles`), or empties the hand |
 | `inv <id>` | Clicks a `VCInventory` item in the inventory bar |
+| `evidence <id>` | Hands a piece of evidence over from the lab's evidence bar |
 | `icon <id>` | Clicks an emotion or action icon |
 | `dial <number>` | Types a number on the cell phone and sends it |
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <text>` | Runs an ING search at the office computer |
 | `set <var> <value>` | Sets a GAM variable |
 | `route <view>` | Prints the shortest way to a view over every move, and the enable state that closes each closed move |
-| `gate <id>` | Prints the GAM enable state of an object |
+| `gate <id>` / `gate enable <id>` | Prints the GAM enable state of an object, or the object an enable state controls |
 | `var <id>` | Prints a GAM variable with its name |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |

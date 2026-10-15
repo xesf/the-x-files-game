@@ -197,6 +197,45 @@ static int cmd_walk(int argc, char **argv)
     return 0;
 }
 
+/* Prints each trigger of a trigger list (or one trigger): its kind and
+ * its decoded actions. */
+static int cmd_triggers(int argc, char **argv)
+{
+    xf_neo_db db;
+    u32 id, ids[64], acts[256];
+    char line[256];
+    int n, i, k, m;
+
+    if (argc != 3) {
+        fputs("usage: xftool hdb-triggers <file.hdb> <trigger list or trigger id>\n", stderr);
+        return 2;
+    }
+    if (xf_neo_open(&db, argv[1]) != 0)
+        return 1;
+    id = (u32)strtoul(argv[2], NULL, 0);
+    n = vc_class(&db, id) == VC_TRIGGER ? (ids[0] = id, 1) : vc_read_list(&db, id, ids, 64);
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        u32 list;
+        int kind;
+        if (vc_class(&db, ids[i]) != VC_TRIGGER || xf_neo_object(&db, ids[i], &r, NULL, NULL) != 0)
+            continue;
+        list = xf_neo_u32(&r);
+        kind = xf_neo_u8(&r);
+        printf("trigger %u kind %d, list %u\n", ids[i], kind, list);
+        m = vc_read_list(&db, list, acts, 256);
+        for (k = 0; k < m; k++) {
+            vc_action a;
+            if (vc_read_action(&db, acts[k], &a) != 0)
+                continue;
+            vc_action_text(&a, line, sizeof(line));
+            printf("  #%u %s\n", acts[k], line);
+        }
+    }
+    xf_neo_close(&db);
+    return 0;
+}
+
 /* Prints the actions of a list, or statistics over all actions. */
 static int cmd_actions(int argc, char **argv)
 {
@@ -273,6 +312,7 @@ static int cmd_run(int argc, char **argv)
 
 const xftool_cmd xftool_hdb_cmds[] = {
     { "hdb-run", "<hdb> <gam> <list> [kind]  run an action or trigger list with tracing", cmd_run },
+    { "hdb-triggers", "<file.hdb> <trigger list>  decode each trigger: kind and actions", cmd_triggers },
     { "hdb-actions", "<file.hdb> [list id]  decode actions, or count them by type", cmd_actions },
     { "hdb-walk", "<file.hdb> <view> [disc]  follow every move from a view", cmd_walk },
     { "hdb-asset", "<file.hdb> <id>...  decode media references", cmd_asset },

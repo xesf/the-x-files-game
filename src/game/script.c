@@ -92,6 +92,18 @@ static void print_state(game *g)
             printf(" %u:%s", ids[i], nm);
         }
         printf("\n");
+        n = game_evidence(g, ids, 64);
+        if (n) {
+            printf("  evidence:");
+            for (i = 0; i < n; i++) {
+                char nm[64] = "";
+                xf_neo_reader r;
+                if (xf_neo_object(&g->db, ids[i], &r, NULL, NULL) == 0)
+                    vc_read_name(&g->db, xf_neo_u32(&r), nm, sizeof(nm));
+                printf(" %u:%s", ids[i], nm);
+            }
+            printf("\n");
+        }
         if (g->photo_count) {
             printf("  photos:");
             for (i = 0; i < g->photo_count; i++)
@@ -424,6 +436,8 @@ int script_run(script *s, const char *path, int quiet)
             ok = game_dial(g, what);
         } else if (strcmp(cmd, "icon") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = game_click_icon(g, (u32)a);
+        } else if (strcmp(cmd, "evidence") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            ok = game_click_evidence(g, (u32)a);
         } else if (strcmp(cmd, "inv") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = game_click_inventory(g, (u32)a);
         } else if (strcmp(cmd, "back") == 0) {
@@ -465,13 +479,15 @@ int script_run(script *s, const char *path, int quiet)
                     printf("  var %ld %s = %d\n", a, g->interp.vars[i].name, g->interp.vars[i].value);
         } else if (strcmp(cmd, "route") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             route(g, (u32)a);
-        } else if (strcmp(cmd, "gate") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+        } else if (strcmp(cmd, "gate") == 0 && (sscanf(line, "%*s %ld", &a) == 1 || sscanf(line, "%*s enable %ld", &b) == 1)) {
             /* The GAM enable state of an object, to look up what sets it
-             * (tools/re/vc_who.py enable <id>). */
+             * (tools/re/vc_who.py enable <id>); `gate enable <id>` names
+             * the object an enable state controls. */
             u32 i;
+            int by_id = strstr(line, "enable") != NULL;
             for (i = 0; i < g->interp.enable_count; i++)
-                if (g->interp.enables[i].target == (u32)a)
-                    printf("  object %ld: enable #%u is %s\n", a, g->interp.enables[i].id,
+                if (by_id ? g->interp.enables[i].id == (u32)b : g->interp.enables[i].target == (u32)a)
+                    printf("  object %u: enable #%u is %s\n", g->interp.enables[i].target, g->interp.enables[i].id,
                            g->interp.enables[i].enabled ? "on" : "off");
         } else if (strcmp(cmd, "expect") == 0 && (n = sscanf(line, "%*s %31s %ld %ld", what, &a, &b)) >= 2) {
             ok = expect(g, what, a, b, n == 3);
