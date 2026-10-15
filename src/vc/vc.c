@@ -149,6 +149,16 @@ static int path_token(const u8 **p, const u8 *end, char *out, size_t size)
     return 0;
 }
 
+/* A file name has no control characters: "\x01" "8" "nav7.nmv" read as
+ * a 7-byte path would start with one. */
+static int printable(const char *s)
+{
+    for (; *s; s++)
+        if ((u8)*s < 0x20)
+            return 0;
+    return 1;
+}
+
 static u32 num_token(const u8 **p, const u8 *end, int *ok)
 {
     char num[16];
@@ -180,7 +190,7 @@ int vc_parse_media(const u8 *data, size_t size, vc_asset_ref *a)
         {
             const u8 *q = p;
             char tmp[VC_PATH_MAX];
-            if (path_token(&q, end, tmp, sizeof(tmp)) == 0 && strchr(tmp, '.')) {
+            if (path_token(&q, end, tmp, sizeof(tmp)) == 0 && strchr(tmp, '.') && printable(tmp)) {
                 p = save;
                 n--;
                 break;
