@@ -55,7 +55,7 @@ all: $(BUILD)/xfiles$(EXE) $(if $(TOOL_SRC),$(BUILD)/xftool$(EXE))
 $(BUILD)/xfiles$(EXE): $(GAME_OBJ) $(CORE_OBJ) $(PLAT_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(PLAT_LIBS) -lm
 
-$(BUILD)/xftool$(EXE): $(TOOL_OBJ) $(CORE_OBJ) $(BUILD)/src/game/game.o $(BUILD)/src/game/save.o $(BUILD)/src/game/script.o
+$(BUILD)/xftool$(EXE): $(TOOL_OBJ) $(CORE_OBJ) $(BUILD)/src/game/game.o $(BUILD)/src/game/save.o $(BUILD)/src/game/xsave.o $(BUILD)/src/game/script.o
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/%.o: %.c
@@ -128,7 +128,7 @@ $(BUILD)/win9x/XFILES.EXE: $(W9X_OBJ)
 	wlink system nt_win name $@ option quiet option stack=1048576 library winmm.lib $(foreach o,$^,file $(o))
 
 DOS_TOOL_OBJ := $(TOOL_SRC:%.c=$(BUILD)/dos/%.obj) $(CORE_SRC:%.c=$(BUILD)/dos/%.obj) \
-                $(BUILD)/dos/src/game/game.obj $(BUILD)/dos/src/game/save.obj $(BUILD)/dos/src/game/script.obj
+                $(BUILD)/dos/src/game/game.obj $(BUILD)/dos/src/game/save.obj $(BUILD)/dos/src/game/xsave.obj $(BUILD)/dos/src/game/script.obj
 
 $(BUILD)/dos/XFTOOL.EXE: $(DOS_TOOL_OBJ)
 	wlink system dos4g name $@ option quiet option stack=1048576 $(foreach o,$^,file $(o))

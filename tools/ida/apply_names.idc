@@ -446,5 +446,16 @@ static main()
     set_name(0x500A50, "pref_volume", SN_NOWARN);
     set_name(0x500760, "pref_defaults", SN_NOWARN);
     set_name(0x4FEA20, "ai_icon_show", SN_NOWARN);
+    set_name(0x5EF6D0, "VCGameState_read", SN_NOWARN);
+    set_name(0x48E1F0, "VCGameState_ctor", SN_NOWARN);
+    set_name(0x486140, "save_restore_place", SN_NOWARN);
+    set_name(0x5EEE40, "VCGameState_set_disc", SN_NOWARN);
+    set_name(0x5EEF80, "VCGameState_set_sounds", SN_NOWARN);
+    set_name(0x5EF1B0, "VCGameState_set_evidence", SN_NOWARN);
+    set_name(0x5EF510, "VCGameState_set_view_media", SN_NOWARN);
+    set_name(0x5EF4B0, "VCGameState_set_flags", SN_NOWARN);
+    set_name(0x5EF5B0, "VCGameState_set_mode", SN_NOWARN);
+    set_name(0x4FE790, "ai_list_get", SN_NOWARN);
+    set_name(0x4FE7B0, "ai_trigger_get", SN_NOWARN);
     msg("names applied\n");
 }

@@ -445,3 +445,14 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x500A50 pref_volume  the volume settings: a slider step, 0 and 11 the arrows
 0x500760 pref_defaults  PrefDefaults: 'Q' best quality (0x4C1830), 'P' best performance (0x4C1700)
 0x4FEA20 ai_icon_show  the Artificial Intuition icon, only with the preference on
+0x5EF6D0 VCGameState_read  reads the save header: node, location, viewpoint, view, object IDs, disc, AI list, five memory lists
+0x48E1F0 VCGameState_ctor  0x1AC-byte save header object, vtable 0x667438
+0x486140 save_restore_place  after a load: queues node, location, viewpoint and view actions, so their entering triggers run
+0x5EEE40 VCGameState_set_disc  the disc, checked against the disc count
+0x5EEF80 VCGameState_set_sounds  the sounds playing: (asset, value, flag) records
+0x5EF1B0 VCGameState_set_evidence  evidence icons shown: (icon, flag) records
+0x5EF510 VCGameState_set_view_media  the view's media, its time and a flag
+0x5EF4B0 VCGameState_set_flags  seven state bytes
+0x5EF5B0 VCGameState_set_mode  how the view was found: 0 the screen, 1 a queued goto, 2 the GAM
+0x4FE790 ai_list_get  the Artificial Intuition action list (0x6C29D4)
+0x4FE7B0 ai_trigger_get  the Artificial Intuition trigger (0x6C2A14)

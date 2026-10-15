@@ -248,6 +248,9 @@ void game_close(game *g);
 
 /* Runs the start-up triggers of the title object and enters the start
  * view. Returns 0, or -1 when the data has no start view. */
+/* Runs the title's start-up triggers (the engine registrations among
+ * them); returns the view a new game starts in, or 0. */
+u32 game_run_title(game *g);
 int game_new(game *g);
 int game_enter_view(game *g, u32 view);
 /* The view of a loaded game, without entry triggers. */
@@ -384,6 +387,10 @@ int game_save_mem(game *g, const char *name, u8 **out, size_t *size);
 int game_load_mem(game *g, const u8 *data, size_t size);
 int game_save_file(game *g, const char *path, const char *name);
 int game_load_file(game *g, const char *path);
+/* The original engine's saves (.x files). game_load_mem and
+ * game_load_file take them too. */
+int game_is_x_save(const u8 *data, size_t size);
+int game_load_x_mem(game *g, const u8 *data, size_t size);
 /* The name a save was given; 0 when the data is a save. */
 int game_save_name(const u8 *data, size_t size, char *name, size_t name_size);
 int game_save_file_name(const char *path, char *name, size_t name_size);

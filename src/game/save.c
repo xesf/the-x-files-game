@@ -334,6 +334,8 @@ int game_load_mem(game *g, const u8 *data, size_t size)
     u32 timers[GAME_MAX_TIMERS * 3];
     int timer_n = 0, k;
 
+    if (game_is_x_save(data, size))
+        return game_load_x_mem(g, data, size);
     if (size < 8 || memcmp(data, SAVE_MAGIC, 4) != 0) {
         xf_warn("save: not a saved game");
         return -1;
