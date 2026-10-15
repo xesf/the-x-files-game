@@ -358,6 +358,19 @@
 0x40C540 TriggerHandler_ctor   base of objects with triggers: 12 lists of triggers by kind at +0x1C (0x14 each)
 0x4F71E0 TriggerHandler_fire_kind  runs the triggers of one kind bucket
 0x4F76C0 TriggerHandler_fire   runs the triggers of a kind bucket for an event, setting the event value
+0x43E5B0 DialogBox_build       sets up the dialogue box for the current character
+0x464F70 ING_search            ING search by type: L plate, N name, P phone; queues list 90694 or 90038
+0x4810A0 DialogBox_place       centres the TALK folder on the character at y 285
+0x482610 DialogBox_load_media  loads the dialogue box art (media 34759-34764, 85383)
+0x483A30 VideoText_start       location card text: Courier New 12 pt, lower left of the clip, 50 ms per character
+0x4D9890 Conversation_play     plays the question and the answer (or the repeat answer)
+0x4ED930 Conversation_ask      records a question in the conversation history and starts it
+0x5151A0 ING_search_phone      ING phone search in g_ing_phones
+0x51FCD0 Phone_lookup          looks the dialled number up in g_phone_book
+0x53C520 Font_select           font by number: 2 Times New Roman, 3 Arial, 4 Courier New
+0x5F6720 VCConversation_read   reads name, icons, answer, triggers, question, repeat, flag
+data 0x65E0F0 g_ing_phones   ING phone table: {number media, record}, 12 entries
+data 0x65ECB0 g_phone_book   phone directory: {number media, trigger, action list}, 13 entries
 data 0x6C14A8 g_fired_timers  numbers of the timers that fired since the last tick (10 slots, -1 free)
 data 0x6B6B10 g_game_in_progress  1 when a game runs; the menu then shows "return"
 data 0x6B6FEC g_app  the application object

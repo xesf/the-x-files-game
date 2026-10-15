@@ -147,6 +147,17 @@ int game_choices(game *g, u32 *ids, int max);
 int game_ask(game *g, u32 conversation);
 void game_end_talk(game *g);
 int game_times_asked(const game *g, u32 conversation);
+/* Emotion and action icons (VCEmotionIcon, VCActionIcon): a scene
+ * enables them for a while; clicking one runs its triggers. Fields:
+ * name, 0, animated icon (VCAssetRefList), 0, a second list, triggers. */
+typedef struct {
+    u32 name, icon, triggers;
+} game_icon;
+
+int game_icons(game *g, u32 *ids, int max);
+int game_read_icon(game *g, u32 id, game_icon *icon);
+int game_click_icon(game *g, u32 id);
+
 /* Inventory: the VCInventory objects the player carries (enabled ones),
  * and a click on one of them in the inventory bar. */
 int game_inventory(game *g, u32 *ids, int max);

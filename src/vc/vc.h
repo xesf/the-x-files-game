@@ -23,6 +23,8 @@ enum {
     VC_CHAR_VIEW = 0x2D,
     VC_CONVERSATION = 0x31,
     VC_ACTION = 0x41,
+    VC_ACTION_ICON = 0x47,
+    VC_EMOTION_ICON = 0x48,
     VC_INVENTORY = 0x4B,
     VC_IDEA_MAP = 0x4C,
     VC_IFACE_LAYOUT = 0x4E,

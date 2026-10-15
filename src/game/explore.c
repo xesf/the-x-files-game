@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "game/game.h"
+#include "game/script.h"
 #include "gfx/text.h"
 #include "media/mov.h"
 #include "media/pff.h"
@@ -70,6 +71,9 @@ typedef struct {
 } view_anim;
 
 #define MAX_ANIMS 4
+#define MAX_ICONS 6
+#define MAX_INV 32
+#define CARD_PX 16 /* 12 point at 96 dots per inch */
 
 /* The explorer draws the game and plays its media. */
 typedef struct {
@@ -97,8 +101,23 @@ typedef struct {
     int sound_open, sound_loop;
     u32 sound_serial;
     char sound_path[1024];
-    xf_font font;
+    xf_font font;         /* Dlg.ttr: dialogue and labels */
     int have_font;
+    xf_font card_font;    /* Courier New: location cards */
+    int have_card_font;
+    int debug;            /* Ctrl+Shift+D: hotspot outlines and names */
+    /* dialogue box */
+    xf_image dlg_talk, dlg_up, dlg_down;
+    int talk_scroll;
+    /* emotion and action icons */
+    view_anim icon_anim[MAX_ICONS];
+    int icon_open[MAX_ICONS];
+    u32 icon_ids[MAX_ICONS];
+    int icon_count;
+    /* inventory icons: normal and rollover */
+    xf_image inv_img[MAX_INV][2];
+    u32 inv_ids[MAX_INV];
+    int inv_count;
     u32 fb[SCREEN_W * SCREEN_H];
     /* the view picture: still and moving media */
     u32 picture[PICTURE_W * PICTURE_H];
@@ -109,6 +128,7 @@ typedef struct {
     view_anim anims[MAX_ANIMS];
     int anim_count;
     char label[256];
+    int running, mx, my;
     /* pictures of the interface items on screen, by layout and item */
     xf_image iface_img[GAME_MAX_IFACES][GAME_MAX_IFACE_ITEMS];
     u32 iface_serial;
@@ -422,126 +442,381 @@ static void stop_sound(explorer *e)
     e->sound_open = 0;
 }
 
-/* --- Questions and inventory ----------------------------------------- */
+/* --- Game interface ---------------------------------------------------- */
 
-/* Until the dialogue box and the inventory art are reverse engineered,
- * the explorer lists questions and inventory items as text: questions
- * under the picture, the inventory along the bottom of the screen. */
-#define UI_TEXT 15
-#define CHOICE_Y (PICTURE_Y + PICTURE_H + 8)
-#define CHOICE_H 18
-#define INV_Y 448
+/* The dialogue box (0x482610 loads its art, fixed in the engine): a
+ * 246x120 folder with TALK and HISTORY tabs, a scroll bar and arrows.
+ * 0x4810A0 centres it on the character and puts it at y 285. Blue is
+ * transparent in the game's pictures. */
+#define DLG_TALK 34761
+#define DLG_UP 34759
+#define DLG_DOWN 34764
+#define DLG_Y 285
+#define DLG_W 246
+#define DLG_TEXT_X 12
+#define DLG_TEXT_W 210
+#define DLG_TEXT_TOP 32
+#define DLG_TEXT_BOTTOM 114
+#define DLG_LINE 15
+#define DLG_PX 13
+#define KEY_BLUE 0x0000FF
 
-typedef struct {
-    int x, y, w, h;
-    u32 id;
-} ui_button;
+/* Emotion and action icons: 80x60 animated clips above the video. */
+#define ICON_W 80
+#define ICON_H 60
+#define ICON_Y 12
+#define ICON_GAP 12
 
-static int item_name(explorer *e, u32 id, char *out, size_t size)
+/* Inventory: 30x40 icons along the bottom, shown when the pointer is
+ * near the bottom of the screen. */
+#define INV_Y 436
+#define INV_W 30
+#define INV_H 40
+#define INV_GAP 8
+#define INV_REVEAL 420
+
+static int load_asset_image(explorer *e, u32 asset, xf_image *img)
 {
-    xf_neo_reader r;
-    out[0] = '\0';
-    if (vc_class(&e->g->db, id) == VC_CONVERSATION) {
-        vc_conversation c;
-        return vc_read_conversation(&e->g->db, id, &c) == 0 ? vc_read_name(&e->g->db, c.name, out, size) : -1;
-    }
-    if (xf_neo_object(&e->g->db, id, &r, NULL, NULL) != 0)
+    vc_asset_ref a;
+    int j;
+    memset(img, 0, sizeof(*img));
+    if (vc_read_asset_ref(&e->g->db, asset, &a) != 0)
         return -1;
-    return vc_read_name(&e->g->db, xf_neo_u32(&r), out, size);
+    for (j = 0; j < a.entry_count && !img->pixels; j++) {
+        char path[1024];
+        u32 size;
+        u8 *data;
+        if (!strstr(a.entries[j].path, ".pff") || resolve_media(e, a.entries[j].path, path, sizeof(path)) != 0)
+            continue;
+        if (!e->pff_open)
+            e->pff_open = xf_pff_open(&e->pff, path) == 0;
+        data = e->pff_open ? xf_pff_read(&e->pff, a.entries[j].start, &size) : NULL;
+        if (data && xf_pict_decode(data, size, img) != 0)
+            memset(img, 0, sizeof(*img));
+        free(data);
+    }
+    return img->pixels ? 0 : -1;
 }
 
-/* Lays out the question buttons, or the inventory buttons. */
-static int layout_buttons(explorer *e, int questions, ui_button *b, int max)
+/* The first media of a list as a picture. */
+static int load_list_image(explorer *e, u32 list, xf_image *img)
 {
-    u32 ids[64];
-    int n = questions ? game_choices(e->g, ids, XF_MIN(max, GAME_MAX_CHOICES)) : game_inventory(e->g, ids, 64);
-    int i, k = 0, x = 8, y = questions ? CHOICE_Y : INV_Y;
-    for (i = 0; i < n && k < max; i++) {
-        char name[128];
-        int w;
-        item_name(e, ids[i], name, sizeof(name));
-        w = e->have_font ? xf_text_width(&e->font, UI_TEXT, name, strlen(name)) : 60;
-        if (questions) {
-            b[k].x = 24;
-            b[k].y = y + k * CHOICE_H;
-        } else {
-            if (x + w > SCREEN_W - 8) {
-                x = 8;
-                y += CHOICE_H;
-            }
-            b[k].x = x;
-            b[k].y = y;
-            x += w + 14;
+    u32 ids[4];
+    memset(img, 0, sizeof(*img));
+    return vc_read_list(&e->g->db, list, ids, 4) > 0 ? load_asset_image(e, ids[0], img) : -1;
+}
+
+/* Copies a picture, leaving out the blue key colour. */
+static void blit_keyed(explorer *e, const xf_image *img, int x0, int y0)
+{
+    int x, y;
+    if (!img->pixels)
+        return;
+    for (y = 0; y < img->height; y++) {
+        int sy = y0 + y;
+        if (sy < 0 || sy >= SCREEN_H)
+            continue;
+        for (x = 0; x < img->width; x++) {
+            int sx = x0 + x;
+            u32 c = img->pixels[(size_t)y * img->width + x];
+            if (sx >= 0 && sx < SCREEN_W && c != KEY_BLUE)
+                e->fb[sy * SCREEN_W + sx] = c;
         }
-        b[k].w = w;
-        b[k].h = CHOICE_H;
-        b[k].id = ids[i];
+    }
+}
+
+static int text_px(explorer *e, const char *text, float px)
+{
+    return e->have_font ? xf_text_width(&e->font, px, text, strlen(text)) : (int)strlen(text) * 7;
+}
+
+/* Splits `text` into lines no wider than `w`. Returns the line count;
+ * `starts` and `lens` describe each line. */
+static int wrap_lines(explorer *e, const char *text, float px, int w, int *starts, int *lens, int max)
+{
+    int n = 0, pos = 0, len = (int)strlen(text);
+    while (pos < len && n < max) {
+        int end = pos, last_space = -1;
+        while (end < len) {
+            char tmp[256];
+            int k = XF_MIN(end + 1 - pos, (int)sizeof(tmp) - 1);
+            memcpy(tmp, text + pos, (size_t)k);
+            tmp[k] = '\0';
+            if (text_px(e, tmp, px) > w)
+                break;
+            if (text[end] == ' ')
+                last_space = end;
+            end++;
+        }
+        if (end < len && last_space > pos)
+            end = last_space;
+        if (end == pos)
+            end = pos + 1;
+        starts[n] = pos;
+        lens[n] = end - pos;
+        n++;
+        pos = end;
+        while (pos < len && text[pos] == ' ')
+            pos++;
+    }
+    return n;
+}
+
+/* Where the dialogue box goes: centred on the character, on screen. */
+static int dialog_x(explorer *e)
+{
+    int i, cx = SCREEN_W / 2;
+    for (i = 0; i < e->g->spot_count; i++)
+        if (e->g->spots[i].id == e->g->talking)
+            cx = (e->g->spots[i].region.left + e->g->spots[i].region.right) / 2;
+    return XF_CLAMP(cx - DLG_W / 2, 0, SCREEN_W - DLG_W);
+}
+
+typedef struct {
+    u32 id;
+    int y, lines;
+} dlg_entry;
+
+/* Lays out the questions in the TALK folder from the scroll position.
+ * Returns the number of entries visible; `more` is set when some are
+ * below the box. */
+static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
+{
+    u32 ids[GAME_MAX_CHOICES];
+    int n = game_choices(e->g, ids, GAME_MAX_CHOICES), i, k = 0, y = DLG_Y + DLG_TEXT_TOP;
+    *more = 0;
+    e->talk_scroll = XF_CLAMP(e->talk_scroll, 0, XF_MAX(n - 1, 0));
+    for (i = e->talk_scroll; i < n && k < max; i++) {
+        char q[256] = "";
+        int starts[8], lens[8], lines;
+        vc_conversation c;
+        if (vc_read_conversation(&e->g->db, ids[i], &c) == 0)
+            vc_read_name(&e->g->db, c.name, q, sizeof(q));
+        lines = wrap_lines(e, q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
+        if (y + (lines - 1) * DLG_LINE > DLG_Y + DLG_TEXT_BOTTOM) {
+            *more = 1;
+            break;
+        }
+        out[k].id = ids[i];
+        out[k].y = y;
+        out[k].lines = lines;
         k++;
+        y += lines * DLG_LINE + 3;
     }
     return k;
 }
 
-static const ui_button *button_at(const ui_button *b, int n, int x, int y)
-{
-    int i;
-    for (i = 0; i < n; i++)
-        if (x >= b[i].x && x < b[i].x + b[i].w && y >= b[i].y && y < b[i].y + b[i].h)
-            return &b[i];
-    return NULL;
-}
-
-static void draw_buttons(explorer *e, int questions, int mx, int my)
+static void draw_dialog(explorer *e, int mx, int my)
 {
     xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
-    ui_button b[64];
-    i32 held = game_reg_value(e->g, "RegCurrInvVar", 0);
-    int n = layout_buttons(e, questions, b, 64), i;
+    dlg_entry ent[GAME_MAX_CHOICES];
+    int x0 = dialog_x(e), n, more, i, l;
+    if (!e->dlg_talk.pixels)
+        load_asset_image(e, DLG_TALK, &e->dlg_talk);
+    if (!e->dlg_up.pixels) {
+        load_asset_image(e, DLG_UP, &e->dlg_up);
+        load_asset_image(e, DLG_DOWN, &e->dlg_down);
+    }
+    blit_keyed(e, &e->dlg_talk, x0, DLG_Y);
     if (!e->have_font)
         return;
+    n = dialog_layout(e, ent, GAME_MAX_CHOICES, &more);
     for (i = 0; i < n; i++) {
-        char name[128];
-        u32 color = 0xC0C0C0;
-        int over = mx >= b[i].x && mx < b[i].x + b[i].w && my >= b[i].y && my < b[i].y + b[i].h;
-        item_name(e, b[i].id, name, sizeof(name));
-        if (questions && game_times_asked(e->g, b[i].id))
-            color = 0x808080;
-        if (!questions) {
-            /* The item in hand: its OnInvClick argument is in the triggers;
-             * compare by name with the Inventory_i constant instead. */
-            char var[48], *p, *q;
-            snprintf(var, sizeof(var), "Inventory_i%s", name);
-            for (p = q = var; *p; p++)
-                if (*p != ' ' && *p != '-')
-                    *q++ = *p;
-            *q = '\0';
-            if (held && vc_get_var(&e->g->interp, vc_find_var(&e->g->interp, var)) == held)
-                color = 0xFFE040;
+        char q[256] = "";
+        int starts[8], lens[8], lines;
+        int over = mx >= x0 + DLG_TEXT_X && mx < x0 + DLG_TEXT_X + DLG_TEXT_W && my >= ent[i].y - DLG_LINE + 3 &&
+                   my < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4;
+        u32 color = over ? 0xFFFFFF : game_times_asked(e->g, ent[i].id) ? 0x8C8C8C : 0xD8D8D8;
+        vc_conversation c;
+        if (vc_read_conversation(&e->g->db, ent[i].id, &c) == 0)
+            vc_read_name(&e->g->db, c.name, q, sizeof(q));
+        lines = wrap_lines(e, q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
+        for (l = 0; l < lines; l++)
+            xf_text_draw(&s, &e->font, DLG_PX, x0 + DLG_TEXT_X, ent[i].y + l * DLG_LINE, q + starts[l],
+                         (size_t)lens[l], color);
+    }
+    if (e->talk_scroll > 0)
+        blit_keyed(e, &e->dlg_up, x0 + DLG_W - 17, DLG_Y + 22);
+    if (more)
+        blit_keyed(e, &e->dlg_down, x0 + DLG_W - 17, DLG_Y + 104);
+}
+
+/* Returns 1 when the click hit the dialogue box. */
+static int click_dialog(explorer *e, int x, int y)
+{
+    dlg_entry ent[GAME_MAX_CHOICES];
+    int x0 = dialog_x(e), n, more, i;
+    if (x < x0 || x >= x0 + DLG_W || y < DLG_Y || y >= DLG_Y + 120)
+        return 0;
+    n = dialog_layout(e, ent, GAME_MAX_CHOICES, &more);
+    if (x >= x0 + DLG_W - 18) { /* the scroll arrows */
+        if (y < DLG_Y + 60 && e->talk_scroll > 0)
+            e->talk_scroll--;
+        else if (y >= DLG_Y + 60 && more)
+            e->talk_scroll++;
+        return 1;
+    }
+    for (i = 0; i < n; i++)
+        if (y >= ent[i].y - DLG_LINE + 3 && y < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4) {
+            game_ask(e->g, ent[i].id);
+            return 1;
         }
-        if (over)
-            color = 0xFFFFFF;
-        xf_text_draw(&s, &e->font, UI_TEXT, b[i].x, b[i].y + 14, name, strlen(name), color);
+    return 1;
+}
+
+/* --- Emotion and action icons ----------------------------------------- */
+
+static void close_icons(explorer *e)
+{
+    int i;
+    for (i = 0; i < e->icon_count; i++)
+        if (e->icon_open[i]) {
+            xf_video_close(&e->icon_anim[i].video);
+            xf_mov_close(&e->icon_anim[i].mov);
+        }
+    e->icon_count = 0;
+}
+
+static void refresh_icons(explorer *e)
+{
+    u32 ids[MAX_ICONS];
+    int n = game_icons(e->g, ids, MAX_ICONS), i;
+    if (n == e->icon_count && memcmp(ids, e->icon_ids, (size_t)n * sizeof(u32)) == 0)
+        return;
+    close_icons(e);
+    for (i = 0; i < n; i++) {
+        game_icon ic;
+        u32 media[4];
+        vc_asset_ref a;
+        char path[1024];
+        view_anim *an = &e->icon_anim[i];
+        e->icon_ids[i] = ids[i];
+        e->icon_open[i] = 0;
+        if (game_read_icon(e->g, ids[i], &ic) != 0 || vc_read_list(&e->g->db, ic.icon, media, 4) <= 0 ||
+            vc_read_asset_ref(&e->g->db, media[0], &a) != 0 || a.entry_count == 0 ||
+            resolve_media(e, a.entries[0].path, path, sizeof(path)) != 0 || xf_mov_open(&an->mov, path) != 0)
+            continue;
+        an->track = xf_mov_find(&an->mov, XF_TRACK_VIDEO);
+        if (!an->track || xf_video_open(&an->video, &an->mov, an->track) != 0) {
+            xf_mov_close(&an->mov);
+            continue;
+        }
+        an->start_ms = 0;
+        an->length_ms = XF_MAX((u32)((u64)an->mov.duration * 1000 / an->mov.timescale), 1);
+        an->loop = 1;
+        an->started = plat_ticks_ms();
+        e->icon_open[i] = 1;
+    }
+    e->icon_count = n;
+}
+
+static int icon_x(explorer *e, int i)
+{
+    int total = e->icon_count * ICON_W + (e->icon_count - 1) * ICON_GAP;
+    return (SCREEN_W - total) / 2 + i * (ICON_W + ICON_GAP);
+}
+
+static int icon_at(explorer *e, int x, int y)
+{
+    int i;
+    for (i = 0; i < e->icon_count; i++)
+        if (x >= icon_x(e, i) && x < icon_x(e, i) + ICON_W && y >= ICON_Y && y < ICON_Y + ICON_H)
+            return i;
+    return -1;
+}
+
+static void draw_icons(explorer *e, int mx, int my)
+{
+    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    int i, y, hover = icon_at(e, mx, my);
+    for (i = 0; i < e->icon_count; i++) {
+        view_anim *an = &e->icon_anim[i];
+        int x0 = icon_x(e, i), w, h;
+        if (!e->icon_open[i])
+            continue;
+        update_anim(an, plat_ticks_ms());
+        w = XF_MIN(an->video.width, ICON_W);
+        h = XF_MIN(an->video.height, ICON_H);
+        for (y = 0; y < h; y++)
+            memcpy(&e->fb[(ICON_Y + y) * SCREEN_W + x0], an->video.frame + (size_t)y * an->video.width,
+                   (size_t)w * 4);
+    }
+    /* Rolling over an icon shows what it does. */
+    if (hover >= 0 && e->have_font) {
+        game_icon ic;
+        char name[128] = "", *dash;
+        if (game_read_icon(e->g, e->icon_ids[hover], &ic) == 0)
+            vc_read_name(&e->g->db, ic.name, name, sizeof(name));
+        dash = strrchr(name, '-'); /* "Field Office N1A Cook - Funny" */
+        if (dash && dash[1] == ' ')
+            memmove(name, dash + 2, strlen(dash + 2) + 1);
+        xf_text_draw(&s, &e->font, 14, (SCREEN_W - text_px(e, name, 14)) / 2, ICON_Y + ICON_H + 14, name,
+                     strlen(name), 0xFFFFFF);
     }
 }
 
-/* Returns 1 when the click hit a question or an inventory item. */
-static int click_buttons(explorer *e, int x, int y)
+/* --- Inventory ---------------------------------------------------------- */
+
+static void free_inventory(explorer *e)
 {
-    ui_button b[64];
-    const ui_button *hit;
-    int n;
-    if (e->g->talking) {
-        n = layout_buttons(e, 1, b, 64);
-        if ((hit = button_at(b, n, x, y)) != NULL) {
-            game_ask(e->g, hit->id);
-            return 1;
+    int i;
+    for (i = 0; i < e->inv_count; i++) {
+        free(e->inv_img[i][0].pixels);
+        free(e->inv_img[i][1].pixels);
+    }
+    e->inv_count = 0;
+}
+
+/* VCInventory: name, icon, rollover icon, 0, cursor, triggers. */
+static void refresh_inventory(explorer *e)
+{
+    u32 ids[MAX_INV];
+    int n = game_inventory(e->g, ids, MAX_INV), i;
+    if (n == e->inv_count && memcmp(ids, e->inv_ids, (size_t)n * sizeof(u32)) == 0)
+        return;
+    free_inventory(e);
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        e->inv_ids[i] = ids[i];
+        memset(e->inv_img[i], 0, sizeof(e->inv_img[i]));
+        if (xf_neo_object(&e->g->db, ids[i], &r, NULL, NULL) == 0) {
+            u32 name = xf_neo_u32(&r), icon = xf_neo_u32(&r), over = xf_neo_u32(&r);
+            (void)name;
+            load_list_image(e, icon, &e->inv_img[i][0]);
+            load_list_image(e, over, &e->inv_img[i][1]);
         }
     }
-    n = layout_buttons(e, 0, b, 64);
-    if ((hit = button_at(b, n, x, y)) != NULL) {
-        game_click_inventory(e->g, hit->id);
-        return 1;
+    e->inv_count = n;
+}
+
+static int inv_at(explorer *e, int x, int y)
+{
+    int i;
+    if (y < INV_Y || y >= INV_Y + INV_H)
+        return -1;
+    for (i = 0; i < e->inv_count; i++) {
+        int x0 = 10 + i * (INV_W + INV_GAP);
+        if (x >= x0 && x < x0 + INV_W)
+            return i;
     }
-    return 0;
+    return -1;
+}
+
+static void draw_inventory(explorer *e, int mx, int my)
+{
+    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    int i, hover = inv_at(e, mx, my);
+    for (i = 0; i < e->inv_count; i++) {
+        const xf_image *img = &e->inv_img[i][i == hover && e->inv_img[i][1].pixels ? 1 : 0];
+        blit_keyed(e, img, 10 + i * (INV_W + INV_GAP), INV_Y);
+    }
+    if (hover >= 0 && e->have_font) {
+        char name[96] = "";
+        xf_neo_reader r;
+        if (xf_neo_object(&e->g->db, e->inv_ids[hover], &r, NULL, NULL) == 0)
+            vc_read_name(&e->g->db, xf_neo_u32(&r), name, sizeof(name));
+        xf_text_draw(&s, &e->font, 14, 10, INV_Y - 6, name, strlen(name), 0xFFFFFF);
+    }
 }
 
 /* --- Drawing --------------------------------------------------------- */
@@ -563,6 +838,33 @@ static void frame_rect(explorer *e, const vc_region *r, u32 color)
     }
 }
 
+/* 0x483A30: the location card is a text object in Courier New, 12 point,
+ * typed one character every 50 ms in the lower left corner of the clip,
+ * 15 pixels from its edges. */
+static void draw_card(explorer *e, int clip_x, int clip_y, int clip_w, int clip_h)
+{
+    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    const xf_font *f = e->have_card_font ? &e->card_font : &e->font;
+    const char *text = e->g->card;
+    size_t shown = XF_MIN((size_t)((plat_ticks_ms() - e->card_start) / 50), strlen(text));
+    int lines = 1, line_h = CARD_PX + 2, x = clip_x + 15, y, i;
+    size_t pos = 0;
+    (void)clip_w;
+    if (!e->have_card_font && !e->have_font)
+        return;
+    for (i = 0; text[i]; i++)
+        lines += text[i] == '\n';
+    y = clip_y + clip_h - 15 - (lines - 1) * line_h - CARD_PX / 4;
+    while (pos < shown) {
+        const char *nl = strchr(text + pos, '\n');
+        size_t end = nl ? (size_t)(nl - text) : strlen(text);
+        size_t len = XF_MIN(end, shown) - pos;
+        xf_text_draw(&s, f, CARD_PX, x, y, text + pos, len, 0xFFFFFF);
+        pos = end + 1;
+        y += line_h;
+    }
+}
+
 static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
@@ -571,9 +873,11 @@ static void draw(explorer *e, int mx, int my)
     int i, y;
 
     memset(e->fb, 0, sizeof(e->fb));
+    refresh_icons(e);
     if (e->playing) {
         const u32 *f = e->have_clip ? xf_player_frame(&e->player) : NULL;
         const char *sub = e->have_clip ? xf_player_subtitle(&e->player) : NULL;
+        int cx = PICTURE_X, cy = PICTURE_Y, cw = PICTURE_W, ch = PICTURE_H;
         if (f) {
             /* Scene clips fill the picture area; other clips (logos, titles)
              * are centred on the screen. */
@@ -585,19 +889,17 @@ static void draw(explorer *e, int mx, int my)
             }
             for (y = 0; y < h; y++)
                 memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], f + y * e->player.video.width, (size_t)w * 4);
+            cx = x0;
+            cy = y0;
+            cw = w;
+            ch = h;
         }
         if (sub && e->have_font)
             xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
                                  sub, 0xFFFFFF, 0x000000);
-        if (e->card_active && e->have_font) {
-            char shown[256];
-            size_t n = (plat_ticks_ms() - e->card_start) / 50;
-            n = XF_MIN(n, strlen(g->card));
-            memcpy(shown, g->card, n);
-            shown[n] = '\0';
-            xf_text_draw_wrapped(&s, &e->font, 22, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 34, SCREEN_W - 40,
-                                 shown, 0xFFFFFF, 0x000000);
-        }
+        if (e->card_active)
+            draw_card(e, cx, cy, cw, ch);
+        draw_icons(e, mx, my);
         return;
     }
     if (e->have_picture)
@@ -613,16 +915,22 @@ static void draw(explorer *e, int mx, int my)
         for (y = 0; y < h; y++)
             memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], vd->frame + (size_t)y * vd->width, (size_t)w * 4);
     }
-    for (i = 0; i < g->spot_count; i++) {
-        const vc_region *r = &g->spots[i].region;
-        int inside = mx >= r->left && mx < r->right && my >= r->top && my < r->bottom;
-        frame_rect(e, r, inside ? 0xFFFFFF : colors[g->spots[i].kind]);
+    if (e->debug) {
+        /* Ctrl+Shift+D: hotspot outlines and the view's media name. */
+        for (i = 0; i < g->spot_count; i++) {
+            const vc_region *r = &g->spots[i].region;
+            int inside = mx >= r->left && mx < r->right && my >= r->top && my < r->bottom;
+            frame_rect(e, r, inside ? 0xFFFFFF : colors[g->spots[i].kind]);
+        }
+        if (e->have_font)
+            xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
     }
-    if (e->have_font)
-        xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
+    draw_icons(e, mx, my);
     if (g->talking)
-        draw_buttons(e, 1, mx, my);
-    draw_buttons(e, 0, mx, my);
+        draw_dialog(e, mx, my);
+    refresh_inventory(e);
+    if (my >= INV_REVEAL && !g->iface_count)
+        draw_inventory(e, mx, my);
     draw_ifaces(e);
 }
 
@@ -778,11 +1086,151 @@ static int menu_item_at(int x, int y)
     return -1;
 }
 
-int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_view, int disc)
+/* One frame: input, clips and sound, drawing. */
+static void run_frame(explorer *e)
+{
+    plat_event ev;
+    game_tick(e->g, plat_ticks_ms());
+    while (plat_poll(&ev)) {
+        if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
+            e->running = 0;
+        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'd' &&
+                 (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
+            e->debug = !e->debug;
+            xf_info("debug overlay %s", e->debug ? "on" : "off");
+        }
+        else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE)
+            menu_set_hover(e, menu_item_at(ev.x, ev.y));
+        else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
+            int item = menu_item_at(ev.x, ev.y);
+            if (item >= 0)
+                xf_info("menu: %s", g_menu_items[item].name);
+            if (item == 0) { /* New */
+                menu_close(e);
+                game_new(e->g);
+            } else if (item == 6) { /* Quit */
+                e->running = 0;
+            }
+        } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
+            e->mx = ev.x;
+            e->my = ev.y;
+            if (!e->playing)
+                game_hover(e->g, e->mx, e->my);
+        } else if (e->playing && ev.type == PLAT_EV_MOUSE_DOWN && icon_at(e, ev.x, ev.y) >= 0) {
+            /* An emotion icon answers at once: the clip ends first. */
+            u32 icon = e->icon_ids[icon_at(e, ev.x, ev.y)];
+            finish_media(e);
+            game_click_icon(e->g, icon);
+        } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
+            if (!e->card_active)
+                finish_media(e); /* skip the clip; the location card cannot be skipped */
+        } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && icon_at(e, ev.x, ev.y) >= 0) {
+            game_click_icon(e->g, e->icon_ids[icon_at(e, ev.x, ev.y)]);
+        } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
+            /* Layout items first (a close-up covers everything), then
+             * the dialogue box, the inventory, then the view. */
+            int inv = ev.y >= INV_REVEAL && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
+            if (game_iface_item_at(e->g, ev.x, ev.y))
+                game_click(e->g, ev.x, ev.y);
+            else if (e->g->talking && click_dialog(e, ev.x, ev.y))
+                ;
+            else if (inv >= 0)
+                game_click_inventory(e->g, e->inv_ids[inv]);
+            else if (!game_click(e->g, ev.x, ev.y))
+                game_end_talk(e->g);
+            else
+                e->talk_scroll = 0;
+        } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
+                   (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
+            /* Right click: put the item in hand away, stop talking, or go back. */
+            if (game_reg_value(e->g, "RegCurrInvVar", 0) != game_reg_value(e->g, "RegCurrInvVar", 1))
+                game_hold(e->g, NULL);
+            else if (e->g->talking)
+                game_end_talk(e->g);
+            else
+                game_back(e->g);
+        }
+    }
+    if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
+        (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
+        finish_media(e);
+    start_next_media(e);
+    update_sound(e);
+    if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g))
+        menu_enter(e);
+    if (e->in_menu == 1) {
+        menu_update(e);
+        menu_draw(e);
+    } else {
+        if (e->g->view)
+            refresh_picture(e);
+        refresh_iface_pictures(e);
+        draw(e, e->mx, e->my);
+    }
+    plat_present(e->fb, SCREEN_W, SCREEN_H, SCREEN_W);
+    plat_sleep_ms(e->playing ? 5 : 16);
+}
+
+/* --- Scripts in the window --------------------------------------------- */
+
+static void script_advance(void *user, u32 ms)
+{
+    explorer *e = user;
+    u32 end = plat_ticks_ms() + ms;
+    while (e->running && (i32)(plat_ticks_ms() - end) < 0)
+        run_frame(e);
+}
+
+/* Ends every clip at once, running its triggers, like a player who
+ * skips them all; the location card included. */
+static void script_settle(void *user)
+{
+    explorer *e = user;
+    int guard = 0;
+    run_frame(e);
+    while ((e->playing || game_media_pending(e->g)) && guard++ < 256) {
+        if (e->playing)
+            finish_media(e);
+        start_next_media(e);
+    }
+    run_frame(e);
+}
+
+static int script_shot(void *user, const char *path)
+{
+    explorer *e = user;
+    FILE *fp = fopen(path, "wb");
+    u8 header[54] = { 'B', 'M' };
+    int x, y;
+    u32 size = 54 + SCREEN_W * SCREEN_H * 3;
+    if (!fp)
+        return -1;
+    run_frame(e);
+    header[2] = (u8)size, header[3] = (u8)(size >> 8), header[4] = (u8)(size >> 16);
+    header[10] = 54;
+    header[14] = 40;
+    header[18] = SCREEN_W & 0xFF, header[19] = SCREEN_W >> 8;
+    header[22] = SCREEN_H & 0xFF, header[23] = SCREEN_H >> 8;
+    header[26] = 1;
+    header[28] = 24;
+    fwrite(header, 1, sizeof(header), fp);
+    for (y = SCREEN_H - 1; y >= 0; y--)
+        for (x = 0; x < SCREEN_W; x++) {
+            u32 c = e->fb[y * SCREEN_W + x];
+            u8 px[3] = { (u8)c, (u8)(c >> 8), (u8)(c >> 16) };
+            fwrite(px, 1, 3, fp);
+        }
+    fclose(fp);
+    xf_info("screenshot %s", path);
+    return 0;
+}
+
+int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_view, int disc,
+               const char *script_path)
 {
     explorer *e = calloc(1, sizeof(*e));
     char path[1024];
-    int running = 1, mx = 0, my = 0;
+    int running = 1, result = 0;
 
     if (!e || !(e->g = malloc(sizeof(game))) || game_open(e->g, data_dir) != 0) {
         if (e)
@@ -796,91 +1244,58 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
         e->have_font = xf_font_load(&e->font, path) == 0;
-    if (start_view == 0) {
+    if (plat_font_path("Courier New", path, sizeof(path)) == 0)
+        e->have_card_font = xf_font_load(&e->card_font, path) == 0;
+    if (!e->have_card_font)
+        xf_warn("explore: no Courier New; location cards use the dialogue font");
+    e->debug = getenv("XF_DEBUG_OVERLAY") != NULL;
+    if (script_path) {
+        /* The script starts the game itself. */
+    } else if (start_view == 0) {
         /* Like the original: intro, then the main menu. */
         queue_intro(e);
         e->in_menu = -1; /* open the menu once the intro has played */
     } else if (game_enter_view(e->g, start_view) != 0) {
         running = 0;
     }
-    while (running) {
-        plat_event ev;
-        game_tick(e->g, plat_ticks_ms());
-        while (plat_poll(&ev)) {
-            if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
-                running = 0;
-            else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE)
-                menu_set_hover(e, menu_item_at(ev.x, ev.y));
-            else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
-                int item = menu_item_at(ev.x, ev.y);
-                if (item >= 0)
-                    xf_info("menu: %s", g_menu_items[item].name);
-                if (item == 0) { /* New */
-                    menu_close(e);
-                    game_new(e->g);
-                } else if (item == 6) { /* Quit */
-                    running = 0;
-                }
-            } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
-                mx = ev.x;
-                my = ev.y;
-                if (!e->playing)
-                    game_hover(e->g, mx, my);
-            } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
-                if (!e->card_active)
-                    finish_media(e); /* skip the clip; the location card cannot be skipped */
-            } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
-                /* Layout items first (a close-up covers everything), then
-                 * questions and inventory, then the view. */
-                if (game_iface_item_at(e->g, ev.x, ev.y))
-                    game_click(e->g, ev.x, ev.y);
-                else if (!click_buttons(e, ev.x, ev.y) && !game_click(e->g, ev.x, ev.y))
-                    game_end_talk(e->g);
-            } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
-                       (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
-                /* Right click: put the item in hand away, stop talking, or go back. */
-                if (game_reg_value(e->g, "RegCurrInvVar", 0) != game_reg_value(e->g, "RegCurrInvVar", 1))
-                    game_hold(e->g, NULL);
-                else if (e->g->talking)
-                    game_end_talk(e->g);
-                else
-                    game_back(e->g);
-            }
-        }
-        if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
-            (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
-            finish_media(e);
-        start_next_media(e);
-        update_sound(e);
-        if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g))
-            menu_enter(e);
-        if (e->in_menu == 1) {
-            menu_update(e);
-            menu_draw(e);
-        } else {
-            if (e->g->view)
-                refresh_picture(e);
-            refresh_iface_pictures(e);
-            draw(e, mx, my);
-        }
-        plat_present(e->fb, SCREEN_W, SCREEN_H, SCREEN_W);
-        plat_sleep_ms(e->playing ? 5 : 16);
+    e->running = running;
+    if (script_path && running) {
+        script sc;
+        memset(&sc, 0, sizeof(sc));
+        sc.g = e->g;
+        sc.host.user = e;
+        sc.host.advance = script_advance;
+        sc.host.settle = script_settle;
+        sc.host.shot = script_shot;
+        e->in_menu = 0;
+        result = script_run(&sc, script_path, 0) ? 1 : 0;
+        xf_info("script: %d steps, %s", sc.steps, result ? "stopped at a failure" : "all passed");
+    } else {
+        while (e->running)
+            run_frame(e);
     }
     stop_media(e);
     stop_sound(e);
     close_anims(e);
     free_iface_pictures(e);
+    close_icons(e);
+    free_inventory(e);
+    free(e->dlg_talk.pixels);
+    free(e->dlg_up.pixels);
+    free(e->dlg_down.pixels);
     if (e->pff_open)
         xf_pff_close(&e->pff);
     menu_close(e);
     if (e->nav_open)
         xf_mov_close(&e->nav);
-    if (e->have_font) {
+    if (e->have_font || e->have_card_font)
         xf_text_cache_clear();
+    if (e->have_font)
         xf_font_free(&e->font);
-    }
+    if (e->have_card_font)
+        xf_font_free(&e->card_font);
     game_close(e->g);
     free(e->g);
     free(e);
-    return 0;
+    return result;
 }

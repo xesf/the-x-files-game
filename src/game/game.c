@@ -544,6 +544,44 @@ int game_hold(game *g, const char *item)
     return 1;
 }
 
+int game_icons(game *g, u32 *ids, int max)
+{
+    u32 i;
+    int k = 0;
+    for (i = 0; i < g->db.count && k < max; i++) {
+        int c = g->db.entries[i].class_id;
+        if ((c == VC_EMOTION_ICON || c == VC_ACTION_ICON) && vc_is_enabled(&g->interp, g->db.entries[i].id))
+            ids[k++] = g->db.entries[i].id;
+    }
+    return k;
+}
+
+int game_read_icon(game *g, u32 id, game_icon *icon)
+{
+    xf_neo_reader r;
+    int c = vc_class(&g->db, id);
+    if ((c != VC_EMOTION_ICON && c != VC_ACTION_ICON) || xf_neo_object(&g->db, id, &r, NULL, NULL) != 0)
+        return -1;
+    icon->name = xf_neo_u32(&r);
+    xf_neo_u32(&r);
+    icon->icon = xf_neo_u32(&r);
+    xf_neo_u32(&r);
+    xf_neo_u32(&r);
+    icon->triggers = xf_neo_u32(&r);
+    return r.error ? -1 : 0;
+}
+
+int game_click_icon(game *g, u32 id)
+{
+    game_icon icon;
+    if (game_read_icon(g, id, &icon) != 0)
+        return 0;
+    xf_info("click icon %u", id);
+    vc_run_triggers(&g->interp, icon.triggers, 0);
+    after_triggers(g);
+    return 1;
+}
+
 int game_inventory(game *g, u32 *ids, int max)
 {
     u32 i;

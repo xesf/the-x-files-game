@@ -4,6 +4,7 @@
 
 new
 expect view 691                 # hallway, Cook greets Willmore
+icon 18172                      # answer him with a joke (Funny)
 expect spot 692                 # the moves open once the opening ends
 
 # Meeting room: the equipment case.

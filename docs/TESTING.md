@@ -104,6 +104,7 @@ A script has one command per line; `#` starts a comment.
 | `askall <character>` | Talks to a character and asks every new question, until none is left |
 | `hold <item>` / `hold none` | Takes an inventory item in hand by name (`CaseFiles`), or empties the hand |
 | `inv <id>` | Clicks a `VCInventory` item in the inventory bar |
+| `icon <id>` | Clicks an emotion or action icon |
 | `dial <number>` | Types a number on the cell phone and sends it |
 | `ing <P\|L\|N> <text>` | Runs an ING search at the office computer |
 | `set <var> <value>` | Sets a GAM variable |
@@ -115,6 +116,23 @@ A script has one command per line; `#` starts a comment.
 | `expect spot <id>` / `nospot <id>` | Checks that a hotspot is or is not in the view |
 | `expect iface <id>` / `noiface <id>` | Checks that a layout is or is not up |
 | `expect choice <id>` / `nochoice <id>` | Checks that a question is or is not on offer |
+
+The window can run the same scripts and take screenshots, with or
+without showing the window:
+
+```sh
+XF_HEADLESS=1 build/xfiles --explore <game> 0 1 --media <cd> --script shots.txt
+```
+
+| Command | What it does in the window |
+|---|---|
+| `clips on` / `clips off` | Lets clips play across steps instead of ending with each step |
+| `play <ms>` | Lets time pass with the clips playing |
+| `skip` | Ends every clip at once, running its triggers |
+| `shot <file.bmp>` | Saves the screen |
+
+For example, `new`, `clips on`, `play 2500`, `shot card.bmp` captures the
+location card of a new game.
 
 The run stops at the first failing step and prints the state there. At
 the end it lists the engine functions the story called that are not
