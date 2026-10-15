@@ -1034,11 +1034,14 @@ int script_run(script *s, const char *path, int quiet)
         if (!s->keep_clips && !hold_clip)
             settle(s);
         /* XF_PLAY_RELOAD: save and load again after every step, to show
-         * that a save keeps everything the story needs. */
+         * that a save keeps everything the story needs; XF_PLAY_RELOAD=x
+         * uses the original's .x saves. */
         if (ok && !hold_clip && !s->keep_clips && !g->game_over && !g->iface_count && !g->talking && getenv("XF_PLAY_RELOAD") && strcmp(cmd, "include") != 0) {
             u8 *data;
             size_t size;
-            if (game_save_mem(g, "reload", &data, &size) == 0) {
+            const char *mode = getenv("XF_PLAY_RELOAD");
+            int r = mode[0] == 'x' ? game_save_x_mem(g, &data, &size) : game_save_mem(g, "reload", &data, &size);
+            if (r == 0) {
                 ok = game_load_mem(g, data, size) == 0;
                 free(data);
                 settle(s);

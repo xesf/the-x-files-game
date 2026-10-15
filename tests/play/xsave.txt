@@ -1,6 +1,17 @@
 # The original engine's saved games (.x files): a copy of the GAM with a
-# game state object. These are saves from a 1998 build, kept outside the
-# repository; the script stops early without them.
+# game state object.
+
+# Our .x saves: write one at the end of disc 1, spoil the state, load it.
+include disc1.txt
+save build/test-save.x
+set 1219 5
+load build/test-save.x
+expect view 6548                  # the Comity Inn, room 3
+expect var 1219 2                 # node 2
+expect disc 2
+
+# Saves from a 1998 build, kept outside the repository; the rest of the
+# script is skipped without them.
 need ../Others/x-files-the-game/startcd2.x
 
 # Disc 2: the Comity Inn, room 3, with Mulder's old phone number.
@@ -26,3 +37,11 @@ expect var 1411 104               # iAstaScore: under the threshold (106)
 need ../Others/x-files-the-game/afterraidcd5.x
 load ../Others/x-files-the-game/afterraidcd5.x
 expect view 5501
+
+# Written again by our engine, the disc 7 save keeps its state.
+load ../Others/x-files-the-game/startcd7.x
+save build/test-rt.x
+load build/test-rt.x
+expect view 8153
+expect var 1411 104
+expect photo 21680
