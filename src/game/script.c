@@ -488,6 +488,249 @@ static void probe(script *s, const char *item)
     snap_free(&sn);
 }
 
+/* --- Solve --------------------------------------------------------------
+ * A search for a way forward, for finding the story's next step: from the
+ * current state it tries moves (walk to an object or character and click
+ * it, with nothing or one of a few items in hand; ask a question; click an
+ * icon; shoot at a HOT rectangle; wait) up to a depth, and prints the first
+ * move sequence after which a variable has the wanted value. States that
+ * end the game are dropped, and states already seen are not tried again. */
+
+enum { SOLVE_MOVE_VIEW, SOLVE_MOVE_ASK, SOLVE_MOVE_ICON, SOLVE_MOVE_SHOOT, SOLVE_MOVE_WAIT };
+
+typedef struct {
+    int kind;
+    u32 view, id;
+    const char *item;
+} solve_move;
+
+typedef struct {
+    u32 var;
+    i32 value;
+    int found, tried;
+    u32 *seen;
+    int seen_count, seen_cap;
+    solve_move path[16];
+} solve_ctx;
+
+/* HOT rectangle IDs the engine knows, less 500 and 600 (shooting a
+ * bystander). */
+static const u32 g_hot_ids[] = {
+    100, 101, 102, 103, 104, 111, 112, 113, 114, 121, 122, 131, 132, 141, 142, 201, 211, 221, 222, 223,
+    401, 411, 421, 431, 432, 433, 434, 441, 442, 451, 461, 462, 463, 470,
+};
+
+static const char *const g_solve_items[] = { NULL, "Gun", "Stiletto", "Badge", "Phone", "CattleProd", "Crowbar" };
+
+static u32 solve_hash(game *g)
+{
+    u32 h = 2166136261u, i;
+    for (i = 0; i < g->interp.var_count; i++)
+        h = (h ^ (u32)g->interp.vars[i].value) * 16777619u;
+    for (i = 0; i < g->interp.enable_count; i++)
+        h = (h ^ (u32)g->interp.enables[i].enabled) * 16777619u;
+    h = (h ^ g->view) * 16777619u;
+    h = (h ^ g->talking) * 16777619u;
+    return h;
+}
+
+static int solve_seen(solve_ctx *c, u32 h)
+{
+    int i;
+    for (i = 0; i < c->seen_count; i++)
+        if (c->seen[i] == h)
+            return 1;
+    if (c->seen_count == c->seen_cap) {
+        int cap = c->seen_cap ? c->seen_cap * 2 : 4096;
+        u32 *n = realloc(c->seen, sizeof(u32) * (size_t)cap);
+        if (!n)
+            return 1;
+        c->seen = n;
+        c->seen_cap = cap;
+    }
+    c->seen[c->seen_count++] = h;
+    return 0;
+}
+
+static int solve_moves(game *g, solve_move *out, int max)
+{
+    enum { MAXV = 256 };
+    u32 queue[MAXV], ids[64];
+    int head = 0, tail = 0, n = 0, i, k, it;
+    if (g->talking) {
+        int m = game_choices(g, ids, 16);
+        for (k = 0; k < m && n < max; k++) {
+            out[n].kind = SOLVE_MOVE_ASK;
+            out[n].id = ids[k];
+            out[n++].item = NULL;
+        }
+    }
+    {
+        int m = game_icons(g, ids, 16);
+        for (k = 0; k < m && n < max; k++) {
+            out[n].kind = SOLVE_MOVE_ICON;
+            out[n].id = ids[k];
+            out[n++].item = NULL;
+        }
+    }
+    for (k = 0; k < (int)XF_COUNT(g_hot_ids) && n + 2 < max; k++)
+        for (it = 1; it <= 2 && game_view_has_hot(g, g_hot_ids[k]); it++) {
+            out[n].kind = SOLVE_MOVE_SHOOT;
+            out[n].id = g_hot_ids[k];
+            out[n++].item = g_solve_items[it];
+        }
+    out[n].kind = SOLVE_MOVE_WAIT;
+    out[n].id = 0;
+    out[n++].item = NULL;
+    queue[tail++] = g->view;
+    while (head < tail) {
+        u32 v = queue[head++], navs[64];
+        vc_view vw;
+        int m, pass;
+        if (vc_read_view(&g->db, v, &vw) != 0)
+            continue;
+        for (pass = 0; pass < 2; pass++) {
+            m = vc_read_list(&g->db, pass ? vw.characters : vw.explorables, ids, 64);
+            for (k = 0; k < m; k++)
+                if (vc_is_enabled(&g->interp, ids[k]))
+                    for (it = 0; it < (int)XF_COUNT(g_solve_items) && n < max; it++) {
+                        out[n].kind = SOLVE_MOVE_VIEW;
+                        out[n].view = v;
+                        out[n].id = ids[k];
+                        out[n++].item = g_solve_items[it];
+                    }
+        }
+        m = vc_read_list(&g->db, vw.navs, navs, 64);
+        for (k = 0; k < m && tail < MAXV; k++) {
+            vc_nav nav;
+            int seen = 0;
+            if (!vc_is_enabled(&g->interp, navs[k]) || vc_read_nav(&g->db, navs[k], &nav) != 0)
+                continue;
+            for (i = 0; i < tail && !seen; i++)
+                seen = queue[i] == nav.target;
+            if (!seen)
+                queue[tail++] = nav.target;
+        }
+    }
+    return n;
+}
+
+static int solve_apply(script *s, const solve_move *mv)
+{
+    game *g = s->g;
+    u32 path[256];
+    int n, i, ok = 1;
+    switch (mv->kind) {
+    case SOLVE_MOVE_VIEW:
+        if ((n = find_path(g, mv->view, 0, path, 256)) < 0)
+            return 0;
+        for (i = 0; i < n; i++) {
+            game_click_object(g, path[i]);
+            drain_media(g);
+        }
+        if (g->view != mv->view)
+            return 0;
+        if (mv->item && !game_hold(g, mv->item))
+            return 0;
+        ok = game_click_object(g, mv->id);
+        game_hold(g, NULL);
+        break;
+    case SOLVE_MOVE_ASK:
+        ok = game_ask(g, mv->id);
+        break;
+    case SOLVE_MOVE_ICON:
+        ok = game_click_icon(g, mv->id);
+        break;
+    case SOLVE_MOVE_SHOOT:
+        if (!game_hold(g, mv->item))
+            return 0;
+        ok = game_shoot(g, mv->id);
+        game_hold(g, NULL);
+        break;
+    case SOLVE_MOVE_WAIT:
+        advance(s, 10000);
+        break;
+    }
+    drain_media(g);
+    return ok;
+}
+
+static void solve_print(const solve_move *mv)
+{
+    switch (mv->kind) {
+    case SOLVE_MOVE_VIEW:
+        if (mv->item)
+            printf("    walk %u; hold %s; click %u\n", mv->view, mv->item, mv->id);
+        else
+            printf("    walk %u; click %u\n", mv->view, mv->id);
+        break;
+    case SOLVE_MOVE_ASK: printf("    ask %u\n", mv->id); break;
+    case SOLVE_MOVE_ICON: printf("    icon %u\n", mv->id); break;
+    case SOLVE_MOVE_SHOOT: printf("    hold %s; shoot %u\n", mv->item, mv->id); break;
+    case SOLVE_MOVE_WAIT: printf("    wait 10000\n"); break;
+    }
+}
+
+static void solve_dfs(script *s, solve_ctx *c, int depth, int max_depth)
+{
+    enum { MAXM = 400 };
+    solve_move *moves;
+    snapshot sn;
+    u32 now = s->now;
+    int n, i;
+    if (c->found || depth >= max_depth)
+        return;
+    moves = malloc(sizeof(*moves) * MAXM);
+    if (!moves || snap_take(s->g, &sn) != 0) {
+        free(moves);
+        return;
+    }
+    n = solve_moves(s->g, moves, MAXM);
+    for (i = 0; i < n && !c->found; i++) {
+        c->tried++;
+        if (getenv("XF_SOLVE_TRACE") && depth == 0) {
+            int ok = solve_apply(s, &moves[i]);
+            printf("   try: ok %d over %d view %u  ", ok, s->g->game_over, s->g->view);
+            solve_print(&moves[i]);
+            snap_restore(s->g, &sn);
+            s->now = now;
+        }
+        if (solve_apply(s, &moves[i]) && !s->g->game_over) {
+            c->path[depth] = moves[i];
+            if (c->var ? vc_get_var(&s->g->interp, c->var) == c->value : s->g->view == (u32)c->value) {
+                int k;
+                c->found = 1;
+                printf("  found after %d tries:\n", c->tried);
+                for (k = 0; k <= depth; k++)
+                    solve_print(&c->path[k]);
+            } else if (!solve_seen(c, solve_hash(s->g))) {
+                solve_dfs(s, c, depth + 1, max_depth);
+            }
+        }
+        snap_restore(s->g, &sn);
+        s->now = now;
+    }
+    snap_free(&sn);
+    free(moves);
+}
+
+static void solve(script *s, int max_depth, u32 var, i32 value)
+{
+    solve_ctx c;
+    int d;
+    memset(&c, 0, sizeof(c));
+    c.var = var;
+    c.value = value;
+    for (d = 1; d <= max_depth && !c.found; d++) {
+        c.seen_count = 0;
+        solve_dfs(s, &c, 0, d);
+        printf("  depth %d: %d tries, %d states\n", d, c.tried, c.seen_count);
+    }
+    if (!c.found)
+        printf("  not found\n");
+    free(c.seen);
+}
+
 /* Checks one "expect" line. Returns 1 when it holds. */
 static int expect(game *g, const char *what, long a, long b, int have_b)
 {
@@ -539,7 +782,7 @@ int script_run(script *s, const char *path, int quiet)
     }
     while (fgets(line, sizeof(line), fp)) {
         char cmd[32] = "", what[32] = "", path2[32] = "";
-        long a = 0, b = 0;
+        long a = 0, b = 0, c = 0;
         int n, ok = 1;
         char *hash = strchr(line, '#');
         lineno++;
@@ -643,6 +886,11 @@ int script_run(script *s, const char *path, int quiet)
             for (i = 0; i < g->interp.var_count; i++)
                 if (g->interp.vars[i].id == (u32)a)
                     printf("  var %ld %s = %d\n", a, g->interp.vars[i].name, g->interp.vars[i].value);
+        } else if (strcmp(cmd, "solve") == 0 && sscanf(line, "%*s %ld var %ld %ld", &a, &b, &c) == 3) {
+            /* solve <depth> var <id> <value> | view <id>: search for moves */
+            solve(s, (int)a, (u32)b, (i32)c);
+        } else if (strcmp(cmd, "solve") == 0 && sscanf(line, "%*s %ld view %ld", &a, &b) == 2) {
+            solve(s, (int)a, 0, (i32)b);
         } else if (strcmp(cmd, "probe") == 0) {
             int has = sscanf(line, "%*s %31s", what) == 1;
             probe(s, has ? what : NULL);

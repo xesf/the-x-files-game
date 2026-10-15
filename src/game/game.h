@@ -220,6 +220,8 @@ const char *game_email_body(game *g, u32 *item);
  * when the shot needs the gun and it is not in hand. */
 u32 game_hot_at(game *g, u32 asset, int x, int y, u32 ms);
 int game_shoot(game *g, u32 hot);
+/* Whether the HOT file of the view's clip has this rectangle. */
+int game_view_has_hot(game *g, u32 hot);
 
 /* Mouse moved: runs mouse over and off triggers of interface items. */
 void game_hover(game *g, int x, int y);

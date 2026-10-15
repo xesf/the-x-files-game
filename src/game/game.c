@@ -1290,6 +1290,13 @@ static u32 view_hot(game *g, u32 id, int *has)
     return first;
 }
 
+int game_view_has_hot(game *g, u32 hot)
+{
+    int has;
+    view_hot(g, hot, &has);
+    return has;
+}
+
 int game_shoot(game *g, u32 hot)
 {
     size_t i, k;
