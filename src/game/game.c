@@ -1,5 +1,6 @@
 #include "game.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,6 +130,9 @@ static void build_spots(game *g)
         if (!changed)
             break;
     }
+    /* The dialogue ends when the character leaves the view. */
+    if (g->talking && !has_spot_id(g->spots, g->spot_count, g->talking))
+        g->talking = 0;
     update_evidence(g);
     depth--;
     for (i = 0; i < g->spot_count; i++)
@@ -1169,16 +1173,254 @@ static int ing_phone(game *g, const char *text)
     return 0;
 }
 
-/* 0x464F70: runs the search, then action list 90694 when it found a
- * record and 90038 when it did not. Name and plate searches are not
- * implemented yet. */
-int game_ing_search(game *g, char type, const char *text)
+/* 0x65E1A0: the ING name records, 60 entries of {key item (media: the
+ * databases, then the names it answers to), record item (media: the 8
+ * record fields), mug shot item, fingerprint item, field notes media}. */
+static const struct { u32 key, record, mug, prints, notes; } g_ing_names[] = {
+    { 60627, 79934, 15286, 15124, 0 },
+    { 60628, 79936, 17337, 15122, 0 },
+    { 60629, 79937, 17339, 15124, 81304 },
+    { 60630, 79938, 17341, 15122, 81305 },
+    { 60631, 79939, 17343, 15124, 0 },
+    { 60632, 79940, 17345, 15122, 0 },
+    { 60633, 79941, 17347, 15124, 81321 },
+    { 60634, 79942, 17349, 15122, 81308 },
+    { 60635, 79943, 17351, 15124, 81320 },
+    { 60636, 79944, 17353, 15122, 0 },
+    { 60637, 79945, 17355, 15124, 0 },
+    { 60638, 79946, 17357, 15122, 0 },
+    { 60639, 79947, 17359, 15124, 81310 },
+    { 60640, 79948, 17361, 15122, 81311 },
+    { 60641, 79949, 17363, 15124, 0 },
+    { 60642, 79950, 50591, 15124, 81306 },
+    { 60643, 79951, 50589, 15122, 81307 },
+    { 60644, 79952, 50587, 15124, 81309 },
+    { 80008, 79994, 79806, 15122, 69917 },
+    { 88599, 88600, 79818, 15124, 88643 },
+    { 89079, 89080, 79830, 15122, 89077 },
+    { 80011, 79972, 79810, 15124, 70043 },
+    { 80025, 79986, 79840, 15124, 70007 },
+    { 80015, 79976, 79822, 15124, 82206 },
+    { 80019, 79980, 79836, 15122, 70061 },
+    { 80009, 79970, 80362, 15124, 69935 },
+    { 80027, 79988, 79844, 15122, 70099 },
+    { 80010, 79971, 79846, 15122, 69953 },
+    { 80013, 79974, 79814, 15122, 69971 },
+    { 80014, 79975, 79816, 15124, 69989 },
+    { 80016, 79977, 79820, 15122, 70117 },
+    { 80018, 79979, 79826, 15124, 70025 },
+    { 80022, 79983, 79832, 15124, 70080 },
+    { 80024, 79985, 79838, 15122, 70135 },
+    { 88597, 88598, 79828, 15122, 88637 },
+    { 89596, 89597, 79824, 15124, 89578 },
+    { 89598, 89599, 79848, 15122, 89594 },
+    { 80017, 79978, 80366, 15122, 86076 },
+    { 80020, 79981, 79852, 15124, 86106 },
+    { 80021, 79982, 79933, 15122, 86094 },
+    { 80023, 79984, 79919, 15124, 86096 },
+    { 80026, 79987, 79896, 15122, 86090 },
+    { 80030, 79993, 79929, 15124, 86112 },
+    { 80031, 79991, 79911, 15122, 86098 },
+    { 80032, 79992, 79892, 15124, 86100 },
+    { 87503, 87504, 79915, 15122, 86078 },
+    { 87505, 87506, 79900, 15124, 86092 },
+    { 87507, 87508, 79894, 15122, 86086 },
+    { 87515, 87516, 79906, 15124, 86080 },
+    { 87517, 87518, 79925, 15124, 86088 },
+    { 87523, 87524, 79898, 15122, 86082 },
+    { 87525, 87526, 79902, 15124, 86108 },
+    { 87527, 87528, 79913, 15122, 86084 },
+    { 87535, 87536, 79927, 15124, 86102 },
+    { 87537, 87538, 79921, 15122, 86074 },
+    { 87539, 87540, 79904, 15124, 86072 },
+    { 87541, 87542, 79917, 15122, 86110 },
+    { 87543, 87544, 79931, 15124, 86104 },
+    { 90721, 90722, 80368, 15122, 90727 },
+    { 91148, 91149, 79923, 15124, 91154 },
+};
+/* 0x65E160 and 0x65E180: the ING record's 8 field labels and fields. */
+static const u32 g_ing_labels[8] = { 35551, 35553, 35554, 35555, 35556, 35557, 35558, 35559 };
+static const u32 g_ing_fields[8] = { 35560, 35562, 35563, 35564, 35565, 35566, 35567, 35568 };
+
+/* Puts a text on a layout item, as SetIItemText does, in the record's
+ * Courier New. */
+static void set_item_text(game *g, u32 item, const char *text)
+{
+    game_item_label *l = (game_item_label *)game_item_label_of(g, item);
+    if (!l && g->label_count < GAME_MAX_LABELS)
+        l = &g->labels[g->label_count++];
+    if (!l)
+        return;
+    memset(l, 0, sizeof(*l));
+    l->item = item;
+    snprintf(l->text, sizeof(l->text), "%s", text);
+    l->color = 'k';
+    l->font = 'c';
+    l->size = 10;
+    l->bold = 'n';
+    l->align = 'l';
+}
+
+/* Lower case, without spaces, dashes and brackets: how the ING compares
+ * what the player typed. */
+static void ing_key(const char *in, char *out, size_t size)
+{
+    size_t k = 0;
+    for (; *in && k + 1 < size; in++)
+        if (!strchr(" -()", *in))
+            out[k++] = (char)tolower((unsigned char)*in);
+    out[k] = '\0';
+}
+
+/* The media list of a layout item. */
+static int item_media(game *g, u32 item, u32 *ids, int max)
+{
+    vc_iface_item it;
+    if (vc_read_iface_item(&g->db, item, &it) != 0)
+        return 0;
+    return vc_read_list(&g->db, it.assets, ids, max);
+}
+
+/* 0x4CA010 (node 2) .. 0x4CA2B0 (node 6). Node 2: Cook's talk is over
+ * and 3 pieces of evidence went to the lab. Node 3: the coroner's office
+ * is done, Cook's field office scene too (variable 5122), and 3 pieces of
+ * evidence were processed, or 2 when Willmore has not translated the
+ * Cyrillic document. Nodes 4 and 6: one scene is finished. Node 5: two. */
+static void set_node_done(game *g, int node)
+{
+    char reg[16];
+    i32 cur = game_reg_value(g, "RegCurrNode", 0);
+    int done = 0, last;
+    snprintf(reg, sizeof(reg), "RegNode%dVars", node);
+#define V(i) game_reg_value(g, reg, i)
+    switch (node) {
+    case 2:
+        done = cur == 2 && V(0) == 1 && V(1) >= 3;
+        last = 2;
+        break;
+    case 3:
+        done = cur == 3 && vc_get_var(&g->interp, 5122) == 1 && V(0) == 1 &&
+               ((V(2) == 1 && V(1) >= 3) || (V(2) == 0 && V(1) >= 2));
+        last = 3;
+        break;
+    case 4:
+        done = cur == 4 && V(0) == 1;
+        last = 1;
+        break;
+    case 5:
+        done = cur == 5 && V(0) == 1 && V(1) == 1;
+        last = 2;
+        break;
+    case 6:
+        done = cur == 6 && V(0) == 1;
+        last = 1;
+        break;
+    default:
+        return;
+    }
+#undef V
+    set_reg_var(g, reg, last, done);
+}
+
+/* What the ING shows when nothing is found (0x4653B9): "No Data Found"
+ * (media 58348). */
+#define ING_NOT_FOUND 58348
+
+/* 0x4667D0: shows one record: its mug shot and fingerprint (the others
+ * hidden), its 8 fields and its field notes. */
+static void ing_show_record(game *g, int i)
+{
+    u32 media[16];
+    char text[160];
+    int n, k;
+    set_item_text(g, 58344, "");
+    for (k = 0; k < (int)XF_COUNT(g_ing_names); k++) {
+        vc_set_enabled(&g->interp, g_ing_names[k].mug, k == i);
+        vc_set_enabled(&g->interp, g_ing_names[k].prints, k == i);
+    }
+    g->ing_notes = g_ing_names[i].notes ? g_ing_names[i].notes : 38133;
+    n = item_media(g, g_ing_names[i].record, media, 16);
+    for (k = 0; k < 8; k++) {
+        set_item_text(g, g_ing_fields[k], k < n ? game_text(g, media[k], text, sizeof(text)) : "");
+        vc_set_enabled(&g->interp, g_ing_labels[k], 1);
+    }
+}
+
+/* 0x464F70, name search: the key item of each record lists the
+ * databases that hold it, then the names it answers to. */
+static int ing_name(game *g, char db, const char *typed)
+{
+    char want[64], have[64], dbs[16];
+    int i, k, n;
+    ing_key(typed, want, sizeof(want));
+    for (i = 0; i < (int)XF_COUNT(g_ing_names); i++) {
+        u32 media[16];
+        int match = 0;
+        n = item_media(g, g_ing_names[i].key, media, 16);
+        for (k = 1; k < n && !match; k++) {
+            char t[64];
+            ing_key(game_text(g, media[k], t, sizeof(t)), have, sizeof(have));
+            match = strcmp(want, have) == 0;
+        }
+        if (!match)
+            continue;
+        /* Record 13, James Wong, answers only once variable 2107
+         * (SHANKSN2_bDoneWithWong) is set; the ING then shows string 1104,
+         * which this build's xfilest.dll does not have. */
+        if (i == 13 && !vc_get_var(&g->interp, 2107))
+            return 0;
+        game_text(g, media[0], dbs, sizeof(dbs));
+        if (!strchr(dbs, db))
+            continue;
+        xf_info("ING: name %s found in %c (record %d)", typed, db, i);
+        ing_show_record(g, i);
+        return 1;
+    }
+    return 0;
+}
+
+/* 0x514DE0, plate search: two plates are on file. The NSA car's plate
+ * (media 88648) answers in the government database with the restricted
+ * record (58350); Mulder and Scully's rental car (88650) answers among
+ * civilians with MulderRentalResponse.txt (88652). */
+static int ing_plate(game *g, char db, const char *typed)
+{
+    char want[32], have[32], t[160];
+    ing_key(typed, want, sizeof(want));
+    ing_key(game_text(g, 88648, t, sizeof(t)), have, sizeof(have));
+    if (db == 'G' && strcmp(want, have) == 0) {
+        set_item_text(g, 58344, game_text(g, 58350, t, sizeof(t)));
+        g->ing_notes = 0;
+        /* Variable 4713 (IFL_bINGHaveSearchedForNSACar) is set the first
+         * time; the original also adds 2 to a score then. */
+        vc_set_var(&g->interp, 4713, 1);
+        xf_info("ING: plate %s found in %c", typed, db);
+        return 1;
+    }
+    ing_key(game_text(g, 88650, t, sizeof(t)), have, sizeof(have));
+    if (db == 'Z' && strcmp(want, have) == 0) {
+        g->ing_notes = 88652;
+        xf_info("ING: plate %s found in %c", typed, db);
+        return 1;
+    }
+    return 0;
+}
+
+/* 0x464F70 ING_search(category, database): runs the search, then action
+ * list 90694 when it found a record and 90038 when it did not. */
+int game_ing_search(game *g, char type, char db, const char *text)
 {
     int found = 0;
     if (type == 'P')
         found = ing_phone(g, text);
-    else
-        xf_info("ING: search type %c not implemented", type);
+    else if (type == 'N')
+        found = ing_name(g, db, text);
+    else if (type == 'L')
+        found = ing_plate(g, db, text);
+    if (!found) {
+        char t[64];
+        set_item_text(g, 58344, game_text(g, ING_NOT_FOUND, t, sizeof(t)));
+    }
     vc_run_action_list(&g->interp, found ? 90694 : 90038);
     after_triggers(g);
     return found;
@@ -1269,6 +1511,13 @@ static int host_call_function(void *user, const vc_action *a)
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
         return 1;
     }
+    /* SetIsNode2Done .. SetIsNode6Done (0x4BC370 ..): the engine decides
+     * whether a part of the story is finished, from the variables that
+     * RegNodeNVars registered, and sets the last one. */
+    if (strncmp(name, "SetIsNode", 9) == 0 && strcmp(name + 10, "Done") == 0) {
+        set_node_done(g, name[9] - '0');
+        return 1;
+    }
     /* 0x4B5B40 fn_DispEvIcons(on): shows or hides the evidence bar */
     if (strcmp(name, "DispEvIcons") == 0 && argc == 1) {
         g->show_evidence = arg_value(g, &args[0]) != 0;
@@ -1290,11 +1539,6 @@ static int host_call_function(void *user, const vc_action *a)
             g->photos[g->photo_count++] = (u32)arg_value(g, &args[0]);
         return 1;
     }
-    /* 0x4B7460 fn_OnCameraClick(item): takes the camera in hand */
-    if (strcmp(name, "OnCameraClick") == 0 && argc == 1) {
-        set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
-        return 1;
-    }
     /* 0x4BC230 fn_SelectInv(inventory object): puts the item in hand.
      * The item's value is the argument of the On...Click call in its
      * click list (OnInvClick, OnCameraClick, OnFLightClick). */
@@ -1304,9 +1548,13 @@ static int host_call_function(void *user, const vc_action *a)
             set_reg_var(g, "RegCurrInvVar", 0, v);
         return 1;
     }
-    /* 0x4B7530 fn_OnFLightClick(item): takes the flashlight in hand,
-     * like OnInvClick; the cursor then lights the dark views. */
-    if (strcmp(name, "OnFLightClick") == 0 && argc == 1) {
+    /* 0x4B7530 fn_OnFLightClick, 0x4B7460 fn_OnCameraClick, OnGunClick,
+     * OnNVisionClick, OnBinocClick (item): take the tool in hand, like
+     * OnInvClick; the tool then works on the view (the flashlight lights
+     * dark views, the camera takes photos). */
+    if ((strcmp(name, "OnFLightClick") == 0 || strcmp(name, "OnCameraClick") == 0 ||
+         strcmp(name, "OnGunClick") == 0 || strcmp(name, "OnNVisionClick") == 0 ||
+         strcmp(name, "OnBinocClick") == 0) && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
         return 1;
     }
@@ -1425,7 +1673,7 @@ static int host_call_function(void *user, const vc_action *a)
         return 1;
     }
     if (strcmp(name, "INGSearch") == 0 && argc >= 1) {
-        game_ing_search(g, (char)arg_value(g, &args[0]), g->ing);
+        game_ing_search(g, (char)arg_value(g, &args[0]), argc > 1 ? (char)arg_value(g, &args[1]) : 'Z', g->ing);
         return 1;
     }
     /* Cell phone: keys, clear, send */
@@ -1458,12 +1706,14 @@ static int host_call_function(void *user, const vc_action *a)
         game_hold(g, NULL);
         return 1;
     }
-    /* 0x4BCAE0 fn_SwapDisc(node, location, viewpoint, view, disc): the
-     * original asks for the disc when it is not in the drive, then goes
-     * to the view. Every disc is installed here. */
+    /* 0x4BCAE0 fn_SwapDisc(node, location, viewpoint, view, iCurrNode):
+     * the last argument is the node variable itself (0x5016A0 takes the
+     * variable); the original asks for the disc that holds the node when
+     * it is not in the drive, then goes to the view. Every disc is
+     * installed here. */
     if (strcmp(name, "SwapDisc") == 0 && argc == 5) {
         g->disc = arg_value(g, &args[4]);
-        xf_info("disc %d", g->disc);
+        xf_info("travel, node %d", g->disc);
         host_go_to_view(g, (u32)arg_value(g, &args[3]));
         return 1;
     }

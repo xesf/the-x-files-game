@@ -88,7 +88,7 @@ typedef struct {
     vc_interp interp;
     vc_place_map places;
     u32 now;              /* game clock in ms, set by game_tick */
-    int disc;             /* disc the story is on, from SwapDisc */
+    int disc;             /* node of the last SwapDisc (iCurrNode) */
 
     u32 view, view_triggers, pending_view;
     u32 view_epoch;       /* counts view changes, to notice nested ones */
@@ -128,6 +128,7 @@ typedef struct {
     u32 focus_item;       /* layout item that receives key presses */
     u32 kit_icons[GAME_MAX_EVIDENCE]; /* EnableKitIcon: icons in the kit */
     int kit_count;
+    u32 ing_notes;                    /* media of the ING record's field notes */
     int show_evidence;                /* DispEvIcons */
     u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */
     int evidence_count;
@@ -231,7 +232,7 @@ int game_hold(game *g, const char *item);
 int game_dial(game *g, const char *number);
 /* Searches the ING database at the office computer: type 'P' phone, 'L'
  * licence plate, 'N' name. Returns 1 when the search found a record. */
-int game_ing_search(game *g, char type, const char *text);
+int game_ing_search(game *g, char type, char db, const char *text);
 /* The value of the engine variable registered by Reg<name>, argument i. */
 i32 game_reg_value(game *g, const char *name, int i);
 

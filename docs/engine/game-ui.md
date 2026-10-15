@@ -175,6 +175,48 @@ label on a layout item: `font` is `'H'` (`Hcd.ttr`) or `'c'` (Courier),
 `'c'` or `'r'`. `RelocateIFace(left, top, right, bottom, event)` moves
 the item whose trigger is running.
 
+## ING searches
+
+`INGSearch(category, database)` runs on the computer's search button.
+The category is `'P'` (phone), `'L'` (licence plate) or `'N'` (name). The
+database is `'Z'` civilian, `'F'` FBI, `'G'` government, `'L'` law
+enforcement or `'C'` criminal. The engine ignores spaces, dashes and
+brackets in what the player typed.
+
+| Search | Engine | Records |
+|---|---|---|
+| Phone | `ING_search_phone` (0x5151A0) | Table at 0x65E0F0 |
+| Plate | 0x514DE0 | The NSA car (240EAK, government: "Error: Restricted Data") and Mulder and Scully's rental (621517, civilian) |
+| Name | 0x464F70 | 60 records at 0x65E1A0 |
+
+A name record has five fields: a key item, whose media list gives the
+databases that hold the person and then the names they answer to, a
+record item with the 8 field texts, a mug shot item, a fingerprint item
+and the field notes. Finding a person shows their mug shot and
+fingerprint, fills the 8 fields (items at 0x65E180) and shows the field
+labels (0x65E160). James Wong's record answers only once
+`SHANKSN2_bDoneWithWong` is set, which happens when the player leaves
+him on the docks. When nothing is found, the ING shows "No Data Found".
+After a search the engine runs action list 90694 (found) or 90038 (not
+found).
+
+## Story progress
+
+Each part of the story (a node) ends when the engine says so.
+`SetIsNode2Done` .. `SetIsNode6Done` (0x4BC370 ..) check the variables
+that `RegNodeNVars` registered and set the last one:
+
+| Node | Complete when |
+|---|---|
+| 2 | Cook's talk at the desk is over and 3 pieces of evidence went to the lab |
+| 3 | The coroner's office is done, Cook's field office scene too, and 3 pieces of evidence were processed (2 without the translated Cyrillic document) |
+| 4, 6 | The node's last scene is finished |
+| 5 | The hauling yard and the coroner's office are done |
+
+The travel lists then move `iCurrNode` to the link that follows: node
+2 complete makes it 11, the warehouse at night. `SwapDisc`'s last
+argument is this node variable, not a disc number.
+
 ## Debug overlay
 
 Ctrl+Shift+D (or `XF_DEBUG_OVERLAY=1`) shows the hotspot outlines (green
