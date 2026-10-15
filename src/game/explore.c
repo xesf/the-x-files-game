@@ -81,6 +81,7 @@ typedef struct {
 #define MAX_CURSORS 24
 #define MAX_CURSOR_FRAMES 12
 #define CARD_PX 16 /* 12 point at 96 dots per inch */
+#define CROSS_SIZE 16
 
 /* A VCCursor: its hot point and pictures (several for animated ones). */
 typedef struct {
@@ -147,6 +148,8 @@ typedef struct {
     int icon_count;
     /* cursors */
     cursor_art cursors[MAX_CURSORS];
+    cursor_art cross;     /* the default pointer */
+    u32 cross_px[CROSS_SIZE * CROSS_SIZE];
     int cursor_count;
     u32 held_inv;         /* VCInventory taken in hand, for its cursor */
     /* inventory icons: normal and rollover */
@@ -1290,23 +1293,52 @@ static u32 held_cursor(explorer *e)
     return xf_neo_u32(&r);
 }
 
-/* The "X" cursor (25541): the pointer wherever nothing else applies,
- * the dialogue box included. */
-#define CURSOR_DEFAULT 25541
+/* The default pointer, wherever no hotspot or item names one (the
+ * dialogue box included): the window class cursor, resource 129 of the
+ * exe (0x459230), a white cross with a black outline, hot spot (7, 7).
+ * The blue X (VCCursor 25541) is never shown: RegXCursorAss
+ * (0x4BBAF0) ends in an empty function in the shipped build. */
+static const cursor_art *cross_cursor(explorer *e)
+{
+    static const char *const rows[7] = {
+        "  o#o  ",
+        "  o#o  ",
+        "ooo#ooo",
+        "###o###",
+        "ooo#ooo",
+        "  o#o  ",
+        "  o#o  ",
+    };
+    int x, y;
+    if (!e->cross.count) {
+        for (x = 0; x < CROSS_SIZE * CROSS_SIZE; x++)
+            e->cross_px[x] = KEY_BLUE;
+        for (y = 0; y < 7; y++)
+            for (x = 0; x < 7; x++)
+                if (rows[y][x] != ' ')
+                    e->cross_px[(y + 4) * CROSS_SIZE + x + 4] = rows[y][x] == '#' ? 0xFFFFFF : 0x000000;
+        e->cross.frames[0].pixels = e->cross_px;
+        e->cross.frames[0].width = CROSS_SIZE;
+        e->cross.frames[0].height = CROSS_SIZE;
+        e->cross.hot_x = 7;
+        e->cross.hot_y = 7;
+        e->cross.count = 1;
+    }
+    return &e->cross;
+}
 
-/* Draws the game's cursor at the pointer, or shows the system pointer
- * when the cursor art is missing. */
-/* The cursor for the pointer at (mx, my), or NULL for the system's. */
+/* The cursor for the pointer at (mx, my): a hotspot's or the item in
+ * hand's, or the cross. */
 static const cursor_art *current_cursor(explorer *e, int mx, int my)
 {
     u32 id = held_cursor(e);
     const cursor_art *c;
     if (!id && !e->playing && e->in_menu != 1 && !e->g->talking)
         id = game_cursor_at(e->g, mx, my);
-    if (!id)
-        id = CURSOR_DEFAULT;
-    c = get_cursor(e, id);
-    plat_show_cursor(!c);
+    c = id ? get_cursor(e, id) : NULL;
+    if (!c)
+        c = cross_cursor(e);
+    plat_show_cursor(0);
     return c;
 }
 

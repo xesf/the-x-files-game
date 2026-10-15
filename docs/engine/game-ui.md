@@ -99,8 +99,13 @@ is an animation from its start frame to its end frame.
 and for objects (7164, eye). Moves use the cursor of their hotspot, and
 the backdrop of a close-up uses 287 (back up). With an item in hand,
 the cursor is the item's cursor picture. Everywhere else, the dialogue
-box included, the cursor is 25541, the spinning blue X
-(`Graphics/cursors/Blue X Icon Picts/BlueX.pff`, 12 frames).
+box included, the pointer is the window's own cursor: resource 129 of
+the exe (`0x459230` registers it with the window class), a white cross
+with a black outline and its hot spot at (7, 7). Our engine draws the
+same cross. The spinning blue X (25541,
+`Graphics/cursors/Blue X Icon Picts/BlueX.pff`, 12 frames) is never
+shown: `RegXCursorAss` (`0x4BBAF0`) ends in an empty function in the
+shipped build.
 
 ## Character lines
 
