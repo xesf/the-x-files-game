@@ -125,7 +125,7 @@ A script has one command per line; `#` starts a comment.
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <database> <text>` / `noing ...` | Runs an ING search at the office computer and expects a record, or none |
 | `set <var> <value>` | Sets a GAM variable |
-| `save <file> [name]` / `load <file>` | Writes the game to a save file, or loads one (ours, or an original `.x` save) |
+| `save <file> [name]` / `load <file>` | Writes the game to a save file, or loads one; a `.x` file is in the original's format |
 | `need <file>` | Stops the script, as passed, when the file is missing: for files that are not part of the game |
 | `reload` | Saves to memory and loads again at once |
 | `restore` | Goes back to the last `SaveGameState` checkpoint |
@@ -186,10 +186,11 @@ the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
 (`suicide.txt`), the phone (`phone.txt`), the Options screen
 (`options.txt`) and saving (`save.txt`).
 
-`xsave.txt` loads saves written by the original engine. These files are
-not part of the game, so the script looks for them in
-`../Others/x-files-the-game` and stops early, as passed, when they are
-missing.
+`xsave.txt` writes and loads a `.x` save, then loads saves written by
+the original engine. These files are not part of the game, so the
+script looks for them in `../Others/x-files-the-game` and stops early,
+as passed, when they are missing. `XF_PLAY_RELOAD=x` reloads through
+`.x` saves instead (see [formats/save.md](formats/save.md)).
 
 With `XF_PLAY_RELOAD=1`, a script saves and loads the game after every
 step that ends at rest: no layout open and no conversation running. All

@@ -38,28 +38,29 @@ big-endian.
 | AI trigger | 4 | Its trigger, or 0 |
 | | 4 | 0 in every save seen |
 | | 4 | −1 in every save seen |
-| Sounds | blob | The sounds playing: asset reference, a flag (1 for a loop), a time in ms |
+| Sounds | blob | The sounds playing: asset reference, time, a flag (1 for a loop) |
 | Inventory | blob | The `VCInventory` items held |
 | Evidence | blob | Evidence icons on show: icon, flag |
 | Kit | blob | The evidence kit's icons (`EnableKitIcon`) |
-| | blob | Empty in every save seen |
+| Timers | blob | The running timers (`0x5EF3D0`): timer, time, a flag (1 for a periodic timer). The time is what is left of a single timer, or the period |
 | Flags | 7 × 1 | Engine settings |
 | View media | 4 + 1 + 4 | The view's clip, a flag and its time in ms |
 | | 4 | A character view, or 0 |
 | | 4 | 0, or one of five layout items |
 | | 2 | 1 |
 
-The records in the Sounds and Evidence blobs are packed in the shipped
-engine: 9 and 5 bytes. Saves from the 1998 beta builds pad them to 12
-and 8 bytes.
+The records in the Sounds, Evidence and Timers blobs are packed in the
+shipped engine: 9, 5 and 9 bytes. Saves from the 1998 beta builds pad
+them to 12 and 8 bytes, and put the loop flag before the time.
 
 ### Photos (class `0x59`)
 
 | Field | Size | Data |
 |---|---|---|
-| Picture | blob | The photo as an image |
+| Picture | blob | An 80 × 60 PICT of the photo (the original's hold a JPEG) |
 | Media | 4 | The media photographed (`TakePhoto`) |
-| | 4 + 2 + 4 + 2 | Position data |
+| Time | 4 | The time in the media, in ms |
+| Rectangle | 4 × 2 | The part of the frame photographed: left, top, right, bottom |
 | Disc | 1 | The disc the photo was taken on |
 | Downloaded | 1 | 1 once the computer has downloaded it |
 
@@ -73,7 +74,7 @@ and 8 bytes.
    start-up);
 2. applies every variable, enable state and string by GAM ID;
 3. restores the lists: questions asked, PDA notes, photos, mail, the
-   evidence kit and the AI hint;
+   evidence kit, the AI hint and the running timers;
 4. goes to the saved view through its node, location and viewpoint,
    running their entering triggers, as `0x486140` does after a load.
 
@@ -81,7 +82,34 @@ The variable IDs of the 1998 beta saves match the shipped GAM; variables
 added later keep their starting value. A file copied as text gains a CR
 before every LF; the loader undoes that when every LF has one.
 
-Our engine cannot write `.x` files yet.
+`0x486140` queues the same actions as a move (`act_set_view`), so the
+original also loses what the entering triggers reset. View 26186 clears `bAskedCookToCover`: a save made there
+after "Cover me" loads without it.
+
+### Writing a `.x` save
+
+`game_save_file` writes a `.x` save for a path ending in `.x`
+(`game_save_x_mem`). The engine starts from the shipped GAM, as the
+original starts from `Temp.gam`:
+
+1. It writes each variable's value, enable state and string into its
+   record. A string that changed gets new data at the end of the file.
+2. It appends the header object, the five list objects and one object
+   for each photo, from the GAM's next free ID (header field 16).
+   The photo pictures are 80 × 60 stills of the media, unpacked
+   (`DirectBitsRect`, 32 bits). A photo whose media is not in the game
+   folder is grey.
+3. It appends an ID index (one leaf node) for each new class, a new
+   subclass list for class 1, and a new class index. Header field 8
+   points at the new class index; field 12 holds the 11 classes.
+
+Fields the engine does not track are written as in the original saves:
+mode 2, the flags `0 0 1 0 0 0 0`, the photo time 0 and the rectangle
+(0, 0, 300, 240).
+
+`XF_PLAY_RELOAD=x` makes the play scripts save and load a `.x` file
+after every step. Discs 1 to 4 pass this way; disc 5 stops at the
+"Cover me" case above.
 
 The menu's Save and Load screens are HDB layouts: 82537 is Save, where
 the player types a slot name, and 82634 is Load. Each has three slots.
