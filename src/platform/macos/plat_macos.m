@@ -17,7 +17,8 @@
 #define AUDIO_FRAMES 1024
 
 static NSWindow *g_window;
-static int g_width, g_height;
+static int g_width, g_height;     /* the last frame shown */
+static int g_init_w, g_init_h;
 static CGImageRef g_frame;
 static plat_event g_events[EVENT_QUEUE_SIZE];
 static int g_ev_head, g_ev_tail;
@@ -155,8 +156,8 @@ int plat_init(const char *title, int width, int height)
     NSRect rect = NSMakeRect(0, 0, width * 2, height * 2);
     XFView *view;
 
-    g_width = width;
-    g_height = height;
+    g_width = g_init_w = width;
+    g_height = g_init_h = height;
     mach_timebase_info(&g_timebase);
     g_start = mach_absolute_time();
     /* XF_HEADLESS: no window and no sound, for scripted test runs. */
@@ -219,10 +220,42 @@ int plat_poll(plat_event *ev)
     return 1;
 }
 
+
+/* XF_OUTPUT=<w>x<h>: the output size without a window, for tests. */
+static int headless_output(int *width, int *height)
+{
+    const char *s = getenv("XF_OUTPUT");
+    int w, h;
+    if (!s || sscanf(s, "%dx%d", &w, &h) != 2 || w < 64 || h < 64)
+        return 0;
+    *width = w;
+    *height = h;
+    return 1;
+}
+
+void plat_output_size(int *width, int *height)
+{
+    *width = g_init_w;
+    *height = g_init_h;
+    if (g_headless || !g_window) {
+        headless_output(width, height);
+        return;
+    }
+    {
+        NSRect b = [g_window.contentView convertRectToBacking:g_window.contentView.bounds];
+        if (b.size.width >= 64 && b.size.height >= 64) {
+            *width = (int)b.size.width;
+            *height = (int)b.size.height;
+        }
+    }
+}
+
 void plat_present(const u32 *pixels, int width, int height, int pitch)
 {
     if (g_headless)
         return;
+    g_width = width;
+    g_height = height;
     @autoreleasepool {
         CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
         CFDataRef data = CFDataCreate(NULL, (const UInt8 *)pixels, (CFIndex)pitch * height * 4);

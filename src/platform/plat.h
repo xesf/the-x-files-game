@@ -52,8 +52,15 @@ void plat_shutdown(void);
 /* Returns 1 and fills `ev` while events are pending, then 0. */
 int plat_poll(plat_event *ev);
 
-/* Shows a frame. Pixels are 0x00RRGGBB, `pitch` is in pixels. */
+/* Shows a frame. Pixels are 0x00RRGGBB, `pitch` is in pixels. The frame
+ * keeps its proportions in the window; mouse events are in the pixels of
+ * the last frame shown, whatever its size. */
 void plat_present(const u32 *pixels, int width, int height, int pitch);
+
+/* The size in pixels a frame should have to fill the window or screen
+ * one to one. Without a window (XF_HEADLESS), XF_OUTPUT=<w>x<h>, or the
+ * size given to plat_init. */
+void plat_output_size(int *width, int *height);
 
 /* Finds an installed system font by family name ("Courier New"). Returns
  * 0 and its path, or -1 when the system has no such font. */

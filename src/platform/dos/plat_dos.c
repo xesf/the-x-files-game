@@ -341,6 +341,13 @@ int plat_poll(plat_event *ev)
     return 0;
 }
 
+/* The VESA mode is the game's own 640x480. */
+void plat_output_size(int *width, int *height)
+{
+    *width = g_width;
+    *height = g_height;
+}
+
 void plat_present(const u32 *pixels, int width, int height, int pitch)
 {
     int x, y;

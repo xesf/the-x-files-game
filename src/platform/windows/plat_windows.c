@@ -15,7 +15,8 @@
 #define EVENT_QUEUE_SIZE 256
 
 static HWND g_hwnd;
-static int g_width, g_height;
+static int g_width, g_height; /* the last frame shown */
+static int g_init_w, g_init_h;
 static const u32 *g_pixels;
 static int g_pitch;
 static BITMAPINFO g_bmi;
@@ -177,8 +178,8 @@ int plat_init(const char *title, int width, int height)
     RECT r;
     DWORD style = WS_OVERLAPPEDWINDOW;
 
-    g_width = width;
-    g_height = height;
+    g_width = g_init_w = width;
+    g_height = g_init_h = height;
     g_start = GetTickCount();
     g_headless = getenv("XF_HEADLESS") != NULL;
     if (g_headless)
@@ -234,15 +235,45 @@ int plat_poll(plat_event *ev)
     return 1;
 }
 
+
+/* XF_OUTPUT=<w>x<h>: the output size without a window, for tests. */
+static int headless_output(int *width, int *height)
+{
+    const char *s = getenv("XF_OUTPUT");
+    int w, h;
+    if (!s || sscanf(s, "%dx%d", &w, &h) != 2 || w < 64 || h < 64)
+        return 0;
+    *width = w;
+    *height = h;
+    return 1;
+}
+
+void plat_output_size(int *width, int *height)
+{
+    RECT c;
+    *width = g_init_w;
+    *height = g_init_h;
+    if (g_headless || !g_hwnd) {
+        headless_output(width, height);
+        return;
+    }
+    GetClientRect(g_hwnd, &c);
+    if (c.right >= 64 && c.bottom >= 64) {
+        *width = c.right;
+        *height = c.bottom;
+    }
+}
+
 void plat_present(const u32 *pixels, int width, int height, int pitch)
 {
     if (g_headless || !g_hwnd)
         return;
     g_pixels = pixels;
     g_pitch = pitch;
+    g_width = width;
+    g_height = height;
     g_bmi.bmiHeader.biWidth = pitch;
-    (void)width;
-    (void)height;
+    g_bmi.bmiHeader.biHeight = -height;
     InvalidateRect(g_hwnd, NULL, FALSE);
     UpdateWindow(g_hwnd);
 }

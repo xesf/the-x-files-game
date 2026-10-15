@@ -24,7 +24,8 @@ static GC g_gc;
 static XImage *g_image;
 static u32 *g_scaled;
 static int g_win_w, g_win_h, g_img_w, g_img_h;
-static int g_width, g_height;
+static int g_width, g_height; /* the last frame shown */
+static int g_init_w, g_init_h;
 static Atom g_wm_delete;
 static Cursor g_blank;
 static int g_headless;
@@ -55,8 +56,8 @@ int plat_init(const char *title, int width, int height)
     XColor black;
     int screen;
 
-    g_width = width;
-    g_height = height;
+    g_width = g_init_w = width;
+    g_height = g_init_h = height;
     clock_gettime(CLOCK_MONOTONIC, &g_start);
     /* XF_HEADLESS: no window and no sound, for scripted test runs. */
     g_headless = getenv("XF_HEADLESS") != NULL;
@@ -207,11 +208,45 @@ int plat_poll(plat_event *ev)
     return 0;
 }
 
+
+/* XF_OUTPUT=<w>x<h>: the output size without a window, for tests. */
+static int headless_output(int *width, int *height)
+{
+    const char *s = getenv("XF_OUTPUT");
+    int w, h;
+    if (!s || sscanf(s, "%dx%d", &w, &h) != 2 || w < 64 || h < 64)
+        return 0;
+    *width = w;
+    *height = h;
+    return 1;
+}
+
+void plat_output_size(int *width, int *height)
+{
+    *width = g_init_w;
+    *height = g_init_h;
+    if (g_headless || !g_dpy) {
+        headless_output(width, height);
+        return;
+    }
+    if (g_win_w >= 64 && g_win_h >= 64) {
+        *width = g_win_w;
+        *height = g_win_h;
+    }
+}
+
 void plat_present(const u32 *pixels, int width, int height, int pitch)
 {
     int x, y;
     if (g_headless || !g_dpy)
         return;
+    if (width != g_width || height != g_height) {
+        /* A frame of another size (the wide layout): fit it anew. */
+        g_width = width;
+        g_height = height;
+        fit_view();
+        XClearWindow(g_dpy, g_win);
+    }
     if (!g_image || g_img_w != g_view_w || g_img_h != g_view_h) {
         Visual *vis = DefaultVisual(g_dpy, DefaultScreen(g_dpy));
         free_image();

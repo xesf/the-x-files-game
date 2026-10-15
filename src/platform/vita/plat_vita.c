@@ -2,8 +2,9 @@
  * Copyright (C) 2026 xesf */
 /* PlayStation Vita backend (VitaSDK):
  *
- *   Video     SceDisplay 960x544, 32-bit, double-buffered in CDRAM; the
- *             640x480 frame is scaled to 725x544 and centred.
+ *   Video     SceDisplay 960x544, 32-bit, double-buffered in CDRAM. A
+ *             960x544 frame (the wide layout) is shown as it is; the
+ *             640x480 one is scaled to 725x544 and centred.
  *   Input     The front touch panel points and clicks. The left stick moves
  *             the pointer, Cross clicks, Circle right-clicks, Start is
  *             Escape, the d-pad gives the arrow keys.
@@ -61,12 +62,38 @@ static void push_event(int type, int button, int key)
     g_ev_head = next;
 }
 
+/* Fits a frame of this size to the screen height, centred. */
+static int fit_frame(int width, int height)
+{
+    int i, *map;
+    int view_w = XF_MIN(SCREEN_W, SCREEN_H * width / height);
+    if (!(map = realloc(g_col_map, sizeof(int) * (size_t)view_w)))
+        return -1;
+    g_col_map = map;
+    if (g_width && g_height) {
+        /* the pointer keeps its place on the screen */
+        g_px = g_px * width / g_width;
+        g_py = g_py * height / g_height;
+    }
+    g_width = width;
+    g_height = height;
+    g_view_w = view_w;
+    g_view_x = (SCREEN_W - g_view_w) / 2;
+    for (i = 0; i < g_view_w; i++)
+        g_col_map[i] = i * width / g_view_w;
+    return 0;
+}
+
+void plat_output_size(int *width, int *height)
+{
+    *width = SCREEN_W;
+    *height = SCREEN_H;
+}
+
 int plat_init(const char *title, int width, int height)
 {
     int i;
     (void)title;
-    g_width = width;
-    g_height = height;
     scePowerSetArmClockFrequency(444);
     scePowerSetBusClockFrequency(222);
     for (i = 0; i < 2; i++) {
@@ -77,13 +104,8 @@ int plat_init(const char *title, int width, int height)
         memset(g_fb[i], 0, SCREEN_W * SCREEN_H * 4);
     }
     /* The 4:3 picture fills the height. */
-    g_view_w = SCREEN_H * width / height;
-    g_view_x = (SCREEN_W - g_view_w) / 2;
-    g_col_map = malloc(sizeof(int) * (size_t)g_view_w);
-    if (!g_col_map)
+    if (fit_frame(width, height) != 0)
         return -1;
-    for (i = 0; i < g_view_w; i++)
-        g_col_map[i] = i * width / g_view_w;
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
     sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
     g_px = width / 2.0f;
@@ -180,7 +202,9 @@ void plat_present(const u32 *pixels, int width, int height, int pitch)
     SceDisplayFrameBuf fb;
     u32 *dst = g_fb[g_back];
     int x, y;
-    (void)width;
+    if ((width != g_width || height != g_height) && fit_frame(width, height) == 0)
+        for (x = 0; x < 2; x++) /* clear the bars of both buffers */
+            memset(g_fb[x], 0, SCREEN_W * SCREEN_H * 4);
     for (y = 0; y < SCREEN_H; y++) {
         const u32 *src = pixels + (size_t)(y * height / SCREEN_H) * (size_t)pitch;
         u32 *row = dst + (size_t)y * SCREEN_W + g_view_x;
