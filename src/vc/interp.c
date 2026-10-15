@@ -90,6 +90,7 @@ void vc_interp_free(vc_interp *in)
     free(in->vars);
     free(in->enables);
     free(in->enable_by_target);
+    free(in->tlocals);
     memset(in, 0, sizeof(*in));
 }
 
@@ -257,7 +258,7 @@ static void run_statement(vc_interp *in, locals *loc, const vc_expression *e)
         vc_set_var(in, e->left.value, l);
 }
 
-static void run_list(vc_interp *in, u32 list, const i32 *args, int argc);
+static void run_list(vc_interp *in, u32 list, u32 trigger, const i32 *args, int argc);
 
 static void run_action(vc_interp *in, locals *loc, u32 id)
 {
@@ -307,11 +308,14 @@ static void run_action(vc_interp *in, locals *loc, u32 id)
             /* 0x480FF0 fn_DoActionList(trigger, action list): every call in
              * the data names a VCTrigger and then its action list. */
             u32 list = (u32)operand(in, loc, &a.u.function.args[a.u.function.argc > 1 ? 1 : 0]);
+            u32 trigger = (u32)operand(in, loc, &a.u.function.args[0]);
+            if (vc_class(in->hdb, trigger) != VC_TRIGGER)
+                trigger = 0;
             if (vc_class(in->hdb, list) == VC_TRIGGER) {
                 xf_neo_reader r;
                 list = xf_neo_object(in->hdb, list, &r, NULL, NULL) == 0 ? xf_neo_u32(&r) : 0;
             }
-            run_list(in, list, NULL, 0);
+            run_list(in, list, trigger, NULL, 0);
         } else if (!in->host.call_function || !in->host.call_function(in->host.user, &a)) {
             xf_debug("interp: function %s not implemented", a.u.function.name);
         }
@@ -321,24 +325,56 @@ static void run_action(vc_interp *in, locals *loc, u32 id)
     }
 }
 
-static void run_list(vc_interp *in, u32 list, const i32 *args, int argc)
+struct vc_trigger_locals {
+    u32 trigger;
+    locals l;
+};
+
+/* The parameters of a trigger, kept from run to run. */
+static locals *trigger_locals(vc_interp *in, u32 trigger)
+{
+    u32 i;
+    for (i = 0; i < in->tlocal_count; i++)
+        if (in->tlocals[i].trigger == trigger)
+            return &in->tlocals[i].l;
+    if (in->tlocal_count == in->tlocal_cap) {
+        u32 cap = in->tlocal_cap ? in->tlocal_cap * 2 : 64;
+        struct vc_trigger_locals *t = realloc(in->tlocals, sizeof(*t) * cap);
+        if (!t)
+            return NULL;
+        in->tlocals = t;
+        in->tlocal_cap = cap;
+    }
+    memset(&in->tlocals[in->tlocal_count], 0, sizeof(in->tlocals[0]));
+    in->tlocals[in->tlocal_count].trigger = trigger;
+    return &in->tlocals[in->tlocal_count++].l;
+}
+
+static void run_list(vc_interp *in, u32 list, u32 trigger, const i32 *args, int argc)
 {
     u32 ids[MAX_LIST];
-    locals loc;
+    locals scratch, *loc = NULL;
     int n, i;
     if (!list || in->depth >= MAX_DEPTH)
         return;
-    memset(&loc, 0, sizeof(loc));
+    if (trigger)
+        loc = trigger_locals(in, trigger);
+    if (!loc) {
+        memset(&scratch, 0, sizeof(scratch));
+        loc = &scratch;
+    }
     for (i = 0; i < argc && i < 8; i++)
-        loc.ints[i] = args[i];
+        loc->ints[i] = args[i];
     n = vc_read_list(in->hdb, list, ids, MAX_LIST);
     in->depth++;
     for (i = 0; i < n; i++)
-        run_action(in, &loc, ids[i]);
+        run_action(in, loc, ids[i]);
     in->depth--;
 }
 
-void vc_run_action_list(vc_interp *in, u32 list) { run_list(in, list, NULL, 0); }
+void vc_run_action_list(vc_interp *in, u32 list) { run_list(in, list, 0, NULL, 0); }
+
+size_t vc_trigger_locals_size(void) { return sizeof(struct vc_trigger_locals); }
 
 void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)
 {
@@ -353,7 +389,7 @@ void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)
         actions = xf_neo_u32(&r);
         k = xf_neo_u8(&r);
         if (k == kind && vc_is_enabled(in, ids[i]))
-            vc_run_action_list(in, actions);
+            run_list(in, actions, ids[i], NULL, 0);
     }
 }
 
@@ -393,7 +429,7 @@ void vc_run_timer_triggers(vc_interp *in, u32 trigger_list, int timer)
         if (!listens)
             continue;
         in->context = timer;
-        run_list(in, actions, NULL, 0);
+        run_list(in, actions, ids[i], NULL, 0);
     }
     in->context = saved;
 }

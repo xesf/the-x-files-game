@@ -139,7 +139,10 @@ static int cmd_asset(int argc, char **argv)
             continue;
         }
         vc_read_name(&db, r.name, name, sizeof(name));
-        printf("%u: kind %u, \"%s\" (%s)\n", id, r.kind, r.logical, name);
+        printf("%u: kind %u, \"%s\" (%s)", id, r.kind, r.logical, name);
+        if (r.triggers)
+            printf(" triggers %u", r.triggers);
+        printf("\n");
         for (i = 0; i < r.entry_count; i++)
             printf("    disc %d: %s %u..%u\n", r.entries[i].disc, r.entries[i].path, r.entries[i].start,
                    r.entries[i].end);

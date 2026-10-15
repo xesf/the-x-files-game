@@ -41,6 +41,11 @@ typedef struct {
     u32 *enable_by_target;    /* indexes into enables, sorted by target */
     vc_host host;
     i32 context;              /* value of the event that runs the triggers (operand kind 4) */
+    /* Parameters (locals) belong to the trigger that runs a list and keep
+     * their values between runs: 0x40C2B0 makes the trigger the context
+     * of each queued action, and parameter operands read it. */
+    struct vc_trigger_locals *tlocals;
+    u32 tlocal_count, tlocal_cap;
     int depth;
     int trace;                /* print every action */
 } vc_interp;
@@ -60,6 +65,8 @@ void vc_set_enabled(vc_interp *in, u32 hdb_object, int on);
 
 /* Runs every action of an action list. */
 void vc_run_action_list(vc_interp *in, u32 list);
+/* Size of one entry of `tlocals`, for saving and restoring them. */
+size_t vc_trigger_locals_size(void);
 /* Runs the triggers of `kind` in a trigger list. */
 void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind);
 

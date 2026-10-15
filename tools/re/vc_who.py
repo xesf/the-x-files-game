@@ -85,6 +85,8 @@ for a, (c, o) in sorted(rec.items()):
     if not hit:
         continue
     for l in lists.get(a, []):
+        if not trig_of_list.get(l):
+            print("action %d in list %d (no trigger runs this list)" % (a, l))
         for tr, kind in trig_of_list.get(l, []):
             for tl in lists.get(tr, []):
                 print("action %d in list %d, trigger %d kind %d, trigger list %d, owner %s"

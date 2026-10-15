@@ -68,7 +68,7 @@ Operand kinds:
 | Kind | Meaning |
 |---|---|
 | 0 | A game variable, by ID |
-| 1 | A parameter of the current action list: 0–7 integers, 10000–10011 booleans, 20000–20003 bytes |
+| 1 | A parameter: 0–7 integers, 10000–10011 booleans, 20000–20003 bytes. Parameters belong to the trigger that runs the list and keep their values from one run to the next (see below) |
 | 2 | A literal number |
 | 3 | A character, for example `'A'`; compared with character variables such as `cSubNode` |
 | 4 | The value of the event that runs the trigger: the timer number for a timer (see [Timers](#timers)), the key for a key press |
@@ -201,3 +201,16 @@ python3 -I tools/re/vc_functions.py path/to/xfiles.exe   # function table
 The action data layout and the operand kinds follow the developer tools
 of the X-Files PC enhancement patch; we checked them against the
 byte-swap routine in the executable and against all actions in the data.
+
+## Parameters keep their values
+
+`QueuedAction_ctor` (0x40C2B0) makes the trigger the context of every
+action it queues, and parameter operands are read from that context. So
+the parameters of a trigger's list survive between runs. Lists that want
+a fresh count start with `param0 = 0`; others count on purpose. On the
+boat in Disc 3, Astadourian's 2-second timer adds 1 to `param0` on each
+tick (and 1 more for each clue found), and Arley's "We're done here"
+plays when it reaches 4. `DoActionList(trigger, list)` runs the list
+with that trigger's parameters. A list run without a trigger gets fresh
+parameters.
+

@@ -357,6 +357,7 @@ typedef struct {
     game *copy;
     vc_var *vars;
     vc_enable *enables;
+    void *tlocals;
 } snapshot;
 
 static int snap_take(game *g, snapshot *sn)
@@ -364,9 +365,11 @@ static int snap_take(game *g, snapshot *sn)
     sn->copy = malloc(sizeof(*g));
     sn->vars = malloc(sizeof(vc_var) * g->interp.var_count + 1);
     sn->enables = malloc(sizeof(vc_enable) * g->interp.enable_count + 1);
-    if (!sn->copy || !sn->vars || !sn->enables)
+    sn->tlocals = malloc(vc_trigger_locals_size() * g->interp.tlocal_count + 1);
+    if (!sn->copy || !sn->vars || !sn->enables || !sn->tlocals)
         return -1;
     *sn->copy = *g;
+    memcpy(sn->tlocals, g->interp.tlocals, vc_trigger_locals_size() * g->interp.tlocal_count);
     memcpy(sn->vars, g->interp.vars, sizeof(vc_var) * g->interp.var_count);
     memcpy(sn->enables, g->interp.enables, sizeof(vc_enable) * g->interp.enable_count);
     return 0;
@@ -374,7 +377,13 @@ static int snap_take(game *g, snapshot *sn)
 
 static void snap_restore(game *g, const snapshot *sn)
 {
-    *g = *sn->copy; /* the arrays the interpreter points to are the same */
+    /* The trigger parameters may have grown (and moved) since. */
+    void *tl = g->interp.tlocals;
+    u32 cap = g->interp.tlocal_cap;
+    *g = *sn->copy; /* the variable and enable arrays are the same */
+    g->interp.tlocals = tl;
+    g->interp.tlocal_cap = cap;
+    memcpy(g->interp.tlocals, sn->tlocals, vc_trigger_locals_size() * g->interp.tlocal_count);
     memcpy(g->interp.vars, sn->vars, sizeof(vc_var) * g->interp.var_count);
     memcpy(g->interp.enables, sn->enables, sizeof(vc_enable) * g->interp.enable_count);
 }
@@ -384,6 +393,7 @@ static void snap_free(snapshot *sn)
     free(sn->copy);
     free(sn->vars);
     free(sn->enables);
+    free(sn->tlocals);
 }
 
 static void probe_one(script *s, const snapshot *sn, u32 view, u32 id, const char *item)
@@ -418,8 +428,11 @@ static void probe_one(script *s, const snapshot *sn, u32 view, u32 id, const cha
         en += g->interp.enables[i].enabled != sn->enables[i].enabled;
     printf("  %u at view %u:%s  vars %d, enables %d%s", id, view, clips, vars, en,
            g->view != view ? "" : "\n");
-    if (g->view != view)
-        printf(" -> view %u\n", g->view);
+    if (g->view != view) {
+        char name[160];
+        view_name(g, g->view, name, sizeof(name));
+        printf(" -> view %u (%s)\n", g->view, name);
+    }
 }
 
 static void probe(script *s, const char *item)
