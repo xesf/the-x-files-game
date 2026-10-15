@@ -29,6 +29,7 @@ static int cmd_play(int argc, char **argv)
     /* Save and Load screens write here; none unless set. */
     if (getenv("XF_SAVE_DIR"))
         snprintf(g->save_dir, sizeof(g->save_dir), "%s", getenv("XF_SAVE_DIR"));
+    game_prefs_load(g);
     memset(&s, 0, sizeof(s));
     s.g = g;
     failed = script_run(&s, argv[2], 0);

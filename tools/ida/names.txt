@@ -441,3 +441,7 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4A4C40 journal_show  JournalInit: the enabled texts of item 49422 in 46370 and 46371, from the front or the last entries
 0x4C9D40 pda_addr_init  PDAInitAddr: the address cards (enabled media of item 45307), card 0x6B6540 in item 35320
 0x4C9AD0 pda_addr_flip  PDAFlipAddr: 0 next, 1 previous, 4 read the cards again, 2/3 media 42906 and 42908 on/off
+0x500810 pref_action_diff  PrefActionDiff: cycles S, H, E (table 0x65CFFC) and writes the variable
+0x500A50 pref_volume  the volume settings: a slider step, 0 and 11 the arrows
+0x500760 pref_defaults  PrefDefaults: 'Q' best quality (0x4C1830), 'P' best performance (0x4C1700)
+0x4FEA20 ai_icon_show  the Artificial Intuition icon, only with the preference on

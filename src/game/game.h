@@ -87,6 +87,7 @@ typedef struct {
 /* The Artificial Intuition icon (a VCEvidenceIcon) in the inventory row. */
 #define GAME_AI_ICON 56185
 #define GAME_PLAYED 32
+#define GAME_PREFS 24
 
 /* Requests from the game to the window. */
 enum { GAME_UI_NONE, GAME_UI_MENU, GAME_UI_GAME, GAME_UI_LOAD };
@@ -217,6 +218,7 @@ typedef struct {
     int note_page_order;  /* that page's place in the page table */
     int journal_page, bible_page; /* the left page of each book */
     int sbase_typed;      /* letters in the secret base password box */
+    i32 prefs[GAME_PREFS]; /* the Options screen's settings (see game.c) */
     int pda_card;         /* the PDA address book's card shown (0x6B6540) */
     int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
@@ -368,6 +370,13 @@ const game_iface_item *game_find_item(game *g, u32 id);
 /* Whether the Artificial Intuition icon glows: a hint is ready. */
 int game_ai_glowing(game *g);
 
+/* Preferences: read from the save folder's "prefs" file (after
+ * save_dir is set), written back on each change; game_pref gives one by
+ * its GAM variable. */
+void game_prefs_load(game *g);
+void game_prefs_apply(game *g);
+i32 game_pref(const game *g, u32 var);
+
 /* Saved games (save.c). game_save_mem returns a malloc'd buffer. Loading
  * starts from a fresh game, restores the state and enters the saved
  * view. */
@@ -382,6 +391,8 @@ int game_save_file_name(const char *path, char *name, size_t name_size);
  * in save_dir. GAME_UI_LOAD asks the window to call game_load_slot with
  * load_slot; "Previous" loads the slot used last. */
 void game_open_slots(game *g, int save);
+/* Opens an interface layout, as the menu's Options and Help items do. */
+void game_open_layout(game *g, u32 layout);
 void game_close_slots(game *g);
 /* Back to a fresh start, as before game_new. */
 int game_reset(game *g);

@@ -1,0 +1,18 @@
+# The Options screen (menu Options, layout 49738): the Game Play tab's
+# settings toggle and cycle, and the hint icon follows Artificial
+# Intuition. Needs XF_SAVE_DIR (make playtest sets it): the settings are
+# saved there.
+new
+open 49738
+click 49751                     # the Game Play tab
+expect var 873 1                # Artificial Intuition: on
+click 50061
+expect var 873 0                # off
+click 50066                     # Action Scene Difficulty: Standard -> Hard
+expect var 991 72
+click 50066                     # -> Easy
+expect var 991 69
+click 50066                     # -> Standard
+expect var 991 83
+click 50061                     # Artificial Intuition back on
+expect var 873 1

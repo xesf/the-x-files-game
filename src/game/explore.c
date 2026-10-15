@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "audio/mixer.h"
 #include "game/game.h"
 #include "game/script.h"
 #include "gfx/text.h"
@@ -637,6 +638,14 @@ static void draw_ifaces(explorer *e)
 
 /* --- Clips and sounds ------------------------------------------------ */
 
+/* A player's mixer volume: its preference (0-100) times the game volume
+ * (Pref_iVolumeGame). */
+static void set_volume(explorer *e, const xf_player *p, u32 pref)
+{
+    if (p->channel >= 0)
+        xf_mixer_set_volume(p->channel, (int)(game_pref(e->g, pref) * game_pref(e->g, 979) * 256 / 10000));
+}
+
 /* Starts the next queued clip. A clip missing on disk still runs its
  * triggers, so the story goes on; if the location card belongs to it,
  * the card is shown alone for its typing time plus two seconds. */
@@ -655,6 +664,7 @@ static void start_next_media(explorer *e)
                                          a.entries[j].start + game_clip_offset(e->g, m.asset),
                                          a.entries[j].end) == 0) {
                     e->have_clip = 1;
+                    set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
                     xf_info("playing %s (%s)", a.logical, a.entries[j].path);
                 }
             }
@@ -698,8 +708,10 @@ static void update_sound(explorer *e)
         if (vc_read_asset_ref(&e->g->db, e->g->sound, &a) == 0) {
             for (j = 0; j < a.entry_count && !e->sound_open; j++)
                 if (resolve_media(e, a.entries[j].path, e->sound_path, sizeof(e->sound_path)) == 0 &&
-                    xf_player_open(&e->sound, e->sound_path, now) == 0)
+                    xf_player_open(&e->sound, e->sound_path, now) == 0) {
                     e->sound_open = 1;
+                    set_volume(e, &e->sound, 978); /* Pref_iVolumeEffect */
+                }
             e->sound_loop = strstr(a.logical, "/Loops/") != NULL || e->g->sound_looped;
             xf_info("sound %s%s", a.logical, e->sound_open ? "" : ": no file on disk");
         }
@@ -1071,8 +1083,8 @@ static void draw_icons(explorer *e, int mx, int my)
             memcpy(&e->fb[(ICON_Y + y) * SCREEN_W + x0], an->video.frame + (size_t)y * an->video.width,
                    (size_t)w * 4);
     }
-    /* Rolling over an icon shows what it does. */
-    if (hover >= 0 && e->have_font) {
+    /* Rolling over an icon shows what it does (Pref_bRolloverText). */
+    if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
         game_icon ic;
         char name[128] = "", *dash;
         if (game_read_icon(e->g, e->icon_ids[hover], &ic) == 0)
@@ -1133,6 +1145,13 @@ static void inv_pos(const explorer *e, int i, int *x, int *y)
     *y = row ? INV_Y - INV_H - INV_ROW_GAP : INV_Y;
 }
 
+/* The inventory shows when the pointer is low on the screen (higher
+ * when a lab's evidence row is up). */
+static int inv_reveal(const explorer *e)
+{
+    return e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL;
+}
+
 static int inv_at(explorer *e, int x, int y)
 {
     int i;
@@ -1156,7 +1175,7 @@ static void draw_inventory(explorer *e, int mx, int my)
         inv_pos(e, i, &x, &y);
         blit_keyed(e, img, x, y);
     }
-    if (hover >= 0 && e->have_font) {
+    if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
         char name[96] = "";
         xf_neo_reader r;
         if (xf_neo_object(&e->g->db, e->inv_ids[hover], &r, NULL, NULL) == 0)
@@ -1405,7 +1424,7 @@ static void draw(explorer *e, int mx, int my)
     refresh_icons(e);
     if (e->playing) {
         const u32 *f = e->have_clip ? xf_player_frame(&e->player) : NULL;
-        const char *sub = e->have_clip ? xf_player_subtitle(&e->player) : NULL;
+        const char *sub = e->have_clip && game_pref(e->g, 2573) ? xf_player_subtitle(&e->player) : NULL; /* Pref_bClosedCaptioning */
         int cx = PICTURE_X, cy = PICTURE_Y, cw = PICTURE_W, ch = PICTURE_H;
         if (f) {
             /* Scene clips fill the picture area; other clips (logos, titles)
@@ -1461,7 +1480,7 @@ static void draw(explorer *e, int mx, int my)
     if (g->talking)
         draw_dialog(e, mx, my);
     refresh_inventory(e);
-    if (my >= (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL) && !g->iface_count)
+    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V') && !g->iface_count) /* Pref_cInventory */
         draw_inventory(e, mx, my);
     draw_ifaces(e);
     draw_overlay(e);
@@ -1613,7 +1632,7 @@ static void queue_intro(explorer *e)
 {
     static const u32 intro[] = { 56003, 56002, 19668, 56001 };
     size_t i;
-    if (getenv("XF_SKIP_INTRO"))
+    if (getenv("XF_SKIP_INTRO") || game_pref(e->g, 994)) /* Pref_bSkipIntro */
         return;
     for (i = 0; i < XF_COUNT(intro); i++)
         game_queue_media(e->g, intro[i]);
@@ -1844,6 +1863,9 @@ static void run_frame(explorer *e)
                 menu_close(e);
                 if (game_load_previous(e->g) != 0)
                     menu_enter(e);
+            } else if (item == 4 || item == 5) { /* Options, Help: HDB layouts */
+                menu_close(e);
+                game_open_layout(e->g, item == 4 ? 49738 : 50460);
             } else if (item == 6) { /* Quit */
                 e->running = 0;
             }
@@ -1851,7 +1873,7 @@ static void run_frame(explorer *e)
             e->mx = ev.x;
             e->my = ev.y;
             if (!e->playing) {
-                int reveal = e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL;
+                int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
                 int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
                 game_hover(e->g, e->mx, e->my);
                 game_hover_inventory(e->g, inv >= 0 ? e->inv_ids[inv] : 0, inv >= e->inv_items);
@@ -1865,14 +1887,20 @@ static void run_frame(explorer *e)
                    clip_shot(e, ev.x, ev.y)) {
             stop_media(e); /* a shot: the clip ends without its end triggers */
         } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
-            if (!e->card_active)
-                finish_media(e); /* skip the clip; the location card cannot be skipped */
+            /* Pref_bSkipClips: "Right/Command + Click to Skip Video Clip".
+             * The opening titles skip with any click or key. The location
+             * card cannot be skipped. */
+            int skip = e->in_menu == -1 ||
+                       (game_pref(e->g, 995) && ev.type == PLAT_EV_MOUSE_DOWN &&
+                        (ev.button == PLAT_MOUSE_RIGHT || (ev.mods & (PLAT_MOD_CMD | PLAT_MOD_CTRL))));
+            if (skip && !e->card_active)
+                finish_media(e);
         } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && icon_at(e, ev.x, ev.y) >= 0) {
             game_click_icon(e->g, e->icon_ids[icon_at(e, ev.x, ev.y)]);
         } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
             /* Layout items first (a close-up covers everything), then
              * the dialogue box, the inventory, then the view. */
-            int reveal = e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL;
+            int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
             int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
             if (game_iface_item_at(e->g, ev.x, ev.y))
                 game_click(e->g, ev.x, ev.y);
@@ -2043,6 +2071,7 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         snprintf(e->g->save_dir, sizeof(e->g->save_dir), "%s", getenv("XF_SAVE_DIR"));
     else if (plat_save_dir(e->g->save_dir, sizeof(e->g->save_dir)) != 0)
         e->g->save_dir[0] = '\0';
+    game_prefs_load(e->g);
     e->disc = disc;
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)

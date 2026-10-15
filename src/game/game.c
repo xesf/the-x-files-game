@@ -18,6 +18,7 @@ static u32 inventory_triggers(game *g, u32 id);
 static void set_item_text(game *g, u32 item, const char *text);
 static int photo_function(game *g, const char *name, int argc, const vc_operand *args);
 static int book_function(game *g, const char *name, int argc, const vc_operand *args);
+static int pref_function(game *g, const char *name, int argc, const vc_operand *args);
 static void note_text(game *g, u32 asset, char *out, size_t size);
 static void media_search(game *g);
 static const u32 g_note_pages[23];
@@ -883,7 +884,7 @@ int game_inventory(game *g, u32 *ids, int max)
     for (i = 0; i < g->db.count && k < max; i++)
         if (g->db.entries[i].class_id == VC_INVENTORY && vc_is_enabled(&g->interp, g->db.entries[i].id))
             ids[k++] = g->db.entries[i].id;
-    if (g->ai_list && k < max)
+    if (g->ai_list && k < max && game_pref(g, 873)) /* Pref_bArtificialIntuition (0x4FEA20) */
         ids[k++] = AI_ICON; /* Artificial Intuition: a hint is ready */
     return k;
 }
@@ -2149,6 +2150,147 @@ static int photo_function(game *g, const char *name, int argc, const vc_operand 
     return 0;
 }
 
+/* --- Preferences (the Options screen) ---------------------------------- */
+
+/* Each preference is a GAM variable (Pref_...); the engine keeps them in
+ * its own preferences object (0x468120), so they outlive a new game or a
+ * load, and in the registry. We keep them in g->prefs and in the file
+ * "prefs" of the save folder. */
+static const u32 g_pref_vars[GAME_PREFS] = {
+    2572, 981, 990, 989, 993, 991, 873, 992, 994, 995, 982, 2573,
+    985, 986, 987, 988, 983, 4210, 5046, 976, 977, 978, 979, 980,
+};
+
+static int pref_index(u32 var)
+{
+    int i;
+    for (i = 0; i < GAME_PREFS; i++)
+        if (g_pref_vars[i] == var)
+            return i;
+    return -1;
+}
+
+i32 game_pref(const game *g, u32 var)
+{
+    int i = pref_index(var);
+    return i < 0 ? 0 : g->prefs[i];
+}
+
+/* Writes the preferences into their variables (after a new game or a
+ * load: the GAM holds the shipped values). */
+void game_prefs_apply(game *g)
+{
+    int i;
+    for (i = 0; i < GAME_PREFS; i++)
+        vc_set_var(&g->interp, g_pref_vars[i], g->prefs[i]);
+}
+
+static void prefs_save(game *g)
+{
+    char path[1024];
+    FILE *f;
+    int i;
+    if (!g->save_dir[0])
+        return;
+    snprintf(path, sizeof(path), "%s/prefs", g->save_dir);
+    if (!(f = fopen(path, "w")))
+        return;
+    for (i = 0; i < GAME_PREFS; i++)
+        fprintf(f, "%u %d\n", g_pref_vars[i], g->prefs[i]);
+    fclose(f);
+}
+
+void game_prefs_load(game *g)
+{
+    char path[1024];
+    FILE *f;
+    unsigned var;
+    int value, i;
+    for (i = 0; i < GAME_PREFS; i++) /* the shipped values first */
+        g->prefs[i] = vc_get_var(&g->interp, g_pref_vars[i]);
+    /* Artificial Intuition is on unless the player turns it off: the GAM
+     * says 0, but the story needs it (Cook takes the case files only with
+     * it on, on Disc 1). */
+    g->prefs[pref_index(873)] = 1;
+    snprintf(path, sizeof(path), "%s/prefs", g->save_dir);
+    if (g->save_dir[0] && (f = fopen(path, "r"))) {
+        while (fscanf(f, "%u %d", &var, &value) == 2)
+            if ((i = pref_index(var)) >= 0)
+                g->prefs[i] = value;
+        fclose(f);
+    }
+    game_prefs_apply(g);
+}
+
+static void pref_set(game *g, u32 var, i32 value)
+{
+    int i = pref_index(var);
+    if (i >= 0)
+        g->prefs[i] = value;
+    vc_set_var(&g->interp, var, value);
+    prefs_save(g);
+}
+
+/* The Pref... functions: yes/no settings toggle, lettered ones cycle
+ * (0x500810 for the difficulty: S, H, E), volumes take a slider step. */
+static int pref_function(game *g, const char *name, int argc, const vc_operand *args)
+{
+    static const struct {
+        const char *name;
+        const char *cycle; /* letters to cycle through, NULL for yes/no */
+    } prefs[] = {
+        { "PrefActionDiff", "SHE" }, { "PrefAutoRes", "AYN" }, { "PrefAutoDepth", "AYN" },
+        { "PrefSaveOnExit", "AYN" }, { "PrefFlashBeam", "MWN" }, { "PrefFlashBrght", "MHL" },
+        { "PrefInventory", "HV" },   { "PrefArtIntuit", NULL }, { "PrefAutoRewind", NULL },
+        { "PrefSkipIntro", NULL },   { "PrefSkipVideo", NULL },  { "PrefRollover", NULL },
+        { "PrefClosedCap", NULL },   { "PrefSubliminal", NULL }, { "PrefTransition", NULL },
+        { "PrefTranslucnt", NULL },  { "PrefSmoothText", NULL }, { "PrefHighVideo", NULL },
+        { "PrefLiveEnviro", NULL },  { "Pref3DSound", NULL },
+    };
+    size_t k;
+    u32 var = argc >= 1 && args[0].kind == VC_OPND_VARIABLE ? args[0].value : 0;
+    for (k = 0; k < XF_COUNT(prefs); k++)
+        if (strcmp(name, prefs[k].name) == 0 && var) {
+            i32 v = vc_get_var(&g->interp, var);
+            if (prefs[k].cycle) {
+                const char *c = strchr(prefs[k].cycle, (char)v);
+                v = c && c[1] ? c[1] : prefs[k].cycle[0];
+            } else
+                v = !v;
+            pref_set(g, var, v);
+            return 1;
+        }
+    /* 0x500A50: a volume slider, 0 to 100; step 0 and 11 are the arrows */
+    if ((strcmp(name, "PrefDialogVol") == 0 || strcmp(name, "PrefMusicVol") == 0 ||
+         strcmp(name, "PrefEffectVol") == 0 || strcmp(name, "PrefVolume") == 0) && argc == 2 && var) {
+        i32 step = arg_value(g, &args[1]), v = vc_get_var(&g->interp, var);
+        v = step == 0 ? v - 10 : step == 11 ? v + 10 : step * 10;
+        pref_set(g, var, XF_CLAMP(v, 0, 100));
+        return 1;
+    }
+    /* 0x481230 fn_PrefInit, 0x4B5800 fn_AudioInit: the screen shows the
+     * settings, read from the variables */
+    if (strcmp(name, "PrefInit") == 0 || strcmp(name, "AudioInit") == 0) {
+        game_prefs_apply(g);
+        return 1;
+    }
+    /* 0x4B8C30 fn_PrefDefaults(preset) -> 0x500760: 'Q' best quality,
+     * 'P' best performance (0x4C1830, 0x4C1700) */
+    if (strcmp(name, "PrefDefaults") == 0 && argc == 1) {
+        int q = (char)arg_value(g, &args[0]) == 'Q';
+        pref_set(g, 990, q ? 'W' : 'N');
+        pref_set(g, 989, q ? 'H' : 'L');
+        pref_set(g, 986, q);
+        pref_set(g, 987, q);
+        pref_set(g, 988, q);
+        pref_set(g, 4210, q);
+        pref_set(g, 5046, q);
+        pref_set(g, 980, q);
+        return 1;
+    }
+    return 0;
+}
+
 /* --- Books: Willmore's journal, Scully's Bible ------------------------- */
 
 /* A book shows two texts side by side: the enabled media of one item. */
@@ -2524,6 +2666,11 @@ static int slot_function(game *g, const char *name, int argc, const vc_operand *
         return 1;
     }
     return 0;
+}
+
+void game_open_layout(game *g, u32 layout)
+{
+    host_interface(g, layout, 0);
 }
 
 void game_close_slots(game *g)
@@ -3448,7 +3595,7 @@ static int host_call_function(void *user, const vc_action *a)
      * (string 0x27), else goes back to the main menu. */
     if (strcmp(name, "EndGame") == 0 && argc == 1) {
         g->game_over = 1 + (arg_value(g, &args[0]) != 0);
-        if (g->game_over == 2 && g->checkpoint)
+        if (g->game_over == 2 && g->checkpoint && game_pref(g, 992)) /* Pref_bAutoRewind */
             game_message(g, 39, GAME_ASK_RESTORE); /* "Try again?" */
         xf_info("game over");
         return 1;
@@ -3635,6 +3782,8 @@ static int host_call_function(void *user, const vc_action *a)
     if (photo_function(g, name, argc, args))
         return 1;
     if (book_function(g, name, argc, args))
+        return 1;
+    if (pref_function(g, name, argc, args))
         return 1;
     /* 0x4B7930 fn_PDAInitAddr -> 0x4C9D40, 0x4B78B0 fn_PDAFlipAddr(mode)
      * -> 0x4C9AD0: the PDA's address book, a card at a time from the
@@ -3949,11 +4098,9 @@ static int host_call_function(void *user, const vc_action *a)
         return 1;
     }
     /* RegPreferences registers the 24 preference variables; the engine
-     * fills them from the player's settings. We keep the GAM defaults,
-     * except Artificial Intuition (argument 1), which is on: Disc 1
-     * cannot go on without it (Cook only takes the case files with it). */
-    if (strcmp(name, "RegPreferences") == 0 && argc > 1)
-        vc_set_var(&g->interp, args[1].value, 1);
+     * fills them from the player's settings (game_prefs_apply). */
+    if (strcmp(name, "RegPreferences") == 0)
+        game_prefs_apply(g);
     if (strncmp(name, "Reg", 3) == 0 && g->reg_count < (int)XF_COUNT(g->regs)) {
         game_registration *r = &g->regs[g->reg_count++];
         memcpy(r->name, name, sizeof(r->name));
@@ -4051,6 +4198,7 @@ int game_open(game *g, const char *data_dir)
         memset(&g->engine_strings, 0, sizeof(g->engine_strings)); /* English fallbacks */
     vc_place_map_build(&g->db, &g->places);
     xf_info("%u views placed in the hierarchy", g->places.count);
+    game_prefs_load(g); /* the shipped values until save_dir is known */
     return 0;
 }
 
@@ -4088,6 +4236,7 @@ int game_new(game *g)
     vc_run_triggers(&g->interp, xf_neo_u32(&r), 8);
     start = g->pending_view;
     g->pending_view = 0;
+    game_prefs_apply(g);
     xf_info("new game: %d engine registrations, start view %u", g->reg_count, start);
     return start ? game_enter_view(g, start) : -1;
 }

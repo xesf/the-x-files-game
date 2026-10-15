@@ -297,11 +297,13 @@ int game_reset(game *g)
     char save_dir[sizeof(g->save_dir)];
     u32 now = g->now;
     u8 play_once[sizeof(g->play_once)];
+    i32 prefs[GAME_PREFS];
     serials[0] = g->iface_serial;
     serials[1] = g->sound_serial;
     serials[2] = g->fade_serial;
     serials[3] = g->overlay_serial;
     memcpy(play_once, g->play_once, sizeof(play_once)); /* per session, like the original */
+    memcpy(prefs, g->prefs, sizeof(prefs));
     memcpy(dir, g->data_dir, sizeof(dir));
     memcpy(save_dir, g->save_dir, sizeof(save_dir));
     g->checkpoint = NULL;
@@ -318,6 +320,8 @@ int game_reset(game *g)
     g->checkpoint_size = cp_size;
     g->now = now;
     memcpy(g->play_once, play_once, sizeof(play_once));
+    memcpy(g->prefs, prefs, sizeof(prefs));
+    game_prefs_apply(g);
     memcpy(g->save_dir, save_dir, sizeof(save_dir));
     return 0;
 }
@@ -475,6 +479,7 @@ int game_load_mem(game *g, const u8 *data, size_t size)
         t->due = g->now + timers[k * 3 + 1];
         t->period = timers[k * 3 + 2];
     }
+    game_prefs_apply(g); /* the preferences are not part of a save */
     if (!view || game_resume_view(g, view) != 0) {
         xf_warn("save: no view to go to");
         return -1;

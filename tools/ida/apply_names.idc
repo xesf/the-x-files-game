@@ -442,5 +442,9 @@ static main()
     set_name(0x4A4C40, "journal_show", SN_NOWARN);
     set_name(0x4C9D40, "pda_addr_init", SN_NOWARN);
     set_name(0x4C9AD0, "pda_addr_flip", SN_NOWARN);
+    set_name(0x500810, "pref_action_diff", SN_NOWARN);
+    set_name(0x500A50, "pref_volume", SN_NOWARN);
+    set_name(0x500760, "pref_defaults", SN_NOWARN);
+    set_name(0x4FEA20, "ai_icon_show", SN_NOWARN);
     msg("names applied\n");
 }
