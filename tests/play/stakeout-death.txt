@@ -1,0 +1,148 @@
+# The guide's warning on Day 1: at the night stakeout, leaving the hiding
+# place before the intruders go in gets Willmore killed. No checkpoint
+# yet, so the game ends with no Try again.
+include disc1.txt
+expect view 6548
+
+click 22631                     # the motel clerk
+state
+hold Badge
+click 22631                     # flash the badge
+hold none
+click 22631
+state
+askall 22631                    # badge shown: ask her everything, then go to the rooms
+expect view 6578                # Mulder's room
+expect iface 83579              # her note with the rental car's plate
+click 83585                     # put it away
+walk 31395                      # the phone in the room: Willmore notes it
+expect enabled 21927 1          # idea: motel phone
+walk 6622                       # Scully's room, Skinner
+askall 22760                    # includes the motel phone idea
+walk 6661                       # Scully's Powerbook on the desk
+click 39617
+walk 6548                       # back to the clerk
+askall 22631                    # motel phone: the record of calls
+expect iface 39183
+click 39202                     # put the record away
+dial 12025550149                # the D.C. number: Frohike answers
+
+# Back to the Field Office to trace the other number.
+inv 17451                       # PDA
+click 58726                     # Seattle
+click 59118                     # FBI Field Office
+walk 1237                       # Willmore's desk; Scully's laptop stays by the door
+click 29855                     # the computer
+ing P Z 2065550182                # ING phone search (typed in the original)
+expect var 5051 1               # the Dockside Warehouse
+click 31620                     # leave the computer
+inv 17451
+click 58726
+expect enabled 34072 1          # the warehouse is on the Seattle map
+click 59712                     # the Dockside Warehouse
+expect view 26014
+expect noiface 17365
+walk 3197                       # the back door
+hold Lockpick
+click 26691                     # pick the lock
+hold none
+click 84769                     # go in
+expect view 3756
+walk 2497
+click 30818                     # Skinner goes to check the back office
+expect var 4817 1
+
+# Evidence in the main area.
+walk 7308                       # the bullet in the pillar
+hold EvidenceKit
+click 27443
+expect var 3074 1               # bullet collected
+walk 3699                       # the blood at Willmore's feet
+click 27951
+expect var 3073 1               # blood collected
+walk 3730                       # a cigarette butt (Morley)
+click 28149
+hold none
+
+# The crowbar is in a tool box on the dark mezzanine: the flashlight
+# opens the way up the stairs.
+walk 3713                       # the back office, by the stairs
+click 6202                      # up the stairs
+inv 17438                       # the flashlight
+walk 5835
+click 26602                     # the tool box: the crowbar
+walk 3721                       # back down, to the crates
+click 32317
+hold Crowbar
+click 28030                     # pry the crate open
+hold none
+hold EvidenceKit
+click 32294                     # the black powder
+hold none
+
+# Skinner waits in the office; the office loop puts him there.
+walk 2308
+expect enabled 22606 1
+askall 22606
+
+# Out the back to the docks: James Wong, washing his boat.
+walk 26030
+walk 4605
+hold Badge
+click 81880
+hold none
+askall 23532                    # the fish icon comes up during the talk
+expect choice 23582
+
+# Skinner by the car: the sedan has been following them.
+walk 3131
+askall 26892
+click 32351                     # a step towards the car
+inv 17426                       # the camera: photograph the plate
+expect photo 79662
+
+# The Crime Lab: hand the evidence to Amis from the evidence bar.
+inv 17451
+click 58726
+click 59133                     # King County Crime Lab
+click 88655                     # get Amis to the window
+evidence 17469                  # black powder: harmless industrial lead
+evidence 17465                  # the cigarette butt
+evidence 21838                  # the bullet
+evidence 17473                  # the blood
+expect enabled 17469 0
+
+# The Field Office: Skinner in the meeting room, then he flies back to
+# D.C.; Cook takes Scully's PowerBook to Computer Crimes.
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+walk 1215
+askall 39118
+walk 1237                       # Willmore's desk: Cook comes in
+click 40587
+ask 40595                       # "Well, they're still missing"
+ask 40655                       # Computer Crimes can check the PowerBook
+expect nospot 40587
+
+# The ING: the plate of the car that followed them, and James Wong.
+click 29855
+noing L Z 240 EAK               # not a civilian plate
+ing L G 240 EAK                 # Error: Restricted Data
+expect var 4713 1
+ing N C James Wong              # a criminal record
+click 31620
+
+# Node 2 is complete: the warehouse at night.
+inv 17451
+click 58726
+click 59712
+expect var 2045 1
+expect var 1219 11
+
+# The stakeout: a car pulls up and two men carry a box in.
+wait 5000
+expect view 73759
+click 73768                     # step out of hiding
+expect over 1
+expect checkpoint 0
