@@ -24,6 +24,7 @@ enum {
     VC_CONVERSATION = 0x31,
     VC_ACTION = 0x41,
     VC_INVENTORY = 0x4B,
+    VC_IDEA_MAP = 0x4C,
     VC_IFACE_LAYOUT = 0x4E,
     VC_IFACE_ITEM = 0x4F,
     VC_ACTION_LIST = 0x42,

@@ -593,6 +593,20 @@ int game_choices(game *g, u32 *ids, int max)
     for (i = 0; i < n && k < max; i++)
         if (vc_class(&g->db, all[i]) == VC_CONVERSATION && vc_is_enabled(&g->interp, all[i]))
             ids[k++] = all[i];
+    /* VCIdeaMap: an idea icon and a conversation. Once the player has the
+     * idea (its icon is enabled), the character can be asked about it. */
+    n = vc_read_list(&g->db, c.idea_maps, all, 64);
+    for (i = 0; i < n && k < max; i++) {
+        xf_neo_reader r;
+        u32 idea, conv;
+        if (vc_class(&g->db, all[i]) != VC_IDEA_MAP || xf_neo_object(&g->db, all[i], &r, NULL, NULL) != 0)
+            continue;
+        idea = xf_neo_u32(&r);
+        conv = xf_neo_u32(&r);
+        if (idea && vc_is_enabled(&g->interp, idea) && vc_class(&g->db, conv) == VC_CONVERSATION &&
+            vc_is_enabled(&g->interp, conv))
+            ids[k++] = conv;
+    }
     return k;
 }
 

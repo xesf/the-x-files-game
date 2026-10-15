@@ -9,3 +9,9 @@ click 22631                     # flash the badge
 hold none
 click 22631
 state
+askall 22631                    # badge shown: ask her everything, then go to the rooms
+expect view 6578                # Mulder's room
+walk 31395                      # the phone in the room: Willmore notes it
+expect enabled 21927 1          # idea: motel phone
+walk 6622                       # Scully's room, Skinner
+askall 22760                    # includes the motel phone idea
