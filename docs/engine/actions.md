@@ -205,9 +205,12 @@ byte-swap routine in the executable and against all actions in the data.
 ## Parameters keep their values
 
 `QueuedAction_ctor` (0x40C2B0) makes the trigger the context of every
-action it queues, and parameter operands are read from that context. So
-the parameters of a trigger's list survive between runs. Lists that want
-a fresh count start with `param0 = 0`; others count on purpose. On the
+action it queues, and parameter operands are read from that context. The
+trigger handlers are made when their owner comes on screen
+(`TriggerHandler_attach`), so the parameters start at 0 each time the
+owner enters (its kind 8 triggers run), then keep their values from one
+run to the next while it stays. Lists that want a fresh count on every
+run start with `param0 = 0`; others count on purpose. On the
 boat in Disc 3, Astadourian's 2-second timer adds 1 to `param0` on each
 tick (and 1 more for each clue found), and Arley's "We're done here"
 plays when it reaches 4. `DoActionList(trigger, list)` runs the list

@@ -1,0 +1,97 @@
+# Disc 3 (node 3), from Wednesday morning at Willmore's apartment.
+# Object IDs are from the English HDB (CD and DVD share them).
+include disc2.txt
+
+# The Field Office: Cook knocked out, the PowerBook stolen, Pendrell on
+# the phone about the blood, and Cook knowing about Wong.
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+click 28268                     # wake Cook
+click 44098                     # Cook: check if anything is missing
+walk 912
+click 44125                     # the evidence locker: the PowerBook is gone
+walk 1237
+click 44144                     # the phone: Pendrell
+askall 40587                    # Cook
+expect var 5122 1
+
+# Wong is dead: the crime scene on the docks.
+inv 17451
+click 58726
+click 59712                     # Dockside Warehouse: the crime scene now
+expect view 4552
+hold Badge
+click 27467                     # Mendoza lets Willmore through
+hold none
+askall 23931                    # Stearns, the photographer
+askall 26235                    # Arley, the medical examiner
+walk 26102
+askall 27549                    # Detective Astadourian
+walk 4692
+click 63577                     # the slicker with "Tarakan" on it
+walk 59193
+click 59206                     # the pills by the bunk
+walk 4671
+askall 24134                    # Astadourian, about the boat
+wait 20000                      # Arley is done; the Harbor Master arrives
+walk 4640
+askall 23981                    # the Harbor Master: the Tarakan
+
+# The Tarakan.
+inv 17451
+click 58726
+click 59668                     # the Tarakan
+walk 12137
+click 69267                     # the box in the hold
+hold EvidenceKit
+click 55973                     # the lead sphere
+hold none
+walk 17019
+click 48270                     # the captain's journal
+walk 17000
+click 44809                     # the payroll log, from the safe
+click 57372                     # put the payroll log away
+click 48046                     # put the journal away
+expect enabled 21854 1
+walk 11705
+askall 24182                    # Astadourian in the wheelhouse
+walk 11015                      # the white shadows burned into the hull
+walk 11705
+askall 24182
+walk 46042
+click 69249                     # the table: the dusted prints
+click 60055
+walk 46042
+click 46046                     # "The place has already been dusted"
+expect var 4287 1
+dial 2065550171                 # John Amis: lift the prints
+wait 30000
+
+# The coroner: Wong's autopsy, and the Tarakan crew's bodies gone.
+inv 17451
+click 58726
+click 59146                     # King County Medical Examiner
+click 10760
+walk 34783
+click 34786                     # the slug from Wong
+askall 22979                    # the coroner
+askall 22945                    # Astadourian
+askall 33875                    # Astadourian, after the bodies are found gone
+expect var 2047 1
+
+# The Crime Lab: the fingerprints, the bullet and the sphere.
+inv 17451
+click 58726
+click 59133
+click 88655
+askall 22796                    # Amis: the fingerprints
+evidence 21842                  # the bullet from Wong
+evidence 21854                  # the lead sphere
+
+# Home: node 3 is complete, Disc 4 next.
+inv 17451
+click 58726
+click 59694
+expect var 2048 1
+expect var 1219 4

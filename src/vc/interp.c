@@ -380,6 +380,16 @@ void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)
 {
     u32 ids[64];
     int n = vc_read_list(in->hdb, trigger_list, ids, 64), i;
+    /* Entering (kind 8) makes a new handler for the owner's triggers
+     * (TriggerHandler_attach), so their parameters start again from 0;
+     * they then keep their values while the owner stays on screen. */
+    if (kind == 8)
+        for (i = 0; i < n; i++) {
+            u32 k;
+            for (k = 0; k < in->tlocal_count; k++)
+                if (in->tlocals[k].trigger == ids[i])
+                    memset(&in->tlocals[k].l, 0, sizeof(in->tlocals[k].l));
+        }
     for (i = 0; i < n; i++) {
         xf_neo_reader r;
         u32 actions;

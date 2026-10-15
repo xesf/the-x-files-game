@@ -401,7 +401,7 @@ static void probe_one(script *s, const snapshot *sn, u32 view, u32 id, const cha
     game *g = s->g;
     u32 path[256];
     int n = find_path(g, view, 0, path, 256), i, vars = 0, en = 0;
-    char clips[256] = "";
+    char clips[1024] = "";
     if (n < 0)
         return;
     for (i = 0; i < n; i++) {
@@ -415,10 +415,15 @@ static void probe_one(script *s, const snapshot *sn, u32 view, u32 id, const cha
     game_click_object(g, id);
     for (i = g->queue_head; i != g->queue_tail; i = (i + 1) % GAME_MEDIA_QUEUE) {
         vc_asset_ref a;
-        if (vc_read_asset_ref(&g->db, g->queue[i].asset, &a) == 0 && strlen(clips) + 40 < sizeof(clips)) {
+        if (vc_read_asset_ref(&g->db, g->queue[i].asset, &a) == 0) {
+            /* The media's name describes it: "Video:Node 3:...:Willmore
+             * finds stolen painkillers". Show the last part. */
+            char desc[160] = "", *last;
             const char *base = strrchr(a.logical, '/');
-            strcat(clips, " ");
-            strcat(clips, base ? base + 1 : a.logical);
+            vc_read_name(&g->db, a.name & 0xFFFFFF, desc, sizeof(desc));
+            last = strrchr(desc, ':');
+            snprintf(clips + strlen(clips), sizeof(clips) - strlen(clips), " [%s%s%s]", base ? base + 1 : a.logical,
+                     *desc ? " " : "", last ? last + 1 : desc);
         }
     }
     drain_media(g);
