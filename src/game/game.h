@@ -129,6 +129,7 @@ typedef struct {
     u32 kit_icons[GAME_MAX_EVIDENCE]; /* EnableKitIcon: icons in the kit */
     int kit_count;
     u32 rand_seed;                    /* RandGen */
+    u32 fade_serial;                  /* changes on FadeToBlack */
     u32 ing_notes;                    /* media of the ING record's field notes */
     int show_evidence;                /* DispEvIcons */
     u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */

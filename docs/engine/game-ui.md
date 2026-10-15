@@ -235,6 +235,13 @@ The travel lists then move `iCurrNode` to the link that follows: node
 2 complete makes it 11, the warehouse at night. `SwapDisc`'s last
 argument is this node variable, not a disc number.
 
+## Fades
+
+`FadeToBlack(event)` (0x4B6140) fades the screen to black over 2
+seconds; the explorer keeps it black until the view changes.
+`FadeBack(on)` (0x48A2B0) shows or hides a set of screen layers through
+0x40BC30; the explorer does not draw it yet.
+
 ## Debug overlay
 
 Ctrl+Shift+D (or `XF_DEBUG_OVERLAY=1`) shows the hotspot outlines (green
@@ -244,6 +251,7 @@ view's media. It is off by default.
 ## Not yet like the original
 
 - The scroll bar thumb and idea icons are not drawn.
+- `FadeBack` and the photo download screen are not drawn.
 - The colours of `SetIItemText` labels are guesses (`'b'` is drawn white).
 - The question text colour and spacing in the box are estimates.
 - The position of the inventory bar comes from the help texts, not

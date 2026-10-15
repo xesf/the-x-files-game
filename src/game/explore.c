@@ -110,6 +110,7 @@ typedef struct {
     xf_player sound;
     int sound_open, sound_loop;
     u32 sound_serial;
+    u32 fade_serial, fade_start, fade_view; /* FadeToBlack */
     char sound_path[1024];
     xf_font font;         /* Dlg.ttr: dialogue and labels */
     int have_font;
@@ -1107,6 +1108,32 @@ static void draw_darkness(explorer *e, int mx, int my)
         }
 }
 
+/* FadeToBlack: the picture goes black over 2 seconds and stays black
+ * until the view changes. */
+static void draw_fade(explorer *e)
+{
+    u32 now = plat_ticks_ms(), k;
+    int x, y;
+    if (e->fade_serial != e->g->fade_serial) {
+        e->fade_serial = e->g->fade_serial;
+        e->fade_start = now;
+        e->fade_view = e->g->view;
+    }
+    if (!e->fade_start)
+        return;
+    if (e->fade_view != e->g->view && now - e->fade_start > 2000) {
+        e->fade_start = 0;
+        return;
+    }
+    k = now - e->fade_start >= 2000 ? 0 : 255 - (now - e->fade_start) * 255 / 2000;
+    for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
+        for (x = PICTURE_X; x < PICTURE_X + PICTURE_W; x++) {
+            u32 c = e->fb[y * SCREEN_W + x];
+            e->fb[y * SCREEN_W + x] = (((c >> 16) & 0xFF) * k / 255) << 16 | (((c >> 8) & 0xFF) * k / 255) << 8 |
+                                      ((c & 0xFF) * k / 255);
+        }
+}
+
 static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
@@ -1166,6 +1193,7 @@ static void draw(explorer *e, int mx, int my)
             memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], vd->frame + (size_t)y * vd->width, (size_t)w * 4);
     }
     draw_darkness(e, mx, my);
+    draw_fade(e);
     if (e->debug) {
         /* Ctrl+Shift+D: hotspot outlines and the view's media name. */
         for (i = 0; i < g->spot_count; i++) {

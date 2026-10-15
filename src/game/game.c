@@ -1544,6 +1544,16 @@ static int host_call_function(void *user, const vc_action *a)
                     game_reg_value(g, "RegCurrNode", 0) == 10 + link && game_reg_value(g, reg, 0) == 1);
         return 1;
     }
+    /* 0x4B6140 fn_FadeToBlack(event): 0x4EF8E0 fades the screen to black
+     * over 2 seconds. */
+    if (strcmp(name, "FadeToBlack") == 0) {
+        g->fade_serial++;
+        return 1;
+    }
+    /* 0x48A2B0 fn_FadeBack(on): 0x40BC30 shows or hides a set of screen
+     * layers; not drawn yet. */
+    if (strcmp(name, "FadeBack") == 0)
+        return 1;
     /* 0x4BCE10 fn_WillmoreSleeps: does nothing in this build. */
     if (strcmp(name, "WillmoreSleeps") == 0)
         return 1;
