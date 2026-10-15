@@ -34,7 +34,7 @@ all: $(BUILD)/xfiles $(if $(TOOL_SRC),$(BUILD)/xftool)
 $(BUILD)/xfiles: $(GAME_OBJ) $(CORE_OBJ) $(PLAT_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(PLAT_LIBS) -lm
 
-$(BUILD)/xftool: $(TOOL_OBJ) $(CORE_OBJ) $(BUILD)/src/game/game.o
+$(BUILD)/xftool: $(TOOL_OBJ) $(CORE_OBJ) $(BUILD)/src/game/game.o $(BUILD)/src/game/script.o
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/%.o: %.c
