@@ -1,0 +1,92 @@
+# Disc 5 (node 6), from the apartment on Friday morning. Object IDs are
+# from the English HDB (CD and DVD share them).
+include disc4.txt
+
+# The Field Office: Cook is raiding Smolnikoff's warehouse today.
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+wait 3000
+walk 1022
+click 78394                     # Cook walks Willmore to the meeting room
+askall 44971
+wait 30000
+click 1226
+
+# Smolnikoff's warehouse: the raid. The gunfights are random but the
+# play script's random numbers are fixed.
+inv 17451
+click 58726
+click 59681                     # Smolnikoff's warehouse
+click 47779                     # "Cover me"
+wait 8000
+click 47113                     # in through the door
+hold Gun
+shoot                           # three areas, a goon in each
+skip
+shoot
+skip
+shoot
+skip
+expect view 5208                # the first floor is clear
+hold none
+walk 5274
+click 73512                     # Smolnikoff's payroll log
+click 57372
+walk 5380
+click 57449                     # up the stairs
+wait 5000
+walk 5487
+hold Gun
+shoot                           # the gunman on the stairs
+skip
+hold none
+walk 5480
+click 57453
+hold Gun
+shoot                           # the mobster at the barricade
+skip
+hold none
+expect var 2001 1
+walk 5678
+click 43637                     # Smolnikoff, hiding upstairs
+skip
+expect var 2657 1
+askall 23763                    # Smolnikoff
+skip
+askall 36488
+skip
+
+# The gun that Cook planted, in the dark corner downstairs.
+walk 26324
+click 36518
+skip
+inv 17451
+click 58726
+click 59681                     # back to Smolnikoff
+wait 3000
+askall 23763                    # the gun
+skip
+
+# The Crime Lab: Amis fires the gun.
+inv 17451
+click 58726
+click 59133
+wait 3000
+askall 22796
+skip
+evidence 21864
+skip
+expect var 1994 1
+askall 22796
+skip
+
+# Smolnikoff again: his gun shot an FBI agent. Link 3 starts.
+inv 17451
+click 58726
+click 59681
+wait 3000
+askall 23763
+skip
+expect var 2667 1
+expect var 1219 13

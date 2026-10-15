@@ -1110,39 +1110,42 @@ static const struct {
     { 470, 26, 0 }, { 500, 27, 0 }, { 600, 28, 0 },
 };
 
-/* 0x4F4AC0: shot number -> clip, and the view that follows it (0: none;
- * GAME_SHOT_RESTART: the current view starts again). Shots 3, 20, 26 and
- * 27 pick random clips or end the game; 0 to 5 also count hits. */
+/* 0x4F4AC0: shot number -> clip, the view that follows it (0: none;
+ * GAME_SHOT_RESTART: the current view starts again) and the letter put in
+ * the RegViewState variable (var 1495), which the scene reads when the
+ * clip ends: 'r' a hit. Shots 3, 20, 26 and 27 pick random clips or end
+ * the game; 0 to 5 also count hits. */
 #define GAME_SHOT_RESTART 0xFFFFFFFFu
 static const struct {
     u8 shot;
+    char state;
     u32 media, view;
 } g_shots[] = {
-    { 0, 21672, 0 },      /* Rauch */
-    { 1, 21664, GAME_SHOT_RESTART },
-    { 2, 21662, GAME_SHOT_RESTART },
-    { 4, 21718, GAME_SHOT_RESTART }, /* the woods */
-    { 5, 21716, GAME_SHOT_RESTART },
-    { 6, 21230, 0 },      /* Smolnikoff: a mobster gets shot, young */
-    { 7, 21232, 0 },      /* old */
-    { 8, 21234, 0 },      /* middle-aged */
-    { 9, 28456, GAME_SHOT_RESTART }, /* the big fall */
-    { 10, 21238, 5501 },  /* the mobster by the staircase */
-    { 11, 21812, GAME_SHOT_RESTART }, /* the secret base */
-    { 12, 21818, GAME_SHOT_RESTART },
-    { 13, 21808, GAME_SHOT_RESTART },
-    { 14, 44483, 44283 },
-    { 15, 49014, 14519 },
-    { 16, 80090, 0 },
-    { 17, 49013, 0 },
-    { 18, 21782, 0 },
-    { 19, 21784, 0 },
-    { 21, 80090, 0 },
-    { 22, 23434, 0 },
-    { 23, 49022, 49374 },
-    { 24, 49022, 49374 },
-    { 25, 23430, 0 },
-    { 28, 19656, 0 },
+    { 0, 0, 21672, 0 },      /* Rauch */
+    { 1, 0, 21664, GAME_SHOT_RESTART },
+    { 2, 0, 21662, GAME_SHOT_RESTART },
+    { 4, 0, 21718, GAME_SHOT_RESTART }, /* the woods */
+    { 5, 0, 21716, GAME_SHOT_RESTART },
+    { 6, 0, 21230, 0 },      /* Smolnikoff: a mobster gets shot, young */
+    { 7, 0, 21232, 0 },      /* old */
+    { 8, 0, 21234, 0 },      /* middle-aged */
+    { 9, 'r', 28456, GAME_SHOT_RESTART }, /* the gunman on the stairs falls */
+    { 10, 'r', 21238, 5501 }, /* the mobster by the staircase */
+    { 11, 'r', 21812, GAME_SHOT_RESTART }, /* the secret base */
+    { 12, 'r', 21818, GAME_SHOT_RESTART },
+    { 13, 'r', 21808, GAME_SHOT_RESTART },
+    { 14, 'r', 44483, 44283 },
+    { 15, 'r', 49014, 14519 },
+    { 16, 'z', 80090, 0 },
+    { 17, 'z', 49013, 0 },
+    { 18, 'z', 21782, 0 },
+    { 19, 'r', 21784, 0 },
+    { 21, 0, 80090, 0 },
+    { 22, 0, 23434, 0 },
+    { 23, 'w', 49022, 49374 },
+    { 24, 'd', 49022, 49374 },
+    { 25, 0, 23430, 0 },
+    { 28, 0, 19656, 0 },
 };
 
 static int holding(game *g, const char *item)
@@ -1260,6 +1263,8 @@ int game_shoot(game *g, u32 hot)
         for (k = 0; k < XF_COUNT(g_shots); k++)
             if (g_shots[k].shot == g_hot_shots[i].shot) {
                 xf_info("shot %u: clip %u", g_shots[k].shot, g_shots[k].media);
+                if (g_shots[k].state) /* 0x50D0E0 */
+                    set_reg_var(g, "RegViewState", 0, g_shots[k].state);
                 g->shot_media = g_shots[k].media;
                 g->shot_view = g_shots[k].view == GAME_SHOT_RESTART ? g->view : g_shots[k].view;
                 game_queue_media(g, g_shots[k].media);
