@@ -147,9 +147,18 @@ warehouse at night.
 | Function | Address | Use |
 |---|---|---|
 | `OnFLightClick(item)` | 0x4B7530 | Takes the flashlight in hand. Its inventory click also opens the dark moves of the view |
-| `SetFLightProps(mode, place, 'M')` | 0x44B4C0 | Mode 1 by day, 2 in the dark; place `'I'` inside, `'O'` outside |
+| `SetFLightProps(mode, place, beam)` | 0x44B4C0 | Mode 1 by day, 2 in the dark; place `'I'` inside, `'O'` outside; beam `'B'`, `'M'` or `'D'` |
 | `SetLBoxTint(r, g, b)` | 0x4BC410 | Tints the letterbox around the picture, for example (20, 20, 50) at night |
 | `ClearLBoxTint()` | 0x4B5AA0 | Black letterbox again |
+
+`SetFLightProps` keeps its three values in globals (0x6B56B4 ..), and
+the flashlight's cursor (0x49EA10) reads them with the player's beam
+preference. In the dark the engine darkens the view by alpha 0xEE or
+0xC8, and the flashlight lights the view under its beam. The explorer
+darkens the view to 7% of its brightness, lights a circle of 70 pixels
+around the pointer when the flashlight is in hand, and shows the view in
+green with the night vision goggles. The circle size and the green are
+estimates.
 
 
 ## Computer

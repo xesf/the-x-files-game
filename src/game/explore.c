@@ -1072,6 +1072,41 @@ static void draw_card(explorer *e, int clip_x, int clip_y, int clip_w, int clip_
     }
 }
 
+/* SetFLightProps mode 2: the view is dark (0x49EA10 darkens it by alpha
+ * 0xEE or 0xC8, from the beam setting). The flashlight in hand lights a
+ * circle around the pointer; night vision shows the whole view in green.
+ * The beam size and the green are estimates. */
+#define BEAM_RADIUS 70
+
+static void draw_darkness(explorer *e, int mx, int my)
+{
+    game *g = e->g;
+    i32 hand = game_reg_value(g, "RegCurrInvVar", 0);
+    u32 fl = vc_find_var(&g->interp, "Inventory_iFlashlight"), nv = vc_find_var(&g->interp, "Inventory_iNightVision");
+    int light = fl && hand == vc_get_var(&g->interp, fl), green = nv && hand == vc_get_var(&g->interp, nv);
+    int x, y;
+    if (g->flight_mode != 2)
+        return;
+    for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
+        for (x = PICTURE_X; x < PICTURE_X + PICTURE_W; x++) {
+            u32 c = e->fb[y * SCREEN_W + x];
+            int r = (c >> 16) & 0xFF, gg = (c >> 8) & 0xFF, b = c & 0xFF, k = 17; /* 255 - 0xEE */
+            if (green) {
+                int l = (r * 77 + gg * 150 + b * 29) >> 8;
+                e->fb[y * SCREEN_W + x] = (u32)(l / 4) << 16 | (u32)XF_MIN(255, l * 3 / 2) << 8 | (u32)(l / 4);
+                continue;
+            }
+            if (light) {
+                int dx = x - mx, dy = y - my, d2 = dx * dx + dy * dy;
+                if (d2 < BEAM_RADIUS * BEAM_RADIUS) {
+                    int edge = BEAM_RADIUS * BEAM_RADIUS - d2; /* soft rim */
+                    k = 17 + XF_MIN(238, edge * 238 / (BEAM_RADIUS * 20));
+                }
+            }
+            e->fb[y * SCREEN_W + x] = (u32)(r * k / 255) << 16 | (u32)(gg * k / 255) << 8 | (u32)(b * k / 255);
+        }
+}
+
 static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
@@ -1114,7 +1149,7 @@ static void draw(explorer *e, int mx, int my)
         if (e->card_active)
             draw_card(e, cx, cy, cw, ch);
         draw_icons(e, mx, my);
-        plat_show_cursor(1);
+        draw_cursor(e, mx, my);
         return;
     }
     if (e->have_picture)
@@ -1130,6 +1165,7 @@ static void draw(explorer *e, int mx, int my)
         for (y = 0; y < h; y++)
             memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], vd->frame + (size_t)y * vd->width, (size_t)w * 4);
     }
+    draw_darkness(e, mx, my);
     if (e->debug) {
         /* Ctrl+Shift+D: hotspot outlines and the view's media name. */
         for (i = 0; i < g->spot_count; i++) {
