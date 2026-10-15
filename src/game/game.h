@@ -391,6 +391,9 @@ int game_load_file(game *g, const char *path);
  * game_load_file take them too. */
 int game_is_x_save(const u8 *data, size_t size);
 int game_load_x_mem(game *g, const u8 *data, size_t size);
+/* Writes the game as an original .x save; game_save_file does for a
+ * path ending in .x. */
+int game_save_x_mem(game *g, u8 **out, size_t *size);
 /* The name a save was given; 0 when the data is a save. */
 int game_save_name(const u8 *data, size_t size, char *name, size_t name_size);
 int game_save_file_name(const char *path, char *name, size_t name_size);

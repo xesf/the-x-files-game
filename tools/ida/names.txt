@@ -456,3 +456,4 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x5EF5B0 VCGameState_set_mode  how the view was found: 0 the screen, 1 a queued goto, 2 the GAM
 0x4FE790 ai_list_get  the Artificial Intuition action list (0x6C29D4)
 0x4FE7B0 ai_trigger_get  the Artificial Intuition trigger (0x6C2A14)
+0x5EF3D0 VCGameState_set_timers  the running timers (act_timer list 0x6C43F8): (timer, time, periodic) records

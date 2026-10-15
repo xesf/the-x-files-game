@@ -498,7 +498,11 @@ int game_save_file(game *g, const char *path, const char *name)
     size_t size;
     FILE *f;
     int ok;
-    if (game_save_mem(g, name, &data, &size) != 0)
+    size_t len = strlen(path);
+    if (len > 2 && (strcmp(path + len - 2, ".x") == 0 || strcmp(path + len - 2, ".X") == 0)) {
+        if (game_save_x_mem(g, &data, &size) != 0)
+            return -1;
+    } else if (game_save_mem(g, name, &data, &size) != 0)
         return -1;
     if (!(f = fopen(path, "wb"))) {
         xf_warn("save: cannot write %s", path);

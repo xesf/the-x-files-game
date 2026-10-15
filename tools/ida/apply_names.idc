@@ -457,5 +457,6 @@ static main()
     set_name(0x5EF5B0, "VCGameState_set_mode", SN_NOWARN);
     set_name(0x4FE790, "ai_list_get", SN_NOWARN);
     set_name(0x4FE7B0, "ai_trigger_get", SN_NOWARN);
+    set_name(0x5EF3D0, "VCGameState_set_timers", SN_NOWARN);
     msg("names applied\n");
 }
