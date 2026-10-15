@@ -88,7 +88,7 @@ all of them, with `XF_SAVE_DIR` set to `build/saves`.
 The scripts name the rectangle in `shoot <id>`, which works without the
 HOT file. The window needs the file to hit-test a click. The DVD
 install folder has the HOT files of the warehouse, Rauch and woods
-fights. It lacks those of seven secret-base clips (21792, 23428, 49015,
+fights. It lacks those of eight secret-base clips (21792, 23428, 49015,
 49017, 49024, 66733, 70515 and 90178), which play from the disc, and
 the 360 clips whose rectangles 500 and 600 let the player shoot the
 people Willmore talks to. To play those with DVD data, copy the CD's
