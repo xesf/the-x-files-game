@@ -76,8 +76,14 @@ int xf_player_update(xf_player *p, u32 now_ticks)
     if (p->finished)
         return 0;
     if (p->has_audio) {
+        u32 wall = now_ticks - p->start_ticks;
         feed_audio(p);
         p->now_ms = (u32)(xf_mixer_played(p->channel) * 1000 / p->audio.track->sample_rate);
+        /* Without sound output (or when the output stalls) the sound clock
+         * does not move; the wall clock keeps the clip going, a little
+         * behind so the sound normally leads. */
+        if (wall > p->now_ms + 400)
+            p->now_ms = wall - 400;
     } else {
         p->now_ms = now_ticks - p->start_ticks;
     }
@@ -92,7 +98,11 @@ int xf_player_update(xf_player *p, u32 now_ticks)
         }
     }
 
-    if (p->now_ms >= p->duration_ms && (!p->has_audio || !xf_mixer_active(p->channel)))
+    /* The clip ends with its picture and its sound; the sound gets half a
+     * second more at most, so a channel that never drains does not hold
+     * the last frame. */
+    if (p->now_ms >= p->duration_ms &&
+        (!p->has_audio || !xf_mixer_active(p->channel) || now_ticks - p->start_ticks >= p->duration_ms + 500))
         p->finished = 1;
     return !p->finished;
 }
