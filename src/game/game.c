@@ -1072,6 +1072,13 @@ static const game_iface_item *find_item(game *g, u32 id)
     return NULL;
 }
 
+const game_iface_item *game_find_item(game *g, u32 id) { return find_item(g, id); }
+
+int game_ai_glowing(game *g)
+{
+    return g->ai_list && (g->ai_glow || vc_list_ready(&g->interp, g->ai_trigger, g->ai_list));
+}
+
 int game_key(game *g, int key)
 {
     const game_iface_item *it = g->focus_item ? find_item(g, g->focus_item) : NULL;
@@ -1768,8 +1775,12 @@ static void email_read(game *g, u32 item, u32 asset)
     for (i = 0; i < XF_COUNT(computer); i++)
         if (computer[i][0] == asset)
             attachment = (int)i;
-    g->email_body_item = item;
-    email_text(g, asset, g->email_body, sizeof(g->email_body));
+    memset(&g->scroll, 0, sizeof(g->scroll));
+    g->scroll.item = item;
+    g->scroll.color = 'b';
+    g->scroll.font = 'c';
+    g->scroll.size = 12;
+    email_text(g, asset, g->scroll.text, sizeof(g->scroll.text));
     if (attachment < 0)
         return;
     if (item == 54950) { /* the computer */
@@ -1779,7 +1790,7 @@ static void email_read(game *g, u32 item, u32 asset)
         vc_set_enabled(&g->interp, computer[attachment][2], 1);
         if (asset != 64527)
             vc_set_enabled(&g->interp, 69527, 0); /* no Delete */
-        g->email_body_item = 72758;
+        g->scroll.item = 72758;
     } else { /* the PDA */
         vc_set_enabled(&g->interp, 72741, 1);
         vc_set_enabled(&g->interp, 72760, 1);
@@ -1792,7 +1803,7 @@ static void email_read(game *g, u32 item, u32 asset)
         }
         if (asset != 64527)
             vc_set_enabled(&g->interp, 71372, 0);
-        g->email_body_item = 72761;
+        g->scroll.item = 72761;
     }
 }
 
@@ -1849,10 +1860,9 @@ static int email_function(game *g, const char *name, int argc, const vc_operand 
         }
         return 1;
     }
-    /* Scrolling a mail's text, flushing pending mails and preloading the
-     * icons only change what is drawn. */
-    if (strcmp(name, "MainScroll") == 0 || strcmp(name, "ScrollTextKill") == 0 ||
-        strcmp(name, "EmailFlushMess") == 0 || strcmp(name, "PreloadEmIcon") == 0)
+    /* Flushing pending mails and preloading the icons only change what
+     * is drawn. */
+    if (strcmp(name, "EmailFlushMess") == 0 || strcmp(name, "PreloadEmIcon") == 0)
         return 1;
     /* IsIItemHeld(item, var): whether the mouse is held on an item (the
      * scroll arrows repeat while it is). */
@@ -1864,10 +1874,9 @@ static int email_function(game *g, const char *name, int argc, const vc_operand 
     return 0;
 }
 
-const char *game_email_body(game *g, u32 *item)
+const game_scroll *game_scroll_box(game *g)
 {
-    *item = g->email_body_item;
-    return g->email_body;
+    return g->scroll.item && g->scroll.text[0] ? &g->scroll : NULL;
 }
 
 /* What the ING shows when nothing is found (0x4653B9): "No Data Found"
@@ -2117,9 +2126,12 @@ static int host_call_function(void *user, const vc_action *a)
         g->ai_trigger = g->ai_list = 0;
         return 1;
     }
-    /* fn_SetAIGlow(n): only changes how the icon is drawn. */
-    if (strcmp(name, "SetAIGlow") == 0)
+    /* 0x47F970 fn_SetAIGlow(n): 0x47FD40 turns the icon's glow off (0)
+     * or on (1, or a view id it is meant for). */
+    if (strcmp(name, "SetAIGlow") == 0 && argc == 1) {
+        g->ai_glow = arg_value(g, &args[0]);
         return 1;
+    }
     /* 0x48AEF0 fn_SetLanguage(text, string var): 0x48AE30 writes the
      * text of the reference ("english", "german", ...) into the string the
      * variable names. Layouts compare it with scGameLanguageEnglish and
@@ -2289,8 +2301,37 @@ static int host_call_function(void *user, const vc_action *a)
         vc_set_enabled(&g->interp, 36320, 0);
         return 1;
     }
-    if (strcmp(name, "ScrollTextInit") == 0 || strcmp(name, "ScrollTextList") == 0)
+    /* 0x47D220 fn_ScrollTextList(item, text, color, font, size):
+     * 0x480850 shows a text file (field notes, help pages, the APB) in a
+     * scrolling box on the item. fn_ScrollTextInit (0x45DA30) starts an
+     * empty box, MainScroll (0x42FA50) scrolls a line up (0) or down (1)
+     * or a page (2, 3), fn_ScrollTextKill (0x43E0D0) removes it. */
+    if (strcmp(name, "ScrollTextList") == 0 && argc == 5) {
+        memset(&g->scroll, 0, sizeof(g->scroll));
+        g->scroll.item = (u32)arg_value(g, &args[0]);
+        if (!email_text(g, (u32)arg_value(g, &args[1]), g->scroll.text, sizeof(g->scroll.text)))
+            game_text(g, (u32)arg_value(g, &args[1]), g->scroll.text, sizeof(g->scroll.text));
+        g->scroll.color = (char)arg_value(g, &args[2]);
+        g->scroll.font = (char)arg_value(g, &args[3]);
+        g->scroll.size = arg_value(g, &args[4]);
         return 1;
+    }
+    if (strcmp(name, "ScrollTextInit") == 0 && argc == 1) {
+        memset(&g->scroll, 0, sizeof(g->scroll));
+        g->scroll.item = (u32)arg_value(g, &args[0]);
+        return 1;
+    }
+    if (strcmp(name, "MainScroll") == 0 && argc == 1) {
+        static const int step[4] = { -1, 1, -8, 8 };
+        i32 d = arg_value(g, &args[0]);
+        if (d >= 0 && d < 4)
+            g->scroll.line = XF_MAX(g->scroll.line + step[d], 0);
+        return 1;
+    }
+    if (strcmp(name, "ScrollTextKill") == 0) {
+        memset(&g->scroll, 0, sizeof(g->scroll));
+        return 1;
+    }
     /* 0x491190 fn_PlayAssetAt(media, x, y): plays a small clip over the
      * screen, such as the ING's search progress bar; its start triggers
      * run now and its end triggers when it ends. StopPlayAssets(..)

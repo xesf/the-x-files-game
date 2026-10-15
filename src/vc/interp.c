@@ -417,6 +417,24 @@ void vc_run_action_list(vc_interp *in, u32 list) { run_list(in, list, 0, NULL, 0
 
 void vc_run_trigger_list(vc_interp *in, u32 trigger, u32 list) { run_list(in, list, trigger, NULL, 0); }
 
+int vc_list_ready(vc_interp *in, u32 trigger, u32 list)
+{
+    u32 ids[MAX_LIST];
+    int n = vc_read_list(in->hdb, list, ids, MAX_LIST), i;
+    locals scratch, *loc = trigger ? trigger_locals(in, trigger) : NULL;
+    if (!loc) {
+        memset(&scratch, 0, sizeof(scratch));
+        loc = &scratch;
+    }
+    for (i = 0; i < n; i++) {
+        vc_action a;
+        if (vc_read_action(in->hdb, ids[i], &a) == 0 && a.valid &&
+            (!a.has_condition || test_condition(in, loc, &a.condition)))
+            return 1;
+    }
+    return 0;
+}
+
 size_t vc_trigger_locals_size(void) { return sizeof(struct vc_trigger_locals); }
 
 void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)

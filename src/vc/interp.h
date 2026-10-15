@@ -80,6 +80,9 @@ void vc_run_action_list(vc_interp *in, u32 list);
 /* Runs an action list with the parameters of a trigger, as DoActionList
  * does. */
 void vc_run_trigger_list(vc_interp *in, u32 trigger, u32 list);
+/* Whether an action of the list would run now: one without a condition,
+ * or one whose condition holds (0x4FE820). */
+int vc_list_ready(vc_interp *in, u32 trigger, u32 list);
 /* Size of one entry of `tlocals`, for saving and restoring them. */
 size_t vc_trigger_locals_size(void);
 /* Runs the triggers of `kind` in a trigger list. */

@@ -114,6 +114,9 @@ typedef struct {
     int sound_open, sound_loop;
     u32 sound_serial;
     u32 fade_serial, fade_start, fade_view; /* FadeToBlack */
+    xf_player overlay;    /* PlayAssetAt: a small clip over the screen */
+    int overlay_open;
+    u32 overlay_serial;
     char sound_path[1024];
     xf_font font;         /* Dlg.ttr: dialogue and labels */
     int have_font;
@@ -413,6 +416,49 @@ static void refresh_iface_pictures(explorer *e)
 
 static void blit_keyed(explorer *e, const xf_image *img, int x0, int y0);
 
+static int wrap_lines_font(const xf_font *f, const char *text, float px, int w, int *starts, int *lens, int max);
+
+/* The scrolling text box (ScrollTextList, a mail): the text's own lines,
+ * each wrapped to the item's width, from the first line shown down to the
+ * bottom of the item. */
+static void draw_scroll_box(explorer *e)
+{
+    const game_scroll *sb = game_scroll_box(e->g);
+    const game_iface_item *it;
+    const xf_font *f;
+    xf_surface sf = screen_surface(e);
+    float px;
+    int y, line = 0, pos = 0, len, lh;
+    if (!sb || !(it = game_find_item(e->g, sb->item)) || !e->have_font)
+        return;
+    f = sb->font == 'H' && e->have_hcd_font ? &e->hcd_font
+      : sb->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
+    px = (float)(sb->size ? sb->size : 12) * 96.0f / 72.0f;
+    lh = (int)(px * 1.2f);
+    y = it->item.region.top + (int)px;
+    len = (int)strlen(sb->text);
+    while (pos <= len) {
+        int end = pos, starts[64], lens[64], n, k;
+        char para[1024];
+        while (end < len && sb->text[end] != '\n')
+            end++;
+        snprintf(para, sizeof(para), "%.*s", end - pos, sb->text + pos);
+        n = para[0] ? wrap_lines_font(f, para, px, it->item.region.right - it->item.region.left - 8, starts, lens, 64) : 1;
+        if (!para[0])
+            lens[0] = 0, starts[0] = 0;
+        for (k = 0; k < n; k++, line++) {
+            if (line < sb->line)
+                continue;
+            if (y > it->item.region.bottom)
+                return;
+            xf_text_draw(&sf, f, px, it->item.region.left + 4, y, para + starts[k], (size_t)lens[k],
+                         sb->color == 'w' ? 0xFFFFFF : 0x000000);
+            y += lh;
+        }
+        pos = end + 1;
+    }
+}
+
 static void draw_ifaces(explorer *e)
 {
     int k, i, order;
@@ -445,6 +491,7 @@ static void draw_ifaces(explorer *e)
             xf_text_draw(&sf, f, px, x, r->bottom - (r->bottom - r->top - (int)px) / 2 - 3, l->text, strlen(l->text),
                          l->color == 'b' ? 0xFFFFFF : 0x000000);
         }
+    draw_scroll_box(e);
     /* Typed text in text fields, with a caret in the one that has focus. */
     for (k = 0; k < e->g->iface_count && e->have_font; k++)
         for (i = 0; i < e->g->ifaces[k].count; i++) {
@@ -653,6 +700,30 @@ static void draw_outlined(explorer *e, const xf_font *f, float px, int x, int y,
 
 /* Splits `text` into lines no wider than `w`. Returns the line count;
  * `starts` and `lens` describe each line. */
+static int wrap_lines_font(const xf_font *f, const char *text, float px, int w, int *starts, int *lens, int max)
+{
+    int n = 0, pos = 0, len = (int)strlen(text);
+    while (pos < len && n < max) {
+        int end = pos, last_space = -1;
+        while (end < len && xf_text_width(f, px, text + pos, (size_t)(end + 1 - pos)) <= w) {
+            if (text[end] == ' ')
+                last_space = end;
+            end++;
+        }
+        if (end < len && last_space > pos)
+            end = last_space;
+        if (end == pos)
+            end = pos + 1;
+        starts[n] = pos;
+        lens[n] = end - pos;
+        n++;
+        pos = end;
+        while (pos < len && text[pos] == ' ')
+            pos++;
+    }
+    return n;
+}
+
 static int wrap_lines(explorer *e, const char *text, float px, int w, int *starts, int *lens, int max)
 {
     int n = 0, pos = 0, len = (int)strlen(text);
@@ -951,7 +1022,9 @@ static void draw_inventory(explorer *e, int mx, int my)
     xf_surface s = screen_surface(e);
     int i, x, y, hover = inv_at(e, mx, my);
     for (i = 0; i < e->inv_count; i++) {
-        const xf_image *img = &e->inv_img[i][i == hover && e->inv_img[i][1].pixels ? 1 : 0];
+        /* The Artificial Intuition icon blinks while a hint is ready. */
+        int glow = e->inv_ids[i] == GAME_AI_ICON && game_ai_glowing(e->g) && (plat_ticks_ms() / 500) % 2;
+        const xf_image *img = &e->inv_img[i][(i == hover || glow) && e->inv_img[i][1].pixels ? 1 : 0];
         inv_pos(e, i, &x, &y);
         blit_keyed(e, img, x, y);
     }
@@ -1184,6 +1257,9 @@ static void draw_fade(explorer *e)
         }
 }
 
+static void draw_overlay(explorer *e);
+static int open_asset_player(explorer *e, u32 asset, xf_player *p);
+
 static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
@@ -1254,14 +1330,62 @@ static void draw(explorer *e, int mx, int my)
         if (e->have_font)
             xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
     }
-    draw_icons(e, mx, my);
-    if (g->talking)
-        draw_dialog(e, mx, my);
+    if (!g->text_off) { /* TextOn(0) hides them during scenes */
+        draw_icons(e, mx, my);
+        if (g->talking)
+            draw_dialog(e, mx, my);
+    }
     refresh_inventory(e);
     if (my >= (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL) && !g->iface_count)
         draw_inventory(e, mx, my);
     draw_ifaces(e);
+    draw_overlay(e);
     draw_cursor(e, mx, my);
+}
+
+/* PlayAssetAt: the overlay clip starts when the game names a new one and
+ * ends (running its end triggers) when it has played. */
+static void update_overlay(explorer *e)
+{
+    u32 now = plat_ticks_ms();
+    if (e->overlay_serial != e->g->overlay_serial) {
+        e->overlay_serial = e->g->overlay_serial;
+        if (e->overlay_open)
+            xf_player_close(&e->overlay);
+        e->overlay_open = e->g->overlay && open_asset_player(e, e->g->overlay, &e->overlay) == 0;
+        if (e->g->overlay && !e->overlay_open)
+            game_overlay_end(e->g); /* no file: the scene goes on */
+    }
+    if (!e->overlay_open)
+        return;
+    if (!e->g->overlay) { /* StopPlayAssets */
+        xf_player_close(&e->overlay);
+        e->overlay_open = 0;
+    } else if (!xf_player_update(&e->overlay, now)) {
+        xf_player_close(&e->overlay);
+        e->overlay_open = 0;
+        game_overlay_end(e->g);
+    }
+}
+
+static void draw_overlay(explorer *e)
+{
+    const u32 *f;
+    int w, h, x0, y0, y;
+    if (!e->overlay_open || !(f = xf_player_frame(&e->overlay)))
+        return;
+    w = e->overlay.video.width;
+    h = e->overlay.video.height;
+    x0 = e->g->overlay_x;
+    y0 = e->g->overlay_y;
+    for (y = 0; y < h; y++) {
+        int sy = y0 + y, x;
+        if (sy < 0 || sy >= SCREEN_H)
+            continue;
+        for (x = 0; x < w; x++)
+            if (x0 + x >= 0 && x0 + x < SCREEN_W)
+                e->fb[sy * SCREEN_W + x0 + x] = f[y * w + x];
+    }
 }
 
 /* 0x471820 play_intro_sequence: Fox logo, HyperBole logo, teaser and
@@ -1513,6 +1637,7 @@ static void run_frame(explorer *e)
         finish_media(e);
     start_next_media(e);
     update_sound(e);
+    update_overlay(e);
     if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g))
         menu_enter(e);
     if (e->in_menu == 1) {

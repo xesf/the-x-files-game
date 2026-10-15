@@ -91,6 +91,15 @@ typedef struct {
 #define GAME_MAX_EMAILS 64
 #define GAME_EMAIL_ROWS 8
 
+/* A scrolling text box on a layout item (ScrollTextList): a mail, a
+ * field note, a help page. `line` is the first line shown. */
+typedef struct {
+    u32 item;
+    char text[4096];
+    char color, font;
+    int size, line;
+} game_scroll;
+
 typedef struct {
     xf_neo_db db, gam;
     vc_interp interp;
@@ -150,8 +159,7 @@ typedef struct {
     } emails[GAME_MAX_EMAILS];
     int email_count, email_scroll;
     char email_mode;                  /* EmailInit: 'C' computer, 'P' PDA */
-    u32 email_body_item;              /* InitEmailRead: the item showing a mail */
-    char email_body[4096];
+    game_scroll scroll;               /* ScrollTextList, InitEmailRead */
     u32 ing_notes;                    /* media of the ING record's field notes */
     int show_evidence;                /* DispEvIcons */
     u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */
@@ -162,7 +170,8 @@ typedef struct {
     u8 lbox_tint[3];      /* SetLBoxTint colour */
     int lbox_tinted;
     u32 binoc_from;       /* the view the binoculars look out of */
-    u32 ai_trigger, ai_list; /* SetAIList: the Artificial Intuition hint */
+    u32 ai_trigger, ai_list;
+    i32 ai_glow;          /* SetAIGlow */ /* SetAIList: the Artificial Intuition hint */
     u32 smol_vars[3];     /* InitSmShootout: per area, set when clear */
     int smol_clear[3], smol_visits[3], smol_area;
     u32 shot_media, shot_view, shot_epoch;
@@ -220,8 +229,8 @@ int game_evidence(game *g, u32 *ids, int max);
 /* Hands one piece of evidence over: runs its click triggers. */
 int game_click_evidence(game *g, u32 id);
 
-/* The mail being read and the item it is shown in. */
-const char *game_email_body(game *g, u32 *item);
+/* The scrolling text box, or NULL when there is none. */
+const game_scroll *game_scroll_box(game *g);
 
 /* Gunfights: the HOT rectangle of a clip at a point of the video frame
  * and a clip time (0 for none), and a shot at one. game_shoot returns 0
@@ -293,5 +302,9 @@ int game_view_media(game *g, u32 *ids, int max);
 
 const game_spot *game_spot_at(const game *g, int x, int y);
 const game_iface_item *game_iface_item_at(game *g, int x, int y);
+/* The item with this ID in an open layout, or NULL. */
+const game_iface_item *game_find_item(game *g, u32 id);
+/* Whether the Artificial Intuition icon glows: a hint is ready. */
+int game_ai_glowing(game *g);
 
 #endif
