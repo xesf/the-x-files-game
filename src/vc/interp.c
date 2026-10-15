@@ -145,6 +145,14 @@ u32 vc_find_var(const vc_interp *in, const char *name)
     return 0;
 }
 
+void vc_set_enabled(vc_interp *in, u32 hdb_object, int on)
+{
+    u32 i;
+    for (i = 0; i < in->enable_count; i++)
+        if (in->enables[i].target == hdb_object)
+            in->enables[i].enabled = on != 0;
+}
+
 int vc_is_enabled(const vc_interp *in, u32 hdb_object)
 {
     u32 lo = 0, hi = in->enable_count;

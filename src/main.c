@@ -3,7 +3,8 @@
  *   xfiles --explore <game folder> <view> [disc] [--media <folder>]...
  *                                                   walk the scene graph; view 0
  *                                                   starts a new game; --media
- *                                                   adds folders to search for clips
+ *                                                   adds folders to search for clips;
+ *                                                   --script <file> plays a story script
  * Without arguments it shows a test pattern. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -134,16 +135,18 @@ int main(int argc, char **argv)
         xf_warn("no audio output");
 
     if (argc > 3 && strcmp(argv[1], "--explore") == 0) {
-        const char *media[8];
+        const char *media[8], *script = NULL;
         int i, n = 0, disc = 1;
         for (i = 4; i < argc; i++) {
             if (strcmp(argv[i], "--media") == 0 && i + 1 < argc && n < 7)
                 media[n++] = argv[++i];
+            else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc)
+                script = argv[++i];
             else
                 disc = atoi(argv[i]);
         }
         media[n] = NULL;
-        r = xf_explore(argv[2], media, (u32)strtoul(argv[3], NULL, 10), disc);
+        r = xf_explore(argv[2], media, (u32)strtoul(argv[3], NULL, 10), disc, script);
     }
     else if (argc > 2 && strcmp(argv[1], "--play") == 0)
         r = play_movie(argv[2], argc > 4 && strcmp(argv[3], "--data") == 0 ? argv[4] : NULL);

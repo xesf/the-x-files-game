@@ -57,6 +57,10 @@ void plat_present(const u32 *pixels, int width, int height, int pitch);
  * 0 and its path, or -1 when the system has no such font. */
 int plat_font_path(const char *family, char *out, size_t size);
 
+/* Shows or hides the system pointer over the window (the game draws its
+ * own cursors). */
+void plat_show_cursor(int show);
+
 u32 plat_ticks_ms(void);
 void plat_sleep_ms(u32 ms);
 

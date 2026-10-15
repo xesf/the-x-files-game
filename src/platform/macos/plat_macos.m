@@ -310,3 +310,15 @@ int plat_font_path(const char *family, char *out, size_t size)
     }
     return -1;
 }
+
+void plat_show_cursor(int show)
+{
+    static int hidden;
+    if (g_headless || hidden == !show)
+        return;
+    if (show)
+        [NSCursor unhide];
+    else
+        [NSCursor hide];
+    hidden = !show;
+}

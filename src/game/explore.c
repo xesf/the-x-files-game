@@ -73,7 +73,17 @@ typedef struct {
 #define MAX_ANIMS 4
 #define MAX_ICONS 6
 #define MAX_INV 32
+#define MAX_CURSORS 24
+#define MAX_CURSOR_FRAMES 12
 #define CARD_PX 16 /* 12 point at 96 dots per inch */
+
+/* A VCCursor: its hot point and pictures (several for animated ones). */
+typedef struct {
+    u32 id;
+    int hot_x, hot_y;
+    xf_image frames[MAX_CURSOR_FRAMES];
+    int count;
+} cursor_art;
 
 /* The explorer draws the game and plays its media. */
 typedef struct {
@@ -107,13 +117,18 @@ typedef struct {
     int have_card_font;
     int debug;            /* Ctrl+Shift+D: hotspot outlines and names */
     /* dialogue box */
-    xf_image dlg_talk, dlg_up, dlg_down;
+    xf_image dlg_talk, dlg_history, dlg_up, dlg_down;
     int talk_scroll;
+    int talk_tab;         /* 0 TALK: questions not asked yet; 1 HISTORY: asked */
     /* emotion and action icons */
     view_anim icon_anim[MAX_ICONS];
     int icon_open[MAX_ICONS];
     u32 icon_ids[MAX_ICONS];
     int icon_count;
+    /* cursors */
+    cursor_art cursors[MAX_CURSORS];
+    int cursor_count;
+    u32 held_inv;         /* VCInventory taken in hand, for its cursor */
     /* inventory icons: normal and rollover */
     xf_image inv_img[MAX_INV][2];
     u32 inv_ids[MAX_INV];
@@ -342,23 +357,17 @@ static void refresh_iface_pictures(explorer *e)
             load_item_picture(e, &e->g->ifaces[k].items[i], &e->iface_img[k][i]);
 }
 
+static void blit_keyed(explorer *e, const xf_image *img, int x0, int y0);
+
 static void draw_ifaces(explorer *e)
 {
-    int k, i, y, order;
+    int k, i, order;
     for (k = 0; k < e->g->iface_count; k++)
         for (order = 0; order < 256; order++) /* back to front */
             for (i = 0; i < e->g->ifaces[k].count; i++) {
                 const game_iface_item *it = &e->g->ifaces[k].items[i];
-                const xf_image *img = &e->iface_img[k][i];
-                int x0 = it->item.region.left, y0 = it->item.region.top, w, h;
-                if ((it->item.flags & 0xFF) != order || !img->pixels || !vc_is_enabled(&e->g->interp, it->id))
-                    continue;
-                w = XF_MIN(img->width, SCREEN_W - x0);
-                h = XF_MIN(img->height, SCREEN_H - y0);
-                if (x0 < 0 || y0 < 0 || w <= 0)
-                    continue;
-                for (y = 0; y < h; y++)
-                    memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], img->pixels + (size_t)y * img->width, (size_t)w * 4);
+                if ((it->item.flags & 0xFF) == order && vc_is_enabled(&e->g->interp, it->id))
+                    blit_keyed(e, &e->iface_img[k][i], it->item.region.left, it->item.region.top);
             }
 }
 
@@ -449,6 +458,7 @@ static void stop_sound(explorer *e)
  * 0x4810A0 centres it on the character and puts it at y 285. Blue is
  * transparent in the game's pictures. */
 #define DLG_TALK 34761
+#define DLG_HISTORY 34760
 #define DLG_UP 34759
 #define DLG_DOWN 34764
 #define DLG_Y 285
@@ -461,11 +471,12 @@ static void stop_sound(explorer *e)
 #define DLG_PX 13
 #define KEY_BLUE 0x0000FF
 
-/* Emotion and action icons: 80x60 animated clips above the video. */
+/* Emotion and action icons: 80x60 animated clips below the video, each
+ * with its name underneath on rollover. */
 #define ICON_W 80
 #define ICON_H 60
-#define ICON_Y 12
-#define ICON_GAP 12
+#define ICON_Y (PICTURE_Y + PICTURE_H + 10)
+#define ICON_GAP 24
 
 /* Inventory: 30x40 icons along the bottom, shown when the pointer is
  * near the bottom of the screen. */
@@ -530,6 +541,19 @@ static int text_px(explorer *e, const char *text, float px)
     return e->have_font ? xf_text_width(&e->font, px, text, strlen(text)) : (int)strlen(text) * 7;
 }
 
+/* Text with a one-pixel black outline, readable over any picture. */
+static void draw_outlined(explorer *e, const xf_font *f, float px, int x, int y, const char *text, size_t len,
+                          u32 color)
+{
+    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    int dx, dy;
+    for (dy = -1; dy <= 1; dy++)
+        for (dx = -1; dx <= 1; dx++)
+            if (dx || dy)
+                xf_text_draw(&s, f, px, x + dx, y + dy, text, len, 0x000000);
+    xf_text_draw(&s, f, px, x, y, text, len, color);
+}
+
 /* Splits `text` into lines no wider than `w`. Returns the line count;
  * `starts` and `lens` describe each line. */
 static int wrap_lines(explorer *e, const char *text, float px, int w, int *starts, int *lens, int max)
@@ -582,8 +606,12 @@ typedef struct {
  * below the box. */
 static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
 {
-    u32 ids[GAME_MAX_CHOICES];
-    int n = game_choices(e->g, ids, GAME_MAX_CHOICES), i, k = 0, y = DLG_Y + DLG_TEXT_TOP;
+    u32 all[GAME_MAX_CHOICES], ids[GAME_MAX_CHOICES];
+    int m = game_choices(e->g, all, GAME_MAX_CHOICES), n = 0, i, k = 0, y = DLG_Y + DLG_TEXT_TOP;
+    /* TALK lists what has not been asked yet; HISTORY what has. */
+    for (i = 0; i < m; i++)
+        if ((game_times_asked(e->g, all[i]) > 0) == (e->talk_tab == 1))
+            ids[n++] = all[i];
     *more = 0;
     e->talk_scroll = XF_CLAMP(e->talk_scroll, 0, XF_MAX(n - 1, 0));
     for (i = e->talk_scroll; i < n && k < max; i++) {
@@ -611,13 +639,15 @@ static void draw_dialog(explorer *e, int mx, int my)
     xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
     dlg_entry ent[GAME_MAX_CHOICES];
     int x0 = dialog_x(e), n, more, i, l;
-    if (!e->dlg_talk.pixels)
+    if (!e->dlg_talk.pixels) {
         load_asset_image(e, DLG_TALK, &e->dlg_talk);
+        load_asset_image(e, DLG_HISTORY, &e->dlg_history);
+    }
     if (!e->dlg_up.pixels) {
         load_asset_image(e, DLG_UP, &e->dlg_up);
         load_asset_image(e, DLG_DOWN, &e->dlg_down);
     }
-    blit_keyed(e, &e->dlg_talk, x0, DLG_Y);
+    blit_keyed(e, e->talk_tab ? &e->dlg_history : &e->dlg_talk, x0, DLG_Y);
     if (!e->have_font)
         return;
     n = dialog_layout(e, ent, GAME_MAX_CHOICES, &more);
@@ -626,7 +656,7 @@ static void draw_dialog(explorer *e, int mx, int my)
         int starts[8], lens[8], lines;
         int over = mx >= x0 + DLG_TEXT_X && mx < x0 + DLG_TEXT_X + DLG_TEXT_W && my >= ent[i].y - DLG_LINE + 3 &&
                    my < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4;
-        u32 color = over ? 0xFFFFFF : game_times_asked(e->g, ent[i].id) ? 0x8C8C8C : 0xD8D8D8;
+        u32 color = over ? 0xFFFFFF : 0xD8D8D8;
         vc_conversation c;
         if (vc_read_conversation(&e->g->db, ent[i].id, &c) == 0)
             vc_read_name(&e->g->db, c.name, q, sizeof(q));
@@ -648,6 +678,15 @@ static int click_dialog(explorer *e, int x, int y)
     int x0 = dialog_x(e), n, more, i;
     if (x < x0 || x >= x0 + DLG_W || y < DLG_Y || y >= DLG_Y + 120)
         return 0;
+    if (y < DLG_Y + 16) { /* the TALK and HISTORY tabs */
+        e->talk_tab = x >= x0 + 100;
+        e->talk_scroll = 0;
+        return 1;
+    }
+    if (x >= x0 + DLG_W - 16 && y < DLG_Y + 30) { /* the close box */
+        game_end_talk(e->g);
+        return 1;
+    }
     n = dialog_layout(e, ent, GAME_MAX_CHOICES, &more);
     if (x >= x0 + DLG_W - 18) { /* the scroll arrows */
         if (y < DLG_Y + 60 && e->talk_scroll > 0)
@@ -727,7 +766,6 @@ static int icon_at(explorer *e, int x, int y)
 
 static void draw_icons(explorer *e, int mx, int my)
 {
-    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
     int i, y, hover = icon_at(e, mx, my);
     for (i = 0; i < e->icon_count; i++) {
         view_anim *an = &e->icon_anim[i];
@@ -750,8 +788,11 @@ static void draw_icons(explorer *e, int mx, int my)
         dash = strrchr(name, '-'); /* "Field Office N1A Cook - Funny" */
         if (dash && dash[1] == ' ')
             memmove(name, dash + 2, strlen(dash + 2) + 1);
-        xf_text_draw(&s, &e->font, 14, (SCREEN_W - text_px(e, name, 14)) / 2, ICON_Y + ICON_H + 14, name,
-                     strlen(name), 0xFFFFFF);
+        {
+            int cx = icon_x(e, hover) + ICON_W / 2, w = text_px(e, name, 14);
+            int x = XF_CLAMP(cx - w / 2, 4, SCREEN_W - 4 - w);
+            draw_outlined(e, &e->font, 14, x, ICON_Y + ICON_H + 16, name, strlen(name), 0xFFFFFF);
+        }
     }
 }
 
@@ -819,6 +860,113 @@ static void draw_inventory(explorer *e, int mx, int my)
     }
 }
 
+/* --- Cursors ------------------------------------------------------------ */
+
+/* Reads one picture of a .pff bundle; x.pff stays open. */
+static int load_pff_image(explorer *e, const char *path, u32 index, xf_image *img)
+{
+    xf_pff pff, *p = &pff;
+    u32 size;
+    u8 *data;
+    int own = 0;
+    memset(img, 0, sizeof(*img));
+    if (strstr(path, "x.pff") || strstr(path, "X.PFF")) {
+        if (!e->pff_open)
+            e->pff_open = xf_pff_open(&e->pff, path) == 0;
+        if (!e->pff_open)
+            return -1;
+        p = &e->pff;
+    } else {
+        if (xf_pff_open(&pff, path) != 0)
+            return -1;
+        own = 1;
+    }
+    data = xf_pff_read(p, index, &size);
+    if (data && xf_pict_decode(data, size, img) != 0)
+        memset(img, 0, sizeof(*img));
+    free(data);
+    if (own)
+        xf_pff_close(&pff);
+    return img->pixels ? 0 : -1;
+}
+
+/* VCCursor: hot point (two 16-bit values), name, media list. A .pic
+ * cursor is one picture of x.pff; a .pff cursor is a small bundle whose
+ * pictures from the start to the end index animate. */
+static const cursor_art *get_cursor(explorer *e, u32 id)
+{
+    cursor_art *c;
+    xf_neo_reader r;
+    u32 media[4];
+    vc_asset_ref a;
+    int i, j;
+    for (i = 0; i < e->cursor_count; i++)
+        if (e->cursors[i].id == id)
+            return e->cursors[i].count ? &e->cursors[i] : NULL;
+    if (e->cursor_count >= MAX_CURSORS || vc_class(&e->g->db, id) != 0x3D ||
+        xf_neo_object(&e->g->db, id, &r, NULL, NULL) != 0)
+        return NULL;
+    c = &e->cursors[e->cursor_count++];
+    memset(c, 0, sizeof(*c));
+    c->id = id;
+    c->hot_x = (i16)xf_neo_u16(&r);
+    c->hot_y = (i16)xf_neo_u16(&r);
+    xf_neo_u32(&r); /* name */
+    if (vc_read_list(&e->g->db, xf_neo_u32(&r), media, 4) <= 0 || vc_read_asset_ref(&e->g->db, media[0], &a) != 0)
+        return NULL;
+    for (j = 0; j < a.entry_count && !c->count; j++) {
+        char path[1024];
+        u32 k;
+        if (resolve_media(e, a.entries[j].path, path, sizeof(path)) != 0)
+            continue;
+        for (k = a.entries[j].start; k <= XF_MAX(a.entries[j].start, a.entries[j].end) && c->count < MAX_CURSOR_FRAMES;
+             k++)
+            if (load_pff_image(e, path, k, &c->frames[c->count]) == 0)
+                c->count++;
+    }
+    return c->count ? c : NULL;
+}
+
+static void free_cursors(explorer *e)
+{
+    int i, k;
+    for (i = 0; i < e->cursor_count; i++)
+        for (k = 0; k < e->cursors[i].count; k++)
+            free(e->cursors[i].frames[k].pixels);
+    e->cursor_count = 0;
+}
+
+/* The cursor of the item in hand: field 5 of its VCInventory. */
+static u32 held_cursor(explorer *e)
+{
+    xf_neo_reader r;
+    int i;
+    if (!e->held_inv ||
+        game_reg_value(e->g, "RegCurrInvVar", 0) == game_reg_value(e->g, "RegCurrInvVar", 1)) {
+        e->held_inv = 0;
+        return 0;
+    }
+    if (xf_neo_object(&e->g->db, e->held_inv, &r, NULL, NULL) != 0)
+        return 0;
+    for (i = 0; i < 4; i++)
+        xf_neo_u32(&r);
+    return xf_neo_u32(&r);
+}
+
+/* Draws the game's cursor at the pointer, or shows the system pointer
+ * where the game has none. */
+static void draw_cursor(explorer *e, int mx, int my)
+{
+    u32 id = held_cursor(e);
+    const cursor_art *c;
+    if (!id && !e->playing && e->in_menu != 1)
+        id = game_cursor_at(e->g, mx, my);
+    c = id ? get_cursor(e, id) : NULL;
+    plat_show_cursor(!c);
+    if (c)
+        blit_keyed(e, &c->frames[(plat_ticks_ms() / 100) % (u32)c->count], mx - c->hot_x, my - c->hot_y);
+}
+
 /* --- Drawing --------------------------------------------------------- */
 
 static void frame_rect(explorer *e, const vc_region *r, u32 color)
@@ -843,7 +991,6 @@ static void frame_rect(explorer *e, const vc_region *r, u32 color)
  * 15 pixels from its edges. */
 static void draw_card(explorer *e, int clip_x, int clip_y, int clip_w, int clip_h)
 {
-    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
     const xf_font *f = e->have_card_font ? &e->card_font : &e->font;
     const char *text = e->g->card;
     size_t shown = XF_MIN((size_t)((plat_ticks_ms() - e->card_start) / 50), strlen(text));
@@ -859,7 +1006,7 @@ static void draw_card(explorer *e, int clip_x, int clip_y, int clip_w, int clip_
         const char *nl = strchr(text + pos, '\n');
         size_t end = nl ? (size_t)(nl - text) : strlen(text);
         size_t len = XF_MIN(end, shown) - pos;
-        xf_text_draw(&s, f, CARD_PX, x, y, text + pos, len, 0xFFFFFF);
+        draw_outlined(e, f, CARD_PX, x, y, text + pos, len, 0xFFFFFF);
         pos = end + 1;
         y += line_h;
     }
@@ -900,6 +1047,7 @@ static void draw(explorer *e, int mx, int my)
         if (e->card_active)
             draw_card(e, cx, cy, cw, ch);
         draw_icons(e, mx, my);
+        plat_show_cursor(1);
         return;
     }
     if (e->have_picture)
@@ -932,6 +1080,7 @@ static void draw(explorer *e, int mx, int my)
     if (my >= INV_REVEAL && !g->iface_count)
         draw_inventory(e, mx, my);
     draw_ifaces(e);
+    draw_cursor(e, mx, my);
 }
 
 /* 0x471820 play_intro_sequence: Fox logo, HyperBole logo, teaser and
@@ -1058,6 +1207,7 @@ static void menu_update(explorer *e)
 
 static void menu_draw(explorer *e)
 {
+    plat_show_cursor(1);
     int i, y;
     memset(e->fb, 0, sizeof(e->fb));
     for (i = 0; i < MENU_PARTS; i++) {
@@ -1092,7 +1242,9 @@ static void run_frame(explorer *e)
     plat_event ev;
     game_tick(e->g, plat_ticks_ms());
     while (plat_poll(&ev)) {
-        if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
+        if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->talking)
+            game_end_talk(e->g); /* Escape closes the dialogue box first */
+        else if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
             e->running = 0;
         else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'd' &&
                  (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
@@ -1134,12 +1286,19 @@ static void run_frame(explorer *e)
                 game_click(e->g, ev.x, ev.y);
             else if (e->g->talking && click_dialog(e, ev.x, ev.y))
                 ;
-            else if (inv >= 0)
+            else if (inv >= 0) {
                 game_click_inventory(e->g, e->inv_ids[inv]);
-            else if (!game_click(e->g, ev.x, ev.y))
-                game_end_talk(e->g);
-            else
-                e->talk_scroll = 0;
+                e->held_inv = e->inv_ids[inv];
+            }
+            else {
+                u32 was = e->g->talking;
+                if (!game_click(e->g, ev.x, ev.y))
+                    game_end_talk(e->g); /* a click elsewhere closes the box */
+                if (e->g->talking != was) {
+                    e->talk_scroll = 0;
+                    e->talk_tab = 0;
+                }
+            }
         } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
                    (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
             /* Right click: put the item in hand away, stop talking, or go back. */
@@ -1194,6 +1353,15 @@ static void script_settle(void *user)
         start_next_media(e);
     }
     run_frame(e);
+}
+
+static void script_point(void *user, int x, int y)
+{
+    explorer *e = user;
+    e->mx = x;
+    e->my = y;
+    if (!e->playing)
+        game_hover(e->g, x, y);
 }
 
 static int script_shot(void *user, const char *path)
@@ -1267,6 +1435,7 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         sc.host.advance = script_advance;
         sc.host.settle = script_settle;
         sc.host.shot = script_shot;
+        sc.host.point = script_point;
         e->in_menu = 0;
         result = script_run(&sc, script_path, 0) ? 1 : 0;
         xf_info("script: %d steps, %s", sc.steps, result ? "stopped at a failure" : "all passed");
@@ -1280,7 +1449,10 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     free_iface_pictures(e);
     close_icons(e);
     free_inventory(e);
+    free_cursors(e);
+    plat_show_cursor(1);
     free(e->dlg_talk.pixels);
+    free(e->dlg_history.pixels);
     free(e->dlg_up.pixels);
     free(e->dlg_down.pixels);
     if (e->pff_open)

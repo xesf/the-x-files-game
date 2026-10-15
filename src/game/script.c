@@ -386,6 +386,9 @@ int script_run(script *s, const char *path, int quiet)
             continue;
         } else if (strcmp(cmd, "clips") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             s->keep_clips = strcmp(what, "on") == 0 && s->host.advance;
+        } else if (strcmp(cmd, "point") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
+            if (s->host.point)
+                s->host.point(s->host.user, (int)a, (int)b);
         } else if (strcmp(cmd, "skip") == 0) {
             settle(s);
         } else if (strcmp(cmd, "shot") == 0 && sscanf(line, "%*s %255s", file) == 1) {

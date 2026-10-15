@@ -53,6 +53,8 @@ u32 vc_find_var(const vc_interp *in, const char *name);
 void vc_set_var(vc_interp *in, u32 id, i32 value);
 /* 1 unless a VCEnabled object turns the HDB object off. */
 int vc_is_enabled(const vc_interp *in, u32 hdb_object);
+/* Turns an HDB object on or off through its VCEnabled entry, if it has one. */
+void vc_set_enabled(vc_interp *in, u32 hdb_object, int on);
 
 /* Runs every action of an action list. */
 void vc_run_action_list(vc_interp *in, u32 list);

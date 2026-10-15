@@ -502,6 +502,27 @@ void game_hover(game *g, int x, int y)
     after_triggers(g);
 }
 
+/* --- Cursors --------------------------------------------------------- */
+
+/* VCDefaultCursors 321: cursors for characters and for objects when
+ * their region names none. */
+#define CURSOR_TALK 290
+#define CURSOR_LOOK 7164
+
+u32 game_cursor_at(game *g, int x, int y)
+{
+    const game_iface_item *it = game_iface_item_at(g, x, y);
+    const game_spot *s;
+    if (it) /* a close-up's backdrop has the "back up" cursor */
+        return it->item.region.cursor;
+    s = game_spot_at(g, x, y);
+    if (!s)
+        return 0;
+    if (s->region.cursor && vc_class(&g->db, s->region.cursor) == 0x3D)
+        return s->region.cursor;
+    return s->kind == SPOT_CHARACTER ? CURSOR_TALK : s->kind == SPOT_EXPLORE ? CURSOR_LOOK : 0;
+}
+
 /* --- Conversations --------------------------------------------------- */
 
 i32 game_reg_value(game *g, const char *name, int i)
@@ -574,9 +595,14 @@ int game_read_icon(game *g, u32 id, game_icon *icon)
 int game_click_icon(game *g, u32 id)
 {
     game_icon icon;
+    u32 shown[16];
+    int n = game_icons(g, shown, 16), i;
     if (game_read_icon(g, id, &icon) != 0)
         return 0;
     xf_info("click icon %u", id);
+    /* Choosing one answer takes all the icons on offer away. */
+    for (i = 0; i < n; i++)
+        vc_set_enabled(&g->interp, shown[i], 0);
     vc_run_triggers(&g->interp, icon.triggers, 0);
     after_triggers(g);
     return 1;

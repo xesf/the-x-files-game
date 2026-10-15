@@ -13,6 +13,8 @@ typedef struct {
     void (*advance)(void *user, u32 ms);
     /* Ends the clips that are queued or playing, running their triggers. */
     void (*settle)(void *user);
+    /* Moves the pointer, for rollovers and cursors in screenshots. */
+    void (*point)(void *user, int x, int y);
     /* Saves the screen as a BMP file. Returns 0 on success. */
     int (*shot)(void *user, const char *path);
 } script_host;

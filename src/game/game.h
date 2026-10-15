@@ -147,6 +147,11 @@ int game_choices(game *g, u32 *ids, int max);
 int game_ask(game *g, u32 conversation);
 void game_end_talk(game *g);
 int game_times_asked(const game *g, u32 conversation);
+/* The VCCursor for the screen point: the cursor of the layout item or
+ * hotspot under it, else the default cursor for its kind (VCDefault-
+ * Cursors: mouth for characters, eye for objects). 0 for none. */
+u32 game_cursor_at(game *g, int x, int y);
+
 /* Emotion and action icons (VCEmotionIcon, VCActionIcon): a scene
  * enables them for a while; clicking one runs its triggers. Fields:
  * name, 0, animated icon (VCAssetRefList), 0, a second list, triggers. */
