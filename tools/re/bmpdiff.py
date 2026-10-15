@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 xesf and contributors
+# Copyright (C) 2026 xesf
 """Compares two 24/32-bit BMP files: python3 -I tools/re/bmpdiff.py a.bmp b.bmp"""
 import struct
 import sys

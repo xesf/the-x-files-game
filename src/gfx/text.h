@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Draws UTF-8 text with a TrueType font into a 0x00RRGGBB framebuffer. */
 #ifndef XF_TEXT_DRAW_H
 #define XF_TEXT_DRAW_H

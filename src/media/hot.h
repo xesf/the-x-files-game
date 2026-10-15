@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* HOT: hotspot rectangles for a video clip (see docs/formats/hot.md). */
 #ifndef XF_HOT_H
 #define XF_HOT_H

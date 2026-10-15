@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 xesf and contributors
+# Copyright (C) 2026 xesf
 """Finds each VC class's vtable and read method, and lists the stream
 calls the read method makes (stream vtable offset and field tag).
 

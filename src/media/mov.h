@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* QuickTime movie container: tracks and sample tables
  * (see docs/formats/quicktime.md). Decoding is done elsewhere. */
 #ifndef XF_MOV_H

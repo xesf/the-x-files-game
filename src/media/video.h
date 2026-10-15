@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Decodes the frames of a QuickTime video track, whatever the codec. */
 #ifndef XF_VIDEO_H
 #define XF_VIDEO_H

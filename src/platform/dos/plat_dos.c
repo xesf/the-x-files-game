@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* DOS backend (Open Watcom + DOS/4GW):
  *
  *   Video     VESA 2.0 640x480 with a linear framebuffer, at 32, 16 or 15

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Game logic without a platform: the current view and its hotspots, the
  * triggers that run on entering, leaving, clicking and timers, the media
  * queue, interface layouts and the engine functions. The explorer draws

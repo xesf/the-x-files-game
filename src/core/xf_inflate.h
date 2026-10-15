@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* DEFLATE decompression (RFC 1951) with the zlib wrapper (RFC 1950). */
 #ifndef XF_INFLATE_H
 #define XF_INFLATE_H

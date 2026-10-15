@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* PlayStation Vita backend (VitaSDK):
  *
  *   Video     SceDisplay 960x544, 32-bit, double-buffered in CDRAM; the

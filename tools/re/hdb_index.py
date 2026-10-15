@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 xesf and contributors
+# Copyright (C) 2026 xesf
 """Walks the NeoAccess index of an HDB file and lists objects per class.
 
 usage: python3 -I tools/re/hdb_index.py XFILES.HDB [class_id]

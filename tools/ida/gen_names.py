@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 xesf and contributors
+# Copyright (C) 2026 xesf
 """Writes tools/ida/apply_names.idc from tools/ida/names.txt.
 
 Lines: `address name [comment]` for functions, `data address name

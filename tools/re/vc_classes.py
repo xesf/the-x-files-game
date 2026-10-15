@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 xesf and contributors
+# Copyright (C) 2026 xesf
 """Lists the VirtualCinema classes registered at startup.
 
 Each registration allocates a class descriptor and calls the register

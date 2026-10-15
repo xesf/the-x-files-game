@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Linux backend (desktop, Steam Deck, Steam Machine): an X11 window with a
  * software blit scaled to the window, and ALSA sound on its own thread.
  * Under Wayland it runs through XWayland. */

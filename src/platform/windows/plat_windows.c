@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Windows backend: a Win32 window drawn with GDI (StretchDIBits) and
  * waveOut sound fed by a thread. Only ANSI Win32 calls that Windows 95
  * already had, so the same file builds for Windows 9x. */

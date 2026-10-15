@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Entry point.
  *   xfiles --play <movie> [--data <game folder>]   play one movie
  *   xfiles --explore <game folder> <view> [disc] [--media <folder>]...

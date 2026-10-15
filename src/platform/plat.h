@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Platform layer. Each backend implements these functions with the
  * operating system's own APIs. The engine never calls the OS directly. */
 #ifndef XF_PLAT_H

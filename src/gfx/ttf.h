@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* TrueType font reader and antialiased rasterizer for the game's .ttr
  * fonts (glyf outlines, cmap formats 0, 4 and 6). */
 #ifndef XF_TTF_H

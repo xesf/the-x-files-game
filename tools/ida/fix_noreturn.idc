@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 xesf and contributors
+// Copyright (C) 2026 xesf
 // Clear wrong "no return" flags, rebuild the functions that were cut
 // short, then reanalyze. Run in IDA: File > Script file...
 //

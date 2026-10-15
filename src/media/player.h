@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Plays a QuickTime movie: decodes video to the current time and feeds
  * the sound to the mixer. The sound drives the clock when there is any. */
 #ifndef XF_PLAYER_H

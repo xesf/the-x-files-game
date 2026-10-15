@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Unaligned big- and little-endian reads from byte buffers. */
 #ifndef XF_ENDIAN_H
 #define XF_ENDIAN_H

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 xesf and contributors
+# Copyright (C) 2026 xesf
 # Build with: make            (game + tools for the host)
 #             make DEBUG=1    (no optimization, sanitizers)
 

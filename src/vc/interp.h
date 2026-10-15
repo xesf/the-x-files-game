@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Game state and action interpreter (see docs/engine/actions.md). */
 #ifndef XF_VC_INTERP_H
 #define XF_VC_INTERP_H

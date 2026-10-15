@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* Scene explorer: shows a view and follows its navigation hotspots. A
  * development tool on the way to the real game loop. */
 #ifndef XF_EXPLORE_H

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 #include "xf_text.h"
 
 /* 0x80-0x9F differ from Latin-1; 0 marks bytes that are not defined. */

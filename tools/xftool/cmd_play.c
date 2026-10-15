@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 xesf and contributors */
+ * Copyright (C) 2026 xesf */
 /* xftool play: runs a story script against the game logic, without a
  * window or media. Every clip ends as soon as it starts, so its start
  * and end triggers run in order. */

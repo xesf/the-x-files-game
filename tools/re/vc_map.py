@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 xesf and contributors
+# Copyright (C) 2026 xesf
 """Prints a map of the views reachable from a view: their moves, the
 objects and characters in them, and what clicking each one does.
 
