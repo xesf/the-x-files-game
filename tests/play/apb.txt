@@ -1,0 +1,87 @@
+# Guide, Day 1: instead of asking Cook to file the APB, Willmore files it
+# himself on his computer (APB, Send). Skinner then points him to the
+# Comity Inn as on the other path.
+new
+expect view 691                 # hallway, Cook greets Willmore
+icon 18172                      # answer him with a joke (Funny)
+expect spot 692                 # the moves open once the opening ends
+
+# Meeting room: the equipment case.
+walk 1228                       # meeting room, facing the case
+click 32714                     # open the case
+expect iface 84370
+click 84380                     # take the six pieces of equipment
+click 84382
+click 84384
+click 84386
+click 84388
+click 84390
+expect var 3707 6               # all six taken
+
+# Willmore's office: drawer and case files.
+walk 1237
+click 28576                     # look at the drawer
+click 32654                     # open it
+click 84330                     # badge, gun, handcuffs
+click 84332
+click 84334
+expect var 3706 3
+click 1237                      # back to the desk
+click 31845                     # case files
+expect iface 47543
+click 47578                     # put them down
+
+# The phone rings: Shanks wants to see Willmore.
+wait 5000
+expect spot 26655
+click 26655
+
+# Shanks's office.
+walk 911
+click 26535                     # knock and enter
+expect view 889
+expect spot 22148               # Shanks
+expect spot 22428               # Skinner
+
+# Ask Skinner and Shanks everything.
+click 22428                     # Skinner
+expect choice 22432
+ask 22474                       # Are they romantically involved?
+ask 22432                       # Where were they last seen?
+ask 22446                       # What case were they working on?
+expect iface 43351              # the case file
+click 43370                     # put it down
+ask 22435                       # Can I get their cell phone numbers?
+ask 22453                       # Have they disappeared before?
+ask 22465                       # ... romantically involved in the past?
+click 22148                     # Shanks
+ask 22161                       # Should Cook be involved ...?
+ask 22167                       # ... anything unusual in Everett?
+wait 3000                       # Shanks's next question opens on a timer
+expect choice 22150
+ask 22150                       # What should I do with my current assignments?
+wait 3000                       # Skinner and Shanks wrap up: cases to Cook, APB
+click 22148                     # the box closed (DisplayDBox 0): Shanks again
+expect choice 56174             # What were my instructions?
+
+# Cook's office: hand over the case files.
+walk 793
+hold CaseFiles
+click 21993                     # give Cook the case files
+hold none
+click 21993                     # talk to Cook
+expect choice 58356
+walk 1237                       # Willmore's desk
+click 29855                     # the computer
+click 31624
+click 50747
+type Craig Willmore
+click 50748
+type shiloh
+click 39474                     # connect
+click 36307                     # APB
+click 39556                     # Send
+wait 4000
+click 15168                     # quit
+walk 713                        # the hallway: Skinner
+expect enabled 58742 1          # Everett is on the map
