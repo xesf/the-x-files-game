@@ -128,6 +128,7 @@ typedef struct {
     u32 focus_item;       /* layout item that receives key presses */
     u32 kit_icons[GAME_MAX_EVIDENCE]; /* EnableKitIcon: icons in the kit */
     int kit_count;
+    int show_evidence;                /* DispEvIcons */
     u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */
     int evidence_count;
     u32 photos[GAME_MAX_PHOTOS]; /* TakePhoto: media of each photo */

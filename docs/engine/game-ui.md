@@ -128,12 +128,16 @@ the collected evidence, and the kit's copies ("Black Powder (warehouse)
 - KIT"). A new piece of evidence runs its kind 8 triggers, which call
 `EnableKitIcon(copy)` (0x4B5F20) to put its copy in the kit.
 
-In a lab the collected evidence shows as a second row above the
-inventory. Clicking a piece runs its kind 0 triggers: the technician's
-answer plays and the piece goes away. The explorer shows the row in the
-King County Crime Lab (location 10785) and the coroner's office
-(10611); the engine's own test for a lab is not found yet. Icon 56185,
-"AI Icon", is the Artificial Intuition icon, not evidence.
+`DispEvIcons(1)` (0x4B5B40) shows the collected evidence as a second
+row above the inventory, and `DispEvIcons(0)` hides it. At the Crime
+Lab the loop where Amis leans on the window turns it on, and leaving
+the view turns it off. Clicking a piece runs its kind 0 triggers: the
+technician's answer plays and the piece goes away. Icon 56185, "AI
+Icon", is the Artificial Intuition icon, not evidence.
+
+A view's clip can change while the player stays in the view, when a
+trigger switches its media list. The old clip's kind 9 triggers run,
+then the new clip's kind 8 triggers.
 
 ## Darkness and the flashlight
 

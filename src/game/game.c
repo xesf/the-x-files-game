@@ -10,6 +10,7 @@
 
 static void after_triggers(game *g);
 static void update_evidence(game *g);
+static u32 first_enabled(game *g, u32 list);
 static const game_iface_item *find_item(game *g, u32 id);
 
 static void note_missing(game *g, const char *name)
@@ -91,6 +92,20 @@ static void build_spots(game *g)
     if (depth)
         return;
     depth++;
+    /* A trigger can switch the view's clip in place (Amis comes to the
+     * window): the old clip ends and the new one starts, with their
+     * triggers. */
+    if (g->view && !g->entering && vc_read_view(&g->db, g->view, &v) == 0) {
+        u32 now = first_enabled(g, v.assets);
+        if (now != g->view_asset) {
+            vc_asset_ref a;
+            if (g->view_asset && vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
+                vc_run_triggers(&g->interp, a.triggers, 9);
+            g->view_asset = now;
+            if (now && vc_read_asset_ref(&g->db, now, &a) == 0)
+                vc_run_triggers(&g->interp, a.triggers, 8);
+        }
+    }
     for (pass = 0; pass < 4; pass++) {
         int changed = 0;
         n = g->spot_count;
@@ -177,17 +192,11 @@ static void update_evidence(game *g)
     g->evidence_count = collected_evidence(g, g->evidence, GAME_MAX_EVIDENCE);
 }
 
-/* Where the evidence bar shows: the King County Crime Lab and the
- * coroner's office. The engine's own test is not found yet. */
-static int at_lab(game *g)
-{
-    const vc_place *p = g->view ? vc_place_of(&g->places, g->view) : NULL;
-    return p && (p->location == 10785 || p->location == 10611);
-}
-
+/* DispEvIcons turns the evidence bar on and off: the lab loop where
+ * Amis leans on the window turns it on. */
 int game_evidence(game *g, u32 *ids, int max)
 {
-    return at_lab(g) ? collected_evidence(g, ids, max) : 0;
+    return g->show_evidence ? collected_evidence(g, ids, max) : 0;
 }
 
 int game_click_evidence(game *g, u32 id)
@@ -242,7 +251,6 @@ int game_view_media(game *g, u32 *ids, int max)
 
 /* --- Views ----------------------------------------------------------- */
 
-static u32 first_enabled(game *g, u32 list);
 
 /* Removes layout k. Its items run their leave triggers (kind 9). */
 static void remove_layout(game *g, int k)
@@ -1259,6 +1267,11 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x499E40 fn_OnInvClick(item): take the item in hand */
     if (strcmp(name, "OnInvClick") == 0 && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* 0x4B5B40 fn_DispEvIcons(on): shows or hides the evidence bar */
+    if (strcmp(name, "DispEvIcons") == 0 && argc == 1) {
+        g->show_evidence = arg_value(g, &args[0]) != 0;
         return 1;
     }
     /* 0x4B5F20 fn_EnableKitIcon(evidence icon): 0x49FFE0 enables the
