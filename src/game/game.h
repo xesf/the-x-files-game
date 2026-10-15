@@ -219,6 +219,7 @@ typedef struct {
     int journal_page, bible_page; /* the left page of each book */
     int sbase_typed;      /* letters in the secret base password box */
     i32 prefs[GAME_PREFS]; /* the Options screen's settings (see game.c) */
+    int screen_wide;      /* the wide layout (docs/engine/screen.md); saved with the preferences */
     int pda_card;         /* the PDA address book's card shown (0x6B6540) */
     int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
@@ -377,6 +378,8 @@ int game_ai_glowing(game *g);
  * save_dir is set), written back on each change; game_pref gives one by
  * its GAM variable. */
 void game_prefs_load(game *g);
+/* Turns the wide layout on or off, and saves the preferences. */
+void game_set_screen_wide(game *g, int on);
 void game_prefs_apply(game *g);
 i32 game_pref(const game *g, u32 var);
 

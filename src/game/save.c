@@ -298,6 +298,7 @@ int game_reset(game *g)
     u32 now = g->now;
     u8 play_once[sizeof(g->play_once)];
     i32 prefs[GAME_PREFS];
+    int screen_wide = g->screen_wide;
     serials[0] = g->iface_serial;
     serials[1] = g->sound_serial;
     serials[2] = g->fade_serial;
@@ -321,6 +322,7 @@ int game_reset(game *g)
     g->now = now;
     memcpy(g->play_once, play_once, sizeof(play_once));
     memcpy(g->prefs, prefs, sizeof(prefs));
+    g->screen_wide = screen_wide;
     game_prefs_apply(g);
     memcpy(g->save_dir, save_dir, sizeof(save_dir));
     return 0;

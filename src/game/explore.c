@@ -9,6 +9,7 @@
 #include "audio/mixer.h"
 #include "game/game.h"
 #include "game/script.h"
+#include "gfx/screen.h"
 #include "gfx/text.h"
 #include "media/mov.h"
 #include "media/pff.h"
@@ -153,7 +154,19 @@ typedef struct {
     u32 inv_ids[MAX_INV];
     int inv_count;
     int inv_items;        /* inv_ids: the inventory, then the lab's evidence */
-    u32 fb[SCREEN_W * SCREEN_H];
+    u32 *fb;              /* where drawing goes: scene_fb, or ui_fb in the wide layout */
+    u32 scene_fb[SCREEN_W * SCREEN_H];
+    u32 ui_fb[SCREEN_W * SCREEN_H]; /* the interface, SCR_CLEAR where the scene shows */
+    /* the output: the wide layout, or the 640x480 screen as it is */
+    int wide_pref;        /* the wide layout: the saved setting, XF_SCREEN, Ctrl+Shift+W */
+    scr_layout layout;    /* of the frame shown last */
+    u32 *out;
+    size_t out_cap;
+    int out_mx, out_my;   /* the pointer on the output */
+    u32 piece_px[SCREEN_W * SCREEN_H]; /* the interface pieces, cut out of ui_fb */
+    size_t piece_used;
+    const u32 *shown;     /* the frame shown last, for screenshots */
+    int shown_w, shown_h;
     /* the view picture: still and moving media */
     u32 picture[PICTURE_W * PICTURE_H];
     int have_picture;
@@ -1283,7 +1296,8 @@ static u32 held_cursor(explorer *e)
 
 /* Draws the game's cursor at the pointer, or shows the system pointer
  * when the cursor art is missing. */
-static void draw_cursor(explorer *e, int mx, int my)
+/* The cursor for the pointer at (mx, my), or NULL for the system's. */
+static const cursor_art *current_cursor(explorer *e, int mx, int my)
 {
     u32 id = held_cursor(e);
     const cursor_art *c;
@@ -1293,6 +1307,12 @@ static void draw_cursor(explorer *e, int mx, int my)
         id = CURSOR_DEFAULT;
     c = get_cursor(e, id);
     plat_show_cursor(!c);
+    return c;
+}
+
+static void draw_cursor(explorer *e, int mx, int my)
+{
+    const cursor_art *c = current_cursor(e, mx, my);
     if (c)
         blit_keyed(e, &c->frames[(plat_ticks_ms() / 100) % (u32)c->count], mx - c->hot_x, my - c->hot_y);
 }
@@ -1406,20 +1426,75 @@ static void draw_fade(explorer *e)
 static void draw_overlay(explorer *e);
 static int open_asset_player(explorer *e, u32 asset, xf_player *p);
 
+/* The wide layout: the scene strip fills the output and the interface
+ * pieces go around it (see docs/engine/screen.md). Screens drawn for
+ * 640x480 as a whole keep it: layouts (the computer, the PDA...), the
+ * menu, message slots and clips of other sizes, such as the logos. */
+static int want_wide(const explorer *e)
+{
+    const game *g = e->g;
+    if (!e->wide_pref || e->in_menu || g->iface_count || g->slot_mode)
+        return 0;
+    if (e->playing && e->have_clip && xf_player_frame((xf_player *)&e->player) &&
+        (e->player.video.width != PICTURE_W || e->player.video.height != PICTURE_H))
+        return 0;
+    return e->playing || g->view;
+}
+
+/* From here on, drawing goes to the interface layer. */
+static void begin_ui(explorer *e)
+{
+    int i;
+    if (!e->layout.wide)
+        return;
+    e->fb = e->ui_fb;
+    e->piece_used = 0;
+    for (i = 0; i < SCREEN_W * SCREEN_H; i++)
+        e->ui_fb[i] = SCR_CLEAR;
+}
+
+/* Cuts a piece out of the interface layer, so that pieces drawn over
+ * each other in 640x480 can go apart on the output. */
+static void ui_piece(explorer *e, int x, int y, int w, int h, int anchor)
+{
+    scr_rect r;
+    u32 *px;
+    int row;
+    if (!e->layout.wide)
+        return;
+    r.x = XF_MAX(x, 0);
+    r.y = XF_MAX(y, 0);
+    r.w = XF_MIN(x + w, SCREEN_W) - r.x;
+    r.h = XF_MIN(y + h, SCREEN_H) - r.y;
+    if (r.w <= 0 || r.h <= 0 || e->piece_used + (size_t)r.w * r.h > XF_COUNT(e->piece_px))
+        return;
+    px = e->piece_px + e->piece_used;
+    e->piece_used += (size_t)r.w * r.h;
+    for (row = 0; row < r.h; row++) {
+        u32 *src = &e->ui_fb[(r.y + row) * SCREEN_W + r.x];
+        int k;
+        memcpy(px + (size_t)row * r.w, src, (size_t)r.w * 4);
+        for (k = 0; k < r.w; k++)
+            src[k] = SCR_CLEAR;
+    }
+    scr_add_piece(&e->layout, r, anchor, px);
+}
+
 static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
-    xf_surface s = screen_surface(e);
+    xf_surface s;
     const game *g = e->g;
-    int i, y;
+    int i, y, wide = e->layout.wide;
 
+    e->fb = e->scene_fb;
     if (g->lbox_tinted) {
         /* SetLBoxTint: the letterbox takes the scene's tint */
         u32 c = (u32)g->lbox_tint[0] << 16 | (u32)g->lbox_tint[1] << 8 | g->lbox_tint[2];
         for (i = 0; i < SCREEN_W * SCREEN_H; i++)
             e->fb[i] = c;
     } else {
-        memset(e->fb, 0, sizeof(e->fb));
+        memset(e->fb, 0, sizeof(e->scene_fb));
     }
     refresh_icons(e);
     if (e->playing) {
@@ -1442,13 +1517,21 @@ static void draw(explorer *e, int mx, int my)
             cw = w;
             ch = h;
         }
-        if (sub && e->have_font)
-            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
-                                 sub, 0xFFFFFF, 0x000000);
         if (e->card_active && !e->g->text_off)
             draw_card(e, cx, cy, cw, ch);
+        begin_ui(e);
+        s = screen_surface(e);
+        scr_reserve_bottom(&e->layout, inv_reveal(e)); /* icons stay put when the clip ends */
+        if (sub && e->have_font) {
+            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
+                                 sub, 0xFFFFFF, 0x000000);
+            ui_piece(e, 0, PICTURE_Y + PICTURE_H, SCREEN_W, SCREEN_H - PICTURE_Y - PICTURE_H, SCR_ANCHOR_BELOW);
+        }
         draw_icons(e, mx, my);
-        draw_cursor(e, mx, my);
+        if (e->icon_count)
+            ui_piece(e, 0, ICON_Y, SCREEN_W, ICON_H, SCR_ANCHOR_BELOW);
+        if (!wide)
+            draw_cursor(e, mx, my);
         return;
     }
     if (e->have_picture)
@@ -1466,26 +1549,54 @@ static void draw(explorer *e, int mx, int my)
     }
     draw_darkness(e, mx, my);
     draw_fade(e);
-    if (e->debug) {
+    if (e->debug)
         /* Ctrl+Shift+D: hotspot outlines and the view's media name. */
         for (i = 0; i < g->spot_count; i++) {
             const vc_region *r = &g->spots[i].region;
             int inside = mx >= r->left && mx < r->right && my >= r->top && my < r->bottom;
             frame_rect(e, r, inside ? 0xFFFFFF : colors[g->spots[i].kind]);
         }
-        if (e->have_font)
-            xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
+    /* PlayAssetAt: a small clip, with the scene when it is on the strip */
+    if (!wide || (g->overlay_x >= PICTURE_X && g->overlay_y >= PICTURE_Y &&
+                  g->overlay_x + e->overlay.video.width <= PICTURE_X + PICTURE_W &&
+                  g->overlay_y + e->overlay.video.height <= PICTURE_Y + PICTURE_H))
+        draw_overlay(e);
+    else if (e->overlay_open) {
+        begin_ui(e);
+        draw_overlay(e);
+        ui_piece(e, g->overlay_x, g->overlay_y, e->overlay.video.width, e->overlay.video.height, SCR_ANCHOR_CENTER);
+    }
+    if (e->fb != e->ui_fb)
+        begin_ui(e);
+    s = screen_surface(e);
+    scr_reserve_bottom(&e->layout, inv_reveal(e));
+    if (e->debug && e->have_font) {
+        xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
+        ui_piece(e, 0, 0, SCREEN_W, 30, SCR_ANCHOR_TOP_LEFT);
     }
     draw_icons(e, mx, my);
-    if (g->talking)
+    if (e->icon_count)
+        ui_piece(e, 0, ICON_Y, SCREEN_W, ICON_H, SCR_ANCHOR_BELOW);
+    if (g->talking) {
+        int x0 = dialog_x(e);
         draw_dialog(e, mx, my);
+        ui_piece(e, x0, DLG_Y - 6, DLG_W, 130, SCR_ANCHOR_UNDER);
+    }
     refresh_inventory(e);
-    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V') && !g->iface_count) /* Pref_cInventory */
+    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V') && !g->iface_count) { /* Pref_cInventory */
+        /* the rows, with room above for the item's name */
+        int top = (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_Y) - 24;
+        int cols = XF_MAX(e->inv_items, e->inv_count - e->inv_items);
         draw_inventory(e, mx, my);
+        ui_piece(e, 0, top, XF_MIN(SCREEN_W, 10 + cols * (INV_W + INV_GAP) + 60), SCREEN_H - top,
+                 SCR_ANCHOR_BOTTOM_LEFT);
+    }
     draw_ifaces(e);
-    draw_overlay(e);
     draw_message(e, mx, my);
-    draw_cursor(e, mx, my);
+    if (g->ask)
+        ui_piece(e, (SCREEN_W - 360) / 2, (SCREEN_H - 150) / 2, 360, 150, SCR_ANCHOR_CENTER);
+    if (!wide)
+        draw_cursor(e, mx, my);
 }
 
 /* A message box for game_message: the text, then OK, or Yes and No.
@@ -1759,7 +1870,7 @@ static void menu_draw(explorer *e)
 {
     plat_show_cursor(1);
     int i, y;
-    memset(e->fb, 0, sizeof(e->fb));
+    memset(e->fb, 0, sizeof(e->scene_fb));
     for (i = 0; i < MENU_PARTS; i++) {
         const u32 *f = e->menu_open[i] ? xf_player_frame(&e->menu[i]) : NULL;
         int w, h, x0 = g_menu_parts[i].x, y0 = g_menu_parts[i].y;
@@ -1786,6 +1897,59 @@ static int menu_item_at(int x, int y)
     return -1;
 }
 
+/* The software compositor's limit: larger windows get a smaller frame,
+ * which the platform scales up. */
+#define OUT_MAX_PIXELS (1920 * 1200)
+
+/* Draws the frame and shows it: the 640x480 screen as it is, or the
+ * wide layout at the output's size. */
+static void present_frame(explorer *e)
+{
+    int ow, oh;
+    plat_output_size(&ow, &oh);
+    while ((long)ow * oh > OUT_MAX_PIXELS) {
+        ow = ow * 3 / 4;
+        oh = oh * 3 / 4;
+    }
+    scr_layout_begin(&e->layout, ow, oh, want_wide(e));
+    if (e->in_menu == 1)
+        menu_draw(e);
+    else
+        draw(e, e->mx, e->my);
+    e->fb = e->scene_fb;
+    if (e->layout.wide && (size_t)ow * oh > e->out_cap) {
+        u32 *o = realloc(e->out, (size_t)ow * oh * 4);
+        if (o) {
+            e->out = o;
+            e->out_cap = (size_t)ow * oh;
+        } else {
+            scr_layout_begin(&e->layout, ow, oh, 0); /* no memory: the plain screen */
+            draw(e, e->mx, e->my);
+            e->fb = e->scene_fb;
+        }
+    }
+    if (!e->layout.wide) {
+        scr_layout_begin(&e->layout, SCREEN_W, SCREEN_H, 0); /* the platform scales it */
+        e->shown = e->scene_fb;
+        e->shown_w = SCREEN_W;
+        e->shown_h = SCREEN_H;
+    } else {
+        const game *g = e->g;
+        const cursor_art *c = current_cursor(e, e->mx, e->my);
+        u32 bg = g->lbox_tinted ? (u32)g->lbox_tint[0] << 16 | (u32)g->lbox_tint[1] << 8 | g->lbox_tint[2] : 0;
+        scr_compose(&e->layout, e->out, e->scene_fb, e->ui_fb, bg);
+        if (c) {
+            const xf_image *f = &c->frames[(plat_ticks_ms() / 100) % (u32)c->count];
+            scr_draw_scaled(&e->layout, e->out, f->pixels, f->width, f->height, c->hot_x, c->hot_y, e->out_mx,
+                            e->out_my, KEY_BLUE);
+        }
+        e->shown = e->out;
+        e->shown_w = ow;
+        e->shown_h = oh;
+    }
+    plat_present(e->shown, e->shown_w, e->shown_h, e->shown_w);
+}
+
 /* One frame: input, clips and sound, drawing. */
 static void run_frame(explorer *e)
 {
@@ -1802,6 +1966,12 @@ static void run_frame(explorer *e)
     if (!paused)
         game_tick(e->g, plat_ticks_ms() - e->paused_ms);
     while (plat_poll(&ev)) {
+        if (ev.type == PLAT_EV_MOUSE_MOVE || ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_MOUSE_UP) {
+            /* Events come in the pixels of the frame shown last. */
+            e->out_mx = ev.x;
+            e->out_my = ev.y;
+            scr_to_screen(&e->layout, ev.x, ev.y, &ev.x, &ev.y);
+        }
         if (ev.type == PLAT_EV_QUIT)
             e->running = 0;
         else if (e->g->ask && ev.type == PLAT_EV_KEY_DOWN && (ev.key == PLAT_KEY_ESCAPE || ev.key == '\r'))
@@ -1833,6 +2003,12 @@ static void run_frame(explorer *e)
                  (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
             e->debug = !e->debug;
             xf_info("debug overlay %s", e->debug ? "on" : "off");
+        } else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'w' &&
+                   (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
+            /* Ctrl+Shift+W: the wide layout on or off */
+            e->wide_pref = !e->wide_pref;
+            game_set_screen_wide(e->g, e->wide_pref);
+            xf_info("screen: %s", e->wide_pref ? "wide" : "original");
         }
         else if (ev.type == PLAT_EV_KEY_DOWN && !e->playing && e->g->iface_count && ev.key &&
                  (ev.key < 0x100) && !(ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_CMD))) {
@@ -1971,14 +2147,12 @@ static void run_frame(explorer *e)
     place_slot_cursor(e);
     if (e->in_menu == 1) {
         menu_update(e);
-        menu_draw(e);
     } else {
         if (e->g->view)
             refresh_picture(e);
         refresh_iface_pictures(e);
-        draw(e, e->mx, e->my);
     }
-    plat_present(e->fb, SCREEN_W, SCREEN_H, SCREEN_W);
+    present_frame(e);
     plat_sleep_ms(e->playing ? 5 : 16);
 }
 
@@ -2016,6 +2190,7 @@ static void script_point(void *user, int x, int y)
     explorer *e = user;
     e->mx = x;
     e->my = y;
+    scr_to_output(&e->layout, x, y, &e->out_mx, &e->out_my);
     if (!e->playing)
         game_hover(e->g, x, y);
 }
@@ -2023,32 +2198,39 @@ static void script_point(void *user, int x, int y)
 static int script_shot(void *user, const char *path)
 {
     explorer *e = user;
-    FILE *fp = fopen(path, "wb");
+    FILE *fp;
     u8 header[54] = { 'B', 'M' };
-    int x, y;
-    u32 size = 54 + SCREEN_W * SCREEN_H * 3;
-    if (!fp)
-        return -1;
+    int x, y, w, h, pad;
+    u32 size;
     run_frame(e);
-    header[2] = (u8)size, header[3] = (u8)(size >> 8), header[4] = (u8)(size >> 16);
+    w = e->shown_w;
+    h = e->shown_h;
+    pad = (4 - w * 3 % 4) % 4;
+    size = 54 + (u32)((w * 3 + pad) * h);
+    if (!e->shown || !(fp = fopen(path, "wb")))
+        return -1;
+    header[2] = (u8)size, header[3] = (u8)(size >> 8), header[4] = (u8)(size >> 16), header[5] = (u8)(size >> 24);
     header[10] = 54;
     header[14] = 40;
-    header[18] = SCREEN_W & 0xFF, header[19] = SCREEN_W >> 8;
-    header[22] = SCREEN_H & 0xFF, header[23] = SCREEN_H >> 8;
+    header[18] = (u8)w, header[19] = (u8)(w >> 8);
+    header[22] = (u8)h, header[23] = (u8)(h >> 8);
     header[26] = 1;
     header[28] = 24;
     fwrite(header, 1, sizeof(header), fp);
-    for (y = SCREEN_H - 1; y >= 0; y--)
-        for (x = 0; x < SCREEN_W; x++) {
-            u32 c = e->fb[y * SCREEN_W + x];
+    for (y = h - 1; y >= 0; y--) {
+        static const u8 zero[3] = { 0, 0, 0 };
+        for (x = 0; x < w; x++) {
+            u32 c = e->shown[(size_t)y * w + x];
             u8 px[3];
             px[0] = (u8)c;
             px[1] = (u8)(c >> 8);
             px[2] = (u8)(c >> 16);
             fwrite(px, 1, 3, fp);
         }
+        fwrite(zero, 1, (size_t)pad, fp);
+    }
     fclose(fp);
-    xf_info("screenshot %s", path);
+    xf_info("screenshot %s (%dx%d)", path, w, h);
     return 0;
 }
 
@@ -2067,11 +2249,20 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     }
     e->data_dir = data_dir;
     e->media_dirs = media_dirs;
+    e->fb = e->scene_fb;
+    scr_layout_begin(&e->layout, SCREEN_W, SCREEN_H, 0);
     if (getenv("XF_SAVE_DIR"))
         snprintf(e->g->save_dir, sizeof(e->g->save_dir), "%s", getenv("XF_SAVE_DIR"));
     else if (plat_save_dir(e->g->save_dir, sizeof(e->g->save_dir)) != 0)
         e->g->save_dir[0] = '\0';
     game_prefs_load(e->g);
+    {
+        /* XF_SCREEN=wide or original overrides the saved setting */
+        const char *screen = getenv("XF_SCREEN");
+        e->wide_pref = e->g->screen_wide;
+        if (screen)
+            e->wide_pref = strcmp(screen, "wide") == 0 || strcmp(screen, "fill") == 0;
+    }
     e->disc = disc;
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
@@ -2133,6 +2324,7 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     menu_close(e);
     if (e->nav_open)
         xf_mov_close(&e->nav);
+    free(e->out);
     if (e->have_font || e->have_card_font)
         xf_text_cache_clear();
     if (e->have_font)

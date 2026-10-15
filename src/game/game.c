@@ -2197,6 +2197,9 @@ void game_prefs_apply(game *g)
         vc_set_var(&g->interp, g_pref_vars[i], g->prefs[i]);
 }
 
+/* Our own settings share the file, under numbers no GAM variable has. */
+#define PREF_SCREEN_WIDE 0xFFFF0001u
+
 static void prefs_save(game *g)
 {
     char path[1024];
@@ -2209,7 +2212,14 @@ static void prefs_save(game *g)
         return;
     for (i = 0; i < GAME_PREFS; i++)
         fprintf(f, "%u %d\n", g_pref_vars[i], g->prefs[i]);
+    fprintf(f, "%u %d\n", PREF_SCREEN_WIDE, g->screen_wide);
     fclose(f);
+}
+
+void game_set_screen_wide(game *g, int on)
+{
+    g->screen_wide = on != 0;
+    prefs_save(g);
 }
 
 void game_prefs_load(game *g)
@@ -2224,10 +2234,17 @@ void game_prefs_load(game *g)
      * says 0, but the story needs it (Cook takes the case files only with
      * it on, on Disc 1). */
     g->prefs[pref_index(873)] = 1;
+#ifdef __vita__
+    g->screen_wide = 1; /* the handheld's 960x544 screen */
+#else
+    g->screen_wide = 0;
+#endif
     snprintf(path, sizeof(path), "%s/prefs", g->save_dir);
     if (g->save_dir[0] && (f = fopen(path, "r"))) {
         while (fscanf(f, "%u %d", &var, &value) == 2)
-            if ((i = pref_index(var)) >= 0)
+            if (var == PREF_SCREEN_WIDE)
+                g->screen_wide = value != 0;
+            else if ((i = pref_index(var)) >= 0)
                 g->prefs[i] = value;
         fclose(f);
     }
