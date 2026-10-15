@@ -1187,8 +1187,8 @@ static const struct {
 /* 0x4F4AC0: shot number -> clip, the view that follows it (0: none;
  * GAME_SHOT_RESTART: the current view starts again) and the letter put in
  * the RegViewState variable (var 1495), which the scene reads when the
- * clip ends: 'r' a hit. Shots 3, 20, 26 and 27 pick random clips or end
- * the game; 0 to 5 also count hits. */
+ * clip ends: 'r' a hit. Shots 20, 26 and 27 are in game_shoot; shot 3
+ * has no rectangle; 1, 2, 4 and 5 also count hits. */
 #define GAME_SHOT_RESTART 0xFFFFFFFFu
 static const struct {
     u8 shot;
@@ -1352,6 +1352,21 @@ int game_shoot(game *g, u32 hot)
             shot = 0;
         if (!shot)
             return 0;
+        if (shot == 20 || shot == 26) {
+            /* 0x4F4F9C, 0x4F501C: no clip of their own, no restart; the
+             * scene reads RegViewState: 't' (shot 20), or 'b' (shot 26),
+             * where the clip playing ends with its end triggers
+             * (0x4F4050; our reading of it). */
+            set_reg_var(g, "RegViewState", 0, shot == 20 ? 't' : 'b');
+            xf_info("shot %u", shot);
+            if (shot == 20) {
+                g->current.asset = 0;
+                g->current.conversation = 0;
+                g->queue_head = g->queue_tail;
+            } else if (g->current.asset)
+                game_media_end(g);
+            return 1;
+        }
         if (shot == 27) {
             /* 0x4F5038: Willmore turns the gun on himself. RegViewState
              * 'S', and one of two suicide note screens (layouts 62847
