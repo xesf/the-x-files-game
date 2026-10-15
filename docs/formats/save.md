@@ -28,9 +28,9 @@ Their items call these functions:
 The Save screen's text cursor (item 82561) follows the typed name, which
 holds up to 21 characters. Slot `n` is drawn at y = 166 + 58·n.
 
-Before saving, the engine checks the name with engine strings 31, 32 and
-38: no name, a slot that is not empty, and a name that another slot
-already has.
+Before saving, the engine checks the name. It shows engine string 32
+when there is no name, 31 when the slot holds a game, and 38 when
+another slot has the same name.
 
 `SaveGameState` takes a checkpoint. The story calls it before dangerous
 scenes. After a death, `EndGame` asks "Try again?" (engine string 39).
