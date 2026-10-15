@@ -1710,31 +1710,49 @@ static void email_display(game *g, u32 asset)
     email_show_rows(g);
 }
 
-/* 0x43D9F0: shows a mail. Three mails carry an attachment, and the
- * engine shows the items that open it. */
+/* 0x43D9F0: shows a mail. Three mails carry an attachment; for them the
+ * engine shows the attachment items and the text goes to a smaller area
+ * (on the computer 72758, in the PDA 72761). Clicking that text (or the
+ * attachment) runs the item's own triggers: the GPS coordinates from the
+ * Lone Gunmen open the map of Alaska. */
 static void email_read(game *g, u32 item, u32 asset)
 {
-    static const u32 shown_c[][3] = {
+    static const u32 computer[][3] = {
         { 61775, 72715, 72722 },  /* Amis: the Tarakan fingerprint file */
-        { 64527, 91038, 91007 },  /* the coroner: the crew's fingerprints */
-        { 61765, 72723, 91939 },
+        { 64527, 91038, 91007 },  /* the coroner: the crew cut's prints */
+        { 61765, 72723, 91939 },  /* the Lone Gunmen: GPS coordinates */
     };
     size_t i;
     int attachment = -1;
-    for (i = 0; i < XF_COUNT(shown_c); i++)
-        if (shown_c[i][0] == asset)
+    for (i = 0; i < XF_COUNT(computer); i++)
+        if (computer[i][0] == asset)
             attachment = (int)i;
     g->email_body_item = item;
     email_text(g, asset, g->email_body, sizeof(g->email_body));
-    if (attachment < 0 || item != 54950)
+    if (attachment < 0)
         return;
-    vc_set_enabled(&g->interp, 72713, 1);
-    vc_set_enabled(&g->interp, 72710, 1);
-    vc_set_enabled(&g->interp, shown_c[attachment][1], 1);
-    vc_set_enabled(&g->interp, shown_c[attachment][2], 1);
-    if (asset != 64527)
-        vc_set_enabled(&g->interp, 69527, 0); /* no Delete */
-    g->email_body_item = 72758; /* the text area above the attachment */
+    if (item == 54950) { /* the computer */
+        vc_set_enabled(&g->interp, 72713, 1);
+        vc_set_enabled(&g->interp, 72710, 1);
+        vc_set_enabled(&g->interp, computer[attachment][1], 1);
+        vc_set_enabled(&g->interp, computer[attachment][2], 1);
+        if (asset != 64527)
+            vc_set_enabled(&g->interp, 69527, 0); /* no Delete */
+        g->email_body_item = 72758;
+    } else { /* the PDA */
+        vc_set_enabled(&g->interp, 72741, 1);
+        vc_set_enabled(&g->interp, 72760, 1);
+        if (asset == 61765) {
+            vc_set_enabled(&g->interp, 72743, 1);
+            vc_set_enabled(&g->interp, 72759, 1);
+        } else {
+            vc_set_enabled(&g->interp, 72751, 1);
+            vc_set_enabled(&g->interp, 91947, 1);
+        }
+        if (asset != 64527)
+            vc_set_enabled(&g->interp, 71372, 0);
+        g->email_body_item = 72761;
+    }
 }
 
 static int email_function(game *g, const char *name, int argc, const vc_operand *args)
