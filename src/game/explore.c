@@ -464,7 +464,7 @@ static void draw_ifaces(explorer *e)
     int k, i, order;
     char buf[64];
     for (k = 0; k < e->g->iface_count; k++)
-        for (order = 0; order < 256; order++) /* back to front */
+        for (order = 255; order >= 0; order--) /* back to front: a low order is in front */
             for (i = 0; i < e->g->ifaces[k].count; i++) {
                 const game_iface_item *it = &e->g->ifaces[k].items[i];
                 if ((it->item.flags & 0xFF) == order && vc_is_enabled(&e->g->interp, it->id))

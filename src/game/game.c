@@ -1689,9 +1689,15 @@ static size_t email_text(game *g, u32 asset, char *out, size_t size)
             break;
         }
     out[n] = '\0';
-    for (i = 0; i < (int)n; i++)
-        if (out[i] == '\r')
-            out[i] = '\n';
+    { /* CRLF and CR line ends become LF */
+        size_t r, w = 0;
+        for (r = 0; r < n; r++)
+            if (out[r] != '\r')
+                out[w++] = out[r];
+            else if (r + 1 >= n || out[r + 1] != '\n')
+                out[w++] = '\n';
+        out[n = w] = '\0';
+    }
     return n;
 }
 
@@ -1714,8 +1720,6 @@ static void email_field(game *g, u32 asset, const char *name, char *out, size_t 
             snprintf(out, size, "%.*s", (int)n, v);
             return;
         }
-        if (*p == '\n')
-            break; /* end of the header */
     }
 }
 
