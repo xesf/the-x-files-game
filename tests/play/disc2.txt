@@ -31,7 +31,7 @@ click 58726                     # Seattle
 click 59118                     # FBI Field Office
 walk 1237                       # Willmore's desk; Scully's laptop stays by the door
 click 29855                     # the computer
-ing P 2065550182                # ING phone search (typed in the original)
+ing P Z 2065550182                # ING phone search (typed in the original)
 expect var 5051 1               # the Dockside Warehouse
 click 31620                     # leave the computer
 inv 17451
@@ -110,4 +110,32 @@ evidence 21838                  # the bullet
 evidence 17473                  # the blood
 expect enabled 17469 0
 
-# Next: Skinner at the Field Office, the plate in the ING.
+# The Field Office: Skinner in the meeting room, then he flies back to
+# D.C.; Cook takes Scully's PowerBook to Computer Crimes.
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+walk 1215
+askall 39118
+walk 1237                       # Willmore's desk: Cook comes in
+click 40587
+ask 40595                       # "Well, they're still missing"
+ask 40655                       # Computer Crimes can check the PowerBook
+expect nospot 40587
+
+# The ING: the plate of the car that followed them, and James Wong.
+click 29855
+noing L Z 240 EAK               # not a civilian plate
+ing L G 240 EAK                 # Error: Restricted Data
+expect var 4713 1
+ing N C James Wong              # a criminal record
+click 31620
+
+# Node 2 is complete: the warehouse at night.
+inv 17451
+click 58726
+click 34072
+expect var 2045 1
+expect var 1219 11
+
+# Next: the stakeout.
