@@ -1,0 +1,45 @@
+# Disc 6 (link 4, node 7), from Saturday at the apartment. Object IDs
+# are from the English HDB (CD and DVD share them).
+include disc5.txt
+
+# Link 4: X at Hangar 4, Sand Point Naval Station.
+inv 17451
+click 58726
+click 59758                     # Hangar 4
+wait 5000
+walk 6711
+askall 27274                    # X: the stiletto
+skip
+click 29693                     # leave: Astadourian is waiting
+skip
+askall 93595
+skip
+
+# Node 7: Presbyterian Hospital, Gold Bar. Scully.
+inv 17451
+click 58754                     # the map of the state
+click 59010                     # Presbyterian Hospital
+wait 5000
+expect var 1219 7
+askall 23855                    # the receptionist
+skip
+hold Badge
+click 23855
+hold none
+skip
+askall 23855
+skip
+walk 23834
+askall 23857                    # Scully: "We can't tell you."
+skip
+wait 3000
+inv 25579                       # she draws on Willmore: show X's stiletto
+skip
+expect view 73885
+askall 73888
+
+# The rail yard at Rural Route 1121.
+inv 17451
+click 79708
+wait 5000
+expect view 8568
