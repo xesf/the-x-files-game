@@ -3,11 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "xf_file.h"
 #include "xf_log.h"
 
 static void after_triggers(game *g);
+static const game_iface_item *find_item(game *g, u32 id);
 
 static void note_missing(game *g, const char *name)
 {
@@ -452,8 +454,11 @@ static void host_interface(void *user, u32 id, u8 control)
         g->iface_serial++;
         xf_info("interface %u: %d items", id, d->count);
         /* Items run their enter triggers (kind 8) when the layout opens. */
-        for (i = 0; i < d->count; i++)
+        for (i = 0; i < d->count; i++) {
+            g->trigger_item = d->items[i].id;
             vc_run_triggers(&g->interp, d->items[i].item.triggers, 8);
+        }
+        g->trigger_item = 0;
     }
 }
 
@@ -637,6 +642,50 @@ int game_click_inventory(game *g, u32 id)
     return 1;
 }
 
+const char *game_item_text(game *g, u32 item, char *buf, size_t size)
+{
+    const game_iface_item *it = find_item(g, item);
+    u32 ids[64];
+    int n, i;
+    if (!it)
+        return NULL;
+    /* The login fields: their kind 3 trigger calls LoginKeyPress(field). */
+    n = vc_read_list(&g->db, it->item.triggers, ids, 64);
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        u32 acts[8];
+        int m, j;
+        if (xf_neo_object(&g->db, ids[i], &r, NULL, NULL) != 0)
+            continue;
+        m = vc_read_list(&g->db, xf_neo_u32(&r), acts, 8);
+        for (j = 0; j < m; j++) {
+            vc_action a;
+            if (vc_read_action(&g->db, acts[j], &a) == 0 && a.valid && a.type == VC_ACT_FUNCTION &&
+                strcmp(a.u.function.name, "INGKeyPressed") == 0) {
+                snprintf(buf, size, "%s", g->ing);
+                return buf;
+            }
+            if (a.valid && a.type == VC_ACT_FUNCTION &&
+                strcmp(a.u.function.name, "LoginKeyPress") == 0 && a.u.function.argc == 2) {
+                int field = (int)a.u.function.args[0].value - 1;
+                size_t len;
+                if (field < 0 || field > 1)
+                    return NULL;
+                len = strlen(g->login[field]);
+                if (field == 0) {
+                    snprintf(buf, size, "%s", g->login[0]);
+                } else {
+                    len = XF_MIN(len, size - 1);
+                    memset(buf, '*', len);
+                    buf[len] = '\0';
+                }
+                return buf;
+            }
+        }
+    }
+    return NULL;
+}
+
 int game_times_asked(const game *g, u32 conversation)
 {
     int i;
@@ -718,10 +767,29 @@ int game_ask(game *g, u32 conversation)
 
 /* --- Clicks ---------------------------------------------------------- */
 
+/* 1 when a trigger list has triggers of this kind. */
+static int has_kind(game *g, u32 list, int kind)
+{
+    u32 ids[64];
+    int n = vc_read_list(&g->db, list, ids, 64), i;
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        if (vc_class(&g->db, ids[i]) == VC_TRIGGER && xf_neo_object(&g->db, ids[i], &r, NULL, NULL) == 0) {
+            xf_neo_u32(&r);
+            if (xf_neo_u8(&r) == kind)
+                return 1;
+        }
+    }
+    return 0;
+}
+
 static void click_iface_item(game *g, const game_iface_item *it)
 {
     u32 triggers = it->item.triggers;
     xf_info("click interface item %u", it->id);
+    if (has_kind(g, triggers, 3))
+        g->focus_item = it->id; /* a text field */
+    g->trigger_item = it->id;
     g->iface_hover = 0;
     vc_run_triggers(&g->interp, triggers, 0);
     after_triggers(g);
@@ -748,6 +816,39 @@ static void click_spot(game *g, const game_spot *s)
     } else {
         after_triggers(g);
     }
+}
+
+static const game_iface_item *find_item(game *g, u32 id)
+{
+    int k, i;
+    for (k = g->iface_count - 1; k >= 0; k--)
+        for (i = 0; i < g->ifaces[k].count; i++)
+            if (g->ifaces[k].items[i].id == id)
+                return &g->ifaces[k].items[i];
+    return NULL;
+}
+
+int game_key(game *g, int key)
+{
+    const game_iface_item *it = g->focus_item ? find_item(g, g->focus_item) : NULL;
+    i32 saved = g->interp.context;
+    int k, i;
+    if (!it) {
+        /* No focus yet: the first item of the top layouts that takes keys. */
+        g->focus_item = 0;
+        for (k = g->iface_count - 1; k >= 0 && !it; k--)
+            for (i = 0; i < g->ifaces[k].count && !it; i++)
+                if (has_kind(g, g->ifaces[k].items[i].item.triggers, 3))
+                    it = &g->ifaces[k].items[i];
+        if (!it)
+            return 0;
+        g->focus_item = it->id;
+    }
+    g->interp.context = key;
+    vc_run_triggers(&g->interp, it->item.triggers, 3);
+    g->interp.context = saved;
+    after_triggers(g);
+    return 1;
 }
 
 int game_click(game *g, int x, int y)
@@ -973,7 +1074,11 @@ static void format_location_card(game *g, u32 label_ref, i32 day_night, i32 hhmm
 
 static i32 arg_value(game *g, const vc_operand *o)
 {
-    return o->kind == VC_OPND_VARIABLE ? vc_get_var(&g->interp, o->value) : (i32)o->value;
+    if (o->kind == VC_OPND_VARIABLE)
+        return vc_get_var(&g->interp, o->value);
+    if (o->kind == VC_OPND_CONTEXT)
+        return g->interp.context; /* the key or timer of the event */
+    return (i32)o->value;
 }
 
 static int host_call_function(void *user, const vc_action *a)
@@ -1008,6 +1113,85 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x499E40 fn_OnInvClick(item): take the item in hand */
     if (strcmp(name, "OnInvClick") == 0 && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* 0x47D090 fn_LoginInit, 0x4B7250 fn_LoginClick, 0x46A000
+     * fn_LoginKeyPress(field, key), 0x4598B0 fn_PswdConnect(result var):
+     * the FBI computer's login. Field 1 is the name, 2 the password. */
+    if (strcmp(name, "LoginInit") == 0) {
+        memset(g->login, 0, sizeof(g->login));
+        return 1;
+    }
+    if (strcmp(name, "LoginClick") == 0)
+        return 1; /* the clicked field takes the focus (click_iface_item) */
+    if (strcmp(name, "LoginKeyPress") == 0 && argc == 2) {
+        int field = arg_value(g, &args[0]) - 1;
+        i32 key = arg_value(g, &args[1]);
+        size_t n;
+        if (field < 0 || field > 1)
+            return 1;
+        n = strlen(g->login[field]);
+        if (key == 8 && n)
+            g->login[field][n - 1] = '\0';
+        else if (key >= 32 && key < 127 && n + 1 < sizeof(g->login[0])) {
+            g->login[field][n] = (char)key;
+            g->login[field][n + 1] = '\0';
+        }
+        return 1;
+    }
+    if (strcmp(name, "PswdConnect") == 0 && argc == 1) {
+        /* 0x459AB0 compares, ignoring case, with the texts of media
+         * 57905 and 68915. */
+        char want_name[64], want_pass[64];
+        int ok;
+        game_text(g, 57905, want_name, sizeof(want_name)); /* "craig willmore" */
+        game_text(g, 68915, want_pass, sizeof(want_pass)); /* "shiloh" */
+        ok = strcasecmp(g->login[0], want_name) == 0 && strcasecmp(g->login[1], want_pass) == 0;
+        xf_info("login %s / %s: %s", g->login[0], "******", ok ? "accepted" : "refused");
+        if (args[0].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[0].value, ok);
+        if (ok) {
+            vc_set_var(&g->interp, 5327, 0); /* iFBIPasswordCount */
+            vc_set_var(&g->interp, 4946, 1); /* IFL_bHasLoggedInToFBIComputer */
+        } else {
+            vc_set_var(&g->interp, 5327, vc_get_var(&g->interp, 5327) + 1);
+        }
+        return 1;
+    }
+    /* SetIItemText(item, text, color, font, size, bold, align): puts a
+     * text (a media reference, usually a string of xfilest.dll) on a
+     * layout item. */
+    if (strcmp(name, "SetIItemText") == 0 && argc == 7) {
+        u32 item = (u32)arg_value(g, &args[0]);
+        game_item_label *l = (game_item_label *)game_item_label_of(g, item);
+        if (!l && g->label_count < GAME_MAX_LABELS)
+            l = &g->labels[g->label_count++];
+        if (l) {
+            l->item = item;
+            game_text(g, (u32)arg_value(g, &args[1]), l->text, sizeof(l->text));
+            l->color = (char)arg_value(g, &args[2]);
+            l->font = (char)arg_value(g, &args[3]);
+            l->size = arg_value(g, &args[4]);
+            l->bold = (char)arg_value(g, &args[5]);
+            l->align = (char)arg_value(g, &args[6]);
+        }
+        return 1;
+    }
+    /* RelocateIFace(left, top, right, bottom, event): moves the layout
+     * item whose trigger runs. */
+    if (strcmp(name, "RelocateIFace") == 0 && argc >= 4) {
+        game_iface_item *it = (game_iface_item *)find_item(g, g->trigger_item);
+        if (it) {
+            it->item.region.left = (i16)arg_value(g, &args[0]);
+            it->item.region.top = (i16)arg_value(g, &args[1]);
+            it->item.region.right = (i16)arg_value(g, &args[2]);
+            it->item.region.bottom = (i16)arg_value(g, &args[3]);
+        }
+        return 1;
+    }
+    /* 0x74162 SetIItemFocus(item): key presses go to that item */
+    if (strcmp(name, "SetIItemFocus") == 0 && argc == 1) {
+        g->focus_item = (u32)arg_value(g, &args[0]);
         return 1;
     }
     /* ING: typing, clearing and searching */
@@ -1094,6 +1278,63 @@ static int host_call_function(void *user, const vc_action *a)
 
 /* --- Set-up ---------------------------------------------------------- */
 
+const char *game_text(game *g, u32 asset, char *buf, size_t size)
+{
+    xf_neo_reader r, blob;
+    const u8 *p;
+    char tok[2][64];
+    int k;
+    buf[0] = '\0';
+    if (vc_class(&g->db, asset) != VC_ASSET_REF || xf_neo_object(&g->db, asset, &r, NULL, NULL) != 0)
+        return buf;
+    blob = xf_neo_blob(&g->db, &r);
+    p = blob.p;
+    /* Two Pascal tokens: the type ("6" for a string) and the value. */
+    for (k = 0; k < 2 && p && p < blob.end; k++) {
+        size_t n = *p++;
+        if (p + n > blob.end)
+            break;
+        memcpy(tok[k], p, XF_MIN(n, sizeof(tok[k]) - 1));
+        tok[k][XF_MIN(n, sizeof(tok[k]) - 1)] = '\0';
+        p += n;
+    }
+    if (k == 2 && strcmp(tok[0], "6") == 0) {
+        const char *t = xf_strings_get(&g->strings, (u32)atoi(tok[1]));
+        snprintf(buf, size, "%s", t ? t : "");
+    } else {
+        /* A text reference: the "path" token is the text. */
+        vc_asset_ref a;
+        if (vc_read_asset_ref(&g->db, asset, &a) == 0)
+            snprintf(buf, size, "%s", a.logical);
+    }
+    return buf;
+}
+
+const char *game_question_text(game *g, u32 conversation, char *buf, size_t size)
+{
+    vc_conversation c;
+    u32 ids[4];
+    buf[0] = '\0';
+    if (vc_read_conversation(&g->db, conversation, &c) != 0)
+        return buf;
+    /* The "icon" list holds the line as Willmore says it (xfilest.dll);
+     * the VCName is the writers' label. */
+    if (vc_read_list(&g->db, c.icons, ids, 4) > 0)
+        game_text(g, ids[0], buf, size);
+    if (!buf[0])
+        vc_read_name(&g->db, c.name, buf, size);
+    return buf;
+}
+
+const game_item_label *game_item_label_of(game *g, u32 item)
+{
+    int i;
+    for (i = 0; i < g->label_count; i++)
+        if (g->labels[i].item == item)
+            return &g->labels[i];
+    return NULL;
+}
+
 int game_open(game *g, const char *data_dir)
 {
     char path[1024];
@@ -1112,6 +1353,8 @@ int game_open(game *g, const char *data_dir)
         return -1;
     }
     g->interp.trace = getenv("XF_TRACE") != NULL;
+    if (xf_path_resolve(data_dir, "XFILEST.DLL", path, sizeof(path)) != 0 || xf_strings_load(&g->strings, path) != 0)
+        xf_warn("game: no xfilest.dll, interface texts are missing");
     vc_place_map_build(&g->db, &g->places);
     xf_info("%u views placed in the hierarchy", g->places.count);
     return 0;
@@ -1119,6 +1362,7 @@ int game_open(game *g, const char *data_dir)
 
 void game_close(game *g)
 {
+    xf_strings_free(&g->strings);
     vc_place_map_free(&g->places);
     vc_interp_free(&g->interp);
     xf_neo_close(&g->gam);

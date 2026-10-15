@@ -47,6 +47,7 @@ static int map_key(NSEvent *e)
     case 126: return PLAT_KEY_UP;
     case 125: return PLAT_KEY_DOWN;
     case 122: return PLAT_KEY_F1;
+    case 51: return 8; /* backspace */
     }
     s = e.charactersIgnoringModifiers;
     if (s.length == 1 && [s characterAtIndex:0] < 128) {

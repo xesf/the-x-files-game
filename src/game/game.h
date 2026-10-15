@@ -6,6 +6,7 @@
 #define XF_GAME_H
 
 #include "vc/interp.h"
+#include "data/strings.h"
 #include "vc/vc.h"
 
 #define GAME_MAX_SPOTS 64
@@ -67,6 +68,19 @@ typedef struct {
     u32 vars[VC_MAX_ARGS];
 } game_registration;
 
+/* Text that SetIItemText puts on a layout item, with its style. */
+typedef struct {
+    u32 item;
+    char text[160];
+    char color;  /* 'b' and others, see game-ui.md */
+    char font;   /* 'H' Hcd.ttr, 'c' Courier */
+    int size;    /* points */
+    char bold;   /* 'y' or 'n' */
+    char align;  /* 'l', 'c' or 'r' */
+} game_item_label;
+
+#define GAME_MAX_LABELS 64
+
 typedef struct {
     xf_neo_db db, gam;
     vc_interp interp;
@@ -104,6 +118,12 @@ typedef struct {
 
     char phone[24];       /* digits typed on the cell phone */
     char ing[64];         /* text typed in the ING search field */
+    char login[2][32];    /* computer login: name and password */
+    xf_strings strings;   /* xfilest.dll: the game's text */
+    game_item_label labels[GAME_MAX_LABELS];
+    int label_count;
+    u32 trigger_item;     /* layout item whose triggers are running */
+    u32 focus_item;       /* layout item that receives key presses */
 
     game_registration regs[32];
     int reg_count;
@@ -126,6 +146,22 @@ void game_back(game *g);
 int game_click(game *g, int x, int y);
 /* Clicks the hotspot or interface item with this object ID. */
 int game_click_object(game *g, u32 id);
+/* A key press: runs the kind 3 triggers of the layout item with focus,
+ * with the key as the event value. Returns 1 when an item took it. */
+int game_key(game *g, int key);
+/* Text typed in a layout item, for drawing: the login name, or the
+ * password as stars. NULL when the item shows no typed text. */
+const char *game_item_text(game *g, u32 item, char *buf, size_t size);
+
+/* The text of a media reference: a string of xfilest.dll (type 6), or
+ * the reference's own text (kind 4, for example a password). Returns
+ * buf, empty when there is none. */
+const char *game_text(game *g, u32 asset, char *buf, size_t size);
+/* What the dialogue box shows for a question. */
+const char *game_question_text(game *g, u32 conversation, char *buf, size_t size);
+/* The SetIItemText label of a layout item, or NULL. */
+const game_item_label *game_item_label_of(game *g, u32 item);
+
 /* Mouse moved: runs mouse over and off triggers of interface items. */
 void game_hover(game *g, int x, int y);
 

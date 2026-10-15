@@ -115,6 +115,8 @@ typedef struct {
     int have_font;
     xf_font card_font;    /* Courier New: location cards */
     int have_card_font;
+    xf_font hcd_font;     /* Hcd.ttr: computer screens */
+    int have_hcd_font;
     int debug;            /* Ctrl+Shift+D: hotspot outlines and names */
     /* dialogue box */
     xf_image dlg_talk, dlg_history, dlg_up, dlg_down;
@@ -362,6 +364,7 @@ static void blit_keyed(explorer *e, const xf_image *img, int x0, int y0);
 static void draw_ifaces(explorer *e)
 {
     int k, i, order;
+    char buf[64];
     for (k = 0; k < e->g->iface_count; k++)
         for (order = 0; order < 256; order++) /* back to front */
             for (i = 0; i < e->g->ifaces[k].count; i++) {
@@ -369,6 +372,43 @@ static void draw_ifaces(explorer *e)
                 if ((it->item.flags & 0xFF) == order && vc_is_enabled(&e->g->interp, it->id))
                     blit_keyed(e, &e->iface_img[k][i], it->item.region.left, it->item.region.top);
             }
+    /* SetIItemText labels: font 'H' is Hcd.ttr, 'c' Courier New; size in
+     * points (96 dots per inch). */
+    for (k = 0; k < e->g->iface_count; k++)
+        for (i = 0; i < e->g->ifaces[k].count; i++) {
+            const game_iface_item *it = &e->g->ifaces[k].items[i];
+            const game_item_label *l = game_item_label_of(e->g, it->id);
+            const xf_font *f;
+            const vc_region *r = &it->item.region;
+            float px;
+            int w, x;
+            xf_surface sf = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+            if (!l || !l->text[0] || !vc_is_enabled(&e->g->interp, it->id))
+                continue;
+            f = l->font == 'H' && e->have_hcd_font ? &e->hcd_font
+              : l->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
+            px = (float)l->size * 96.0f / 72.0f;
+            w = xf_text_width(f, px, l->text, strlen(l->text));
+            x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
+            xf_text_draw(&sf, f, px, x, r->bottom - (r->bottom - r->top - (int)px) / 2 - 3, l->text, strlen(l->text),
+                         l->color == 'b' ? 0xFFFFFF : 0x000000);
+        }
+    /* Typed text in text fields, with a caret in the one that has focus. */
+    for (k = 0; k < e->g->iface_count && e->have_font; k++)
+        for (i = 0; i < e->g->ifaces[k].count; i++) {
+            const game_iface_item *it = &e->g->ifaces[k].items[i];
+            const char *text = game_item_text(e->g, it->id, buf, sizeof(buf) - 1);
+            const vc_region *r = &it->item.region;
+            if (!text)
+                continue;
+            if (it->id == e->g->focus_item && (plat_ticks_ms() / 500) % 2)
+                strcat(buf, "|");
+            {
+                xf_surface sf = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+                xf_text_draw(&sf, &e->font, 15, r->left + 8, (r->top + r->bottom) / 2 + 5, text, strlen(text),
+                             0x000000);
+            }
+        }
 }
 
 /* --- Clips and sounds ------------------------------------------------ */
@@ -617,9 +657,7 @@ static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
     for (i = e->talk_scroll; i < n && k < max; i++) {
         char q[256] = "";
         int starts[8], lens[8], lines;
-        vc_conversation c;
-        if (vc_read_conversation(&e->g->db, ids[i], &c) == 0)
-            vc_read_name(&e->g->db, c.name, q, sizeof(q));
+        game_question_text(e->g, ids[i], q, sizeof(q));
         lines = wrap_lines(e, q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
         if (y + (lines - 1) * DLG_LINE > DLG_Y + DLG_TEXT_BOTTOM) {
             *more = 1;
@@ -657,9 +695,7 @@ static void draw_dialog(explorer *e, int mx, int my)
         int over = mx >= x0 + DLG_TEXT_X && mx < x0 + DLG_TEXT_X + DLG_TEXT_W && my >= ent[i].y - DLG_LINE + 3 &&
                    my < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4;
         u32 color = over ? 0xFFFFFF : 0xD8D8D8;
-        vc_conversation c;
-        if (vc_read_conversation(&e->g->db, ent[i].id, &c) == 0)
-            vc_read_name(&e->g->db, c.name, q, sizeof(q));
+        game_question_text(e->g, ent[i].id, q, sizeof(q));
         lines = wrap_lines(e, q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
         for (l = 0; l < lines; l++)
             xf_text_draw(&s, &e->font, DLG_PX, x0 + DLG_TEXT_X, ent[i].y + l * DLG_LINE, q + starts[l],
@@ -1251,6 +1287,14 @@ static void run_frame(explorer *e)
             e->debug = !e->debug;
             xf_info("debug overlay %s", e->debug ? "on" : "off");
         }
+        else if (ev.type == PLAT_EV_KEY_DOWN && !e->playing && e->g->iface_count && ev.key &&
+                 (ev.key < 0x100) && !(ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_CMD))) {
+            /* Typing into a layout's text field (login, ING search). */
+            int key = ev.key;
+            if ((ev.mods & PLAT_MOD_SHIFT) && key >= 'a' && key <= 'z')
+                key -= 'a' - 'A';
+            game_key(e->g, key);
+        }
         else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE)
             menu_set_hover(e, menu_item_at(ev.x, ev.y));
         else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
@@ -1412,6 +1456,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
         e->have_font = xf_font_load(&e->font, path) == 0;
+    if (xf_path_resolve(data_dir, "HCD.TTR", path, sizeof(path)) == 0)
+        e->have_hcd_font = xf_font_load(&e->hcd_font, path) == 0;
     if (plat_font_path("Courier New", path, sizeof(path)) == 0)
         e->have_card_font = xf_font_load(&e->card_font, path) == 0;
     if (!e->have_card_font)
@@ -1466,6 +1512,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         xf_font_free(&e->font);
     if (e->have_card_font)
         xf_font_free(&e->card_font);
+    if (e->have_hcd_font)
+        xf_font_free(&e->hcd_font);
     game_close(e->g);
     free(e->g);
     free(e);

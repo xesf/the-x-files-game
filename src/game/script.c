@@ -389,6 +389,13 @@ int script_run(script *s, const char *path, int quiet)
         } else if (strcmp(cmd, "point") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
             if (s->host.point)
                 s->host.point(s->host.user, (int)a, (int)b);
+        } else if (strcmp(cmd, "type") == 0) {
+            /* Types the rest of the line into the field with focus. */
+            const char *t = line + strspn(line, " \t");
+            t += strcspn(t, " \t");
+            t += strspn(t, " \t");
+            while (*t && *t != '\n' && *t != '\r')
+                ok &= game_key(g, (unsigned char)*t++);
         } else if (strcmp(cmd, "skip") == 0) {
             settle(s);
         } else if (strcmp(cmd, "shot") == 0 && sscanf(line, "%*s %255s", file) == 1) {
