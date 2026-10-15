@@ -84,7 +84,7 @@ After the optional condition, the data depends on the type (low 7 bits):
 | Type | Action | Data | Count |
 |---|---|---|---|
 | 0 | Variable statement | An expression (11 bytes) | 2,354 |
-| 1 | Play media | Media object ID (4), selector (1) | 1,859 |
+| 1 | Play media | Media object ID (4), selector (1): 1 plays, 2 loops, 3 stops (0x479BA0) | 1,859 |
 | 2 | Timer | Duration (4), timer number (1), control (1) | 510 |
 | 3 | Enable or disable | GAM `VCEnabled` ID (4), value (4, always 0), new state (1: 1 enable, 0 disable) | 5,265 |
 | 4 | Go to view | View, node, location and viewpoint IDs (4 each) | 347 |

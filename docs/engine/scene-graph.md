@@ -145,8 +145,12 @@ Kinds 2 and 11 occur once each. What the kinds mean, with the evidence:
 | 8 | Enter | The owner appears: view entry, media start. |
 | 9 | Leave | The owner goes away: view exit, media end. |
 
-Kinds 1 and 6 are still open. Kind 1 lists show and hide interfaces;
-kind 6 lists play media.
+Kind 1 is a debug click: it shows and hides interfaces and cheats (the
+E-MAIL button's kind 1 sends every mail); the explorer does not run it.
+Kind 6 follows a finished request. The phone's send key is the clear
+case: when `PhoneSend` finds the number, the key's kind 6 triggers stop
+the ringing and place the call. The other kind 6 lists play a line after
+a sound.
 
 The data supports 8 and 9: kind 8 lists on views store the current view
 in variable 1057, and kind 9 lists disable hotspots and stop timers. The

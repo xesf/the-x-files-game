@@ -135,6 +135,11 @@ the view turns it off. Clicking a piece runs its kind 0 triggers: the
 technician's answer plays and the piece goes away. Icon 56185, "AI
 Icon", is the Artificial Intuition icon, not evidence.
 
+With the pointer on the evidence kit, the collected evidence pops up
+beside it (`RollOnEvKit`, 0x49FDB0, on the kit's mouse over and mouse
+off triggers); the popup closes when the pointer leaves both the kit and
+the popup. A click on the kit closes it (`EvKitIconClick`).
+
 A view's clip can change while the player stays in the view, when a
 trigger switches its media list. The old clip's kind 9 triggers run,
 then the new clip's kind 8 triggers.
@@ -232,6 +237,112 @@ mail has an attachment. Mail files end their lines with CR LF.
 such as the ING's progress bar; its start triggers start the search's
 timer. `INGDisplayCook` (0x4B6620) shows Cook's ING record (number 3),
 or "Restricted Data" once variable 5095 is set.
+
+## Writing mail
+
+The computer's compose screen (layout 38166) and the PDA's (40509) send
+mail to nine people (table 0x6584D0): Amis, Cook, Shanks, Skinner, Jim
+Seitz, Mike Robinson, Barbara Willmore, Pam Hill and Perry Allen.
+
+- `ForwardObject(type)` encloses what the player was reading: `'M'` the
+  Media Index article, `'I'` the ING record, `'N'` the PDA notes page.
+- `DisplayAddrs('T')` and `DisplayAddrs('C')` open the To and Cc pickers
+  (five rows, scrolled with `ScrollAddrs`); `AddrSelected(row)` checks a
+  person; leaving the picker runs `CreateAddrList` and the To or Cc line
+  shows the choice. On the PDA, `AddrSelPDA(row)` picks one person.
+- `EmailSend` (0x474E20) gives the forward to everyone on both lines,
+  once each. Each enclosure has a reply per person (tables 0x65D188,
+  0x65E650, 0x658F88), which waits until `EmailFlushMess` runs: the
+  story calls it when Willmore leaves certain places.
+
+## Cell phone
+
+The phone (layout 15297) dials with its keypad: `PhoneButton(key,
+number, sound)` (0x51F960) adds a digit, 13 at most, shows the number in
+Phn.ttr and plays the button's sound. MENU opens the address book
+(`PhoneMenuInit`, 0x51F640): the enabled media of item 45309, each a
+name and a number on its last line; `PhoneFlipName` steps through it,
+and the next digit typed starts a new number. Send runs `PhoneSend` from
+a timer (`Phone_lookup`, 0x51FCD0):
+
+- more than 11 digits: the phone rings on (list 67422);
+- ten digits outside Seattle's area code 206: a message says to dial 1
+  first (list 83305);
+- a number in the engine's book: the call's trigger and list go into two
+  variables, and the send key's kind 6 triggers place the call
+  (`DoActionListID`);
+- any other number rings on.
+
+## Photo viewer
+
+The computer's photo screen (layout 15232, 0x4B2370) shows up to 20
+thumbnails, five a row, of the photos downloaded from the camera.
+`PhotoDownload` takes the camera's new photos; `PhotoEnlarge(slot)` shows
+one in the top corner, where the sedan's plate reads 240 EAK;
+`PhotoDelete` removes it and `PhotoScroll` moves a row at a time.
+`PhotoForward` is an empty function in the original.
+
+## Media Index
+
+The computer's Media Index (layout 15208) searches newspaper articles.
+`MSKeyPressed` types into the field and `MediaSearch` (0x4654A0) runs
+from the progress clip's timer. Sixteen items (table 0x65D148) each hold
+an article and its keywords; the typed words must equal a keyword, case
+aside. A match shows the article and turns Forward on; the Tarakan
+article also plays a news clip. Anything else shows "No Data Found".
+
+## PDA field notes
+
+The PDA's notepad (layout 32821) shows Willmore's field notes a page at
+a time (`NotePadInit`, 0x4CF8E0; `NoteFlipDay`). `EnablePDANote(note)`
+records a note. There are 23 pages, each a layout item whose media are
+its notes; a page opens once one of its notes is recorded, and the pages
+up to the first one with no note can be read. Pages 5 to 8 and 13 and 14
+change order with the places visited first (variables 5325, 5328 to
+5330).
+
+## PDA address book
+
+The PDA's address book (layout 32823) shows a card at a time
+(`PDAInitAddr`, `PDAFlipAddr`, 0x4C9AD0) from the enabled media of item
+45307: name, mail address and street address.
+
+## Books
+
+Willmore's journal on his nightstand (layout 45360, `JournalInit`,
+`JournalFlip`, 0x4A4C40) and Scully's Bible at the Comity Inn (layout
+60518, `BibleInit`, `BibleFlip`, 0x507540) show two pages side by side.
+The journal's pages are the enabled media of item 49422, so it grows as
+the story goes on, and it opens at the last entries.
+
+## Secret base terminal
+
+A terminal in the secret base (layout 52692) lists files; each asks for
+a password (layout 53263). `SBaseKeyPress` shows a mark per letter typed
+and OK always leads to the refusal (layout 53268).
+
+## Options
+
+The main menu's Options item opens layout 49738, with three tabs
+(Audio, Graphics, Game Play). Each setting is a GAM variable
+(`Pref_...`): yes or no settings toggle, lettered ones cycle (difficulty
+S, H, E), volumes go from 0 to 100. The engine keeps them apart from the
+game, so they outlive a new game or a load; we save them in the file
+`prefs` in the save folder.
+
+| Setting | Effect |
+|---|---|
+| Artificial Intuition | The hint icon shows only when on (on unless turned off) |
+| Action Scene Auto-Rewind | A death asks Try again only when on |
+| Action Scene Difficulty | The goons' chance to fire first |
+| Closed Captioning | Subtitles under the clips |
+| Inventory | `V` keeps the inventory bar up |
+| Rollover Text | Names under icons and inventory items |
+| Skip Introduction | No opening titles |
+| Right/Command + Click to Skip Video Clip | Clips skip only with right click or Command click, and only when on |
+| Volumes | Dialogue (clips) and effects (sounds), times the game volume |
+
+The Graphics settings and the others are stored but have no effect yet.
 
 ## Story progress
 
@@ -336,6 +447,23 @@ Willmore to the meeting room. `DisplayDBox(character view)` (0x47CF00)
 opens a character's dialogue box after a scene; `DisplayDBox(0)` closes
 it.
 
+## Side scenes
+
+- `GetPlayFBIShot`, `GetPlayBones` and `GetPlayCancer` (0x4B0B30 and on)
+  read 1 the first time a session and 0 after: some clips play once.
+- `PrepBombTime(timer, media)` (0x4D0F80) starts the bomb's three-minute
+  countdown clip where the timer is. Clips play only the time range their
+  media entry names (for example `XV/90178.xmv 59100..60767`).
+- `SmGoonShoots(result, try, view)` (0x4B0460): on Smolnikoff's stairs a
+  goon may fire first, 20, 40 or 60 percent on the second try and 50, 65
+  or 80 on the third, by difficulty.
+- `DrawGunRauch(state, letter)` (0x4B0410): drawing the gun while the NSA
+  agents talk on Rauch's porch starts the gunfight (view 39746).
+- `SetShanksVar(flag)` (0x51E160) works out what Shanks has to report
+  from the variables `RegShanksNode2`, `3` and `6` registered; in node 2
+  it also mails Willmore about the warehouse.
+- `SuicideNote` and shot 27: see [Gunfights](#gunfights).
+
 ## The end of the game
 
 `EndGame(var)` (0x4B6020) ends the game: death, or the credits after the
@@ -397,3 +525,7 @@ view's media. It is off by default.
 - The original names each save file after its slot name; ours uses
   `slot1.xfs` to `slot3.xfs`, with the name inside.
 - Original `.x` saves cannot be loaded yet.
+- `PageTurnSound` plays nothing, and `AlienBlast` does not hide the two
+  screen layers.
+- The suicide note uses Courier: the ZonkersHand font is not in the
+  game data.
