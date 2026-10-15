@@ -457,3 +457,11 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4FE790 ai_list_get  the Artificial Intuition action list (0x6C29D4)
 0x4FE7B0 ai_trigger_get  the Artificial Intuition trigger (0x6C2A14)
 0x5EF3D0 VCGameState_set_timers  the running timers (act_timer list 0x6C43F8): (timer, time, periodic) records
+0x45E320 MainMenu_hover  hit tests the pointer against the menu rows and starts each row's rollover; during a game keeps return.pic up
+0x50B8E0 init_menu_return_rect  return.pic's place: (472, 215)-(640, 273), over the Previous row
+data 0x6C3F50 g_menu_return_rect  return.pic over the Previous row during a game
+data 0x6C4078 g_menu_rect_previous  (472, 225)-(638, 261)
+data 0x6C4040 g_menu_rect_options  (472, 275)-(638, 311)
+data 0x6C4010 g_menu_rect_help  (472, 330)-(638, 366)
+data 0x6C40A8 g_menu_rect_quit  (472, 385)-(638, 421)
+data 0x6C3F38 g_menu_rect_top  (57, 0)-(409, 60), TOPro.mov

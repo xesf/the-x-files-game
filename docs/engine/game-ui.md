@@ -340,7 +340,7 @@ game, so they outlive a new game or a load; we save them in the file
 | Artificial Intuition | The hint icon shows only when on (on unless turned off) |
 | Action Scene Auto-Rewind | A death asks Try again only when on |
 | Action Scene Difficulty | The goons' chance to fire first |
-| Closed Captioning | Subtitles under the clips |
+| Closed Captioning | Subtitles under the clips (off at first) |
 | Inventory | `V` keeps the inventory bar up |
 | Rollover Text | Names under icons and inventory items |
 | Skip Introduction | No opening titles |
@@ -348,6 +348,12 @@ game, so they outlive a new game or a load; we save them in the file
 | Volumes | Dialogue (clips) and effects (sounds), times the game volume |
 
 The Graphics settings and the others are stored but have no effect yet.
+
+The Graphics tab (layout 49783) has a Closed Captioning row: button
+49939 runs `PrefClosedCap`, and lights 49889 (off) and 49891 (on) show
+the setting. The tab's background lies in front of the row and has no
+label for it, so the shipped game never shows it. Our engine draws the
+button's light over the background, with a "Closed Captioning" label.
 
 ## Story progress
 
@@ -477,13 +483,34 @@ last scene. Nothing runs after it. When the variable is set (a death) and
 (engine string 39). Yes goes back to the checkpoint; otherwise the game
 returns to the main menu.
 
+## The main menu during a game
+
+Two ways open the main menu during a game, also while a clip plays:
+
+- Escape;
+- the main menu icon, the spinning blue X (`VCCursor` 25541). The Help
+  screen shows it in the top-right corner, above the Artificial
+  Intuition icon. Our engine shows it when the pointer comes to that
+  corner, as the inventory appears at the bottom, and a click on it
+  opens the menu.
+
+The game holds behind the menu: the clip, its sound, the ambient sound
+and the location card stop where they are, and the game clock stops.
+They also hold on the Options, Help, Save and Load screens opened from
+the menu. They go on from the same place when the player returns.
+
+During a game the menu shows `return.pic` (72895) over the Previous
+row: `MainMenu_load_media` adds it at (472, 215)-(640, 273) when
+`g_game_in_progress` is set. That row then returns to the game. The
+rows (`MainMenu_hover`, `0x45E320`) are 36 pixels high from x 472:
+Previous at y 225, Options 275, Help 330, Quit 385.
+
 ## Saving and loading
 
-Escape opens the main menu during a game; the game clock stops there.
 The menu's Save and Load items open the Save screen (layout 82537) and
 the Load screen (82634), each with three slots. On the Save screen the
-player clicks a slot and types its name. Previous loads the slot that
-was saved or loaded last. See [../formats/save.md](../formats/save.md)
+player clicks a slot and types its name. Previous, outside a game, loads
+the slot that was saved or loaded last. See [../formats/save.md](../formats/save.md)
 for the functions and the file format.
 
 Our saves go to the platform's save folder (`plat_save_dir`), or to

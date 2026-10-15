@@ -141,6 +141,7 @@ A script has one command per line; `#` starts a comment.
 | `solve <depth> var <id> <value>` / `solve <depth> view <id>` | Searches for moves (clicks with or without an item, questions, icons, shots, waits) that reach the goal, and prints the first sequence found |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
+| `expect window menu\|paused\|playing 0\|1` | Window scripts: the main menu is up, the game's media hold, a clip plays |
 | `expect disc <n>` | Fails unless the game is on disc `n` |
 | `expect var <id> <value>` | Fails unless the GAM variable has the value |
 | `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |
@@ -164,6 +165,8 @@ XF_HEADLESS=1 build/xfiles --explore <game> 0 1 --media <cd> --script shots.txt
 | Command | What it does in the window |
 |---|---|
 | `clips on` / `clips off` | Lets clips play across steps instead of ending with each step |
+| `key escape\|return\|<char>` | Presses a key, as the platform would send it |
+| `press <x> <y>` | Clicks a 640x480 screen point through the window's input, in any layout |
 | `play <ms>` | Lets time pass with the clips playing |
 | `skip` | Ends every clip at once, running its triggers |
 | `shot <file.bmp>` | Saves the screen |
@@ -187,6 +190,13 @@ again (`bomb-death.txt`), the kiss (`kiss.txt`), lying to Scully
 the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
 (`suicide.txt`), the phone (`phone.txt`), the Options screen
 (`options.txt`) and saving (`save.txt`).
+
+Scripts in `tests/window` need the window: `menu.txt` opens the main
+menu with Escape and with the X icon during a clip, and returns.
+
+```sh
+XF_HEADLESS=1 build/xfiles --explore <game> 0 1 --media <cd> --script tests/window/menu.txt
+```
 
 `xsave.txt` writes and loads a `.x` save, then loads saves written by
 the original engine. These files are not part of the game, so the

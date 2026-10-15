@@ -458,5 +458,13 @@ static main()
     set_name(0x4FE790, "ai_list_get", SN_NOWARN);
     set_name(0x4FE7B0, "ai_trigger_get", SN_NOWARN);
     set_name(0x5EF3D0, "VCGameState_set_timers", SN_NOWARN);
+    set_name(0x45E320, "MainMenu_hover", SN_NOWARN);
+    set_name(0x50B8E0, "init_menu_return_rect", SN_NOWARN);
+    set_name(0x6C3F50, "g_menu_return_rect", SN_NOWARN);
+    set_name(0x6C4078, "g_menu_rect_previous", SN_NOWARN);
+    set_name(0x6C4040, "g_menu_rect_options", SN_NOWARN);
+    set_name(0x6C4010, "g_menu_rect_help", SN_NOWARN);
+    set_name(0x6C40A8, "g_menu_rect_quit", SN_NOWARN);
+    set_name(0x6C3F38, "g_menu_rect_top", SN_NOWARN);
     msg("names applied\n");
 }
