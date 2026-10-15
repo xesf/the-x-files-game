@@ -40,3 +40,12 @@ expect enabled 34072 1          # the warehouse is on the Seattle map
 click 34072                     # the Dockside Warehouse
 expect view 26014
 expect noiface 17365
+walk 3197                       # the back door
+hold Lockpick
+click 26691                     # pick the lock
+hold none
+click 84769                     # go in
+expect view 3756
+
+# Next: Skinner's scene inside does not start yet, so the evidence
+# (bullet, blood, crates) stays disabled.

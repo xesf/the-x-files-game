@@ -201,6 +201,46 @@ static int ask_all(game *g, u32 character, u32 *now)
     return 1;
 }
 
+/* Lists the views reachable through the moves enabled now, with their
+ * objects and characters. */
+static void reach(game *g)
+{
+    enum { MAXV = 512 };
+    static u32 queue[MAXV];
+    int head = 0, tail = 0, i;
+    queue[tail++] = g->view;
+    while (head < tail) {
+        u32 v = queue[head++], navs[64], objs[64];
+        vc_view vw;
+        char name[160];
+        int k, m;
+        if (vc_read_view(&g->db, v, &vw) != 0)
+            continue;
+        view_name(g, v, name, sizeof(name));
+        printf("  view %u (%s)", v, name);
+        m = vc_read_list(&g->db, vw.explorables, objs, 64);
+        for (k = 0; k < m; k++)
+            if (vc_is_enabled(&g->interp, objs[k]))
+                printf(" object:%u", objs[k]);
+        m = vc_read_list(&g->db, vw.characters, objs, 64);
+        for (k = 0; k < m; k++)
+            if (vc_is_enabled(&g->interp, objs[k]))
+                printf(" character:%u", objs[k]);
+        printf("\n");
+        m = vc_read_list(&g->db, vw.navs, navs, 64);
+        for (k = 0; k < m && tail < MAXV; k++) {
+            vc_nav nav;
+            int seen = 0;
+            if (!vc_is_enabled(&g->interp, navs[k]) || vc_read_nav(&g->db, navs[k], &nav) != 0)
+                continue;
+            for (i = 0; i < tail && !seen; i++)
+                seen = queue[i] == nav.target;
+            if (!seen)
+                queue[tail++] = nav.target;
+        }
+    }
+}
+
 /* Checks one "expect" line. Returns 1 when it holds. */
 static int expect(game *g, const char *what, long a, long b, int have_b)
 {
@@ -304,6 +344,8 @@ static int run_script(game *g, const char *path, u32 *now, int *steps, int quiet
             }
         } else if (strcmp(cmd, "set") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
             vc_set_var(&g->interp, (u32)a, (i32)b);
+        } else if (strcmp(cmd, "reach") == 0) {
+            reach(g);
         } else if (strcmp(cmd, "state") == 0) {
             print_state(g);
         } else if (strcmp(cmd, "expect") == 0 && (n = sscanf(line, "%*s %31s %ld %ld", what, &a, &b)) >= 2) {

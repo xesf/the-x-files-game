@@ -108,6 +108,7 @@ A script has one command per line; `#` starts a comment.
 | `ing <P\|L\|N> <text>` | Runs an ING search at the office computer |
 | `set <var> <value>` | Sets a GAM variable |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
+| `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
 | `expect var <id> <value>` | Fails unless the GAM variable has the value |
 | `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |
