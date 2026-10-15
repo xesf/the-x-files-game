@@ -29,11 +29,15 @@ enum {
     PLAT_KEY_F1
 };
 
+/* Modifier keys held during a key event. */
+enum { PLAT_MOD_SHIFT = 1, PLAT_MOD_CTRL = 2, PLAT_MOD_ALT = 4, PLAT_MOD_CMD = 8 };
+
 typedef struct {
     int type;
     int x, y;   /* mouse position in framebuffer pixels */
     int button; /* PLAT_MOUSE_* */
-    int key;    /* PLAT_KEY_* or ASCII */
+    int key;    /* PLAT_KEY_* or ASCII, lower case for letters */
+    int mods;   /* PLAT_MOD_* */
 } plat_event;
 
 /* Called on the audio thread. Fills `frames` stereo frames of signed
@@ -48,6 +52,10 @@ int plat_poll(plat_event *ev);
 
 /* Shows a frame. Pixels are 0x00RRGGBB, `pitch` is in pixels. */
 void plat_present(const u32 *pixels, int width, int height, int pitch);
+
+/* Finds an installed system font by family name ("Courier New"). Returns
+ * 0 and its path, or -1 when the system has no such font. */
+int plat_font_path(const char *family, char *out, size_t size);
 
 u32 plat_ticks_ms(void);
 void plat_sleep_ms(u32 ms);

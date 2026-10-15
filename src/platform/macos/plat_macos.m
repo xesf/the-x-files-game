@@ -49,8 +49,10 @@ static int map_key(NSEvent *e)
     case 122: return PLAT_KEY_F1;
     }
     s = e.charactersIgnoringModifiers;
-    if (s.length == 1 && [s characterAtIndex:0] < 128)
-        return (int)[s characterAtIndex:0];
+    if (s.length == 1 && [s characterAtIndex:0] < 128) {
+        int c = (int)[s characterAtIndex:0];
+        return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
+    }
     return 0;
 }
 
@@ -95,7 +97,7 @@ static int map_key(NSEvent *e)
 - (void)mouseEvent:(NSEvent *)e type:(int)type button:(int)button
 {
     NSPoint p = [self framePoint:e];
-    plat_event ev = { type, (int)p.x, (int)p.y, button, 0 };
+    plat_event ev = { type, (int)p.x, (int)p.y, button, 0, 0 };
     push_event(ev);
 }
 
@@ -107,16 +109,23 @@ static int map_key(NSEvent *e)
 - (void)rightMouseDown:(NSEvent *)e { [self mouseEvent:e type:PLAT_EV_MOUSE_DOWN button:PLAT_MOUSE_RIGHT]; }
 - (void)rightMouseUp:(NSEvent *)e { [self mouseEvent:e type:PLAT_EV_MOUSE_UP button:PLAT_MOUSE_RIGHT]; }
 
+static int map_mods(NSEvent *e)
+{
+    NSEventModifierFlags f = e.modifierFlags;
+    return (f & NSEventModifierFlagShift ? PLAT_MOD_SHIFT : 0) | (f & NSEventModifierFlagControl ? PLAT_MOD_CTRL : 0) |
+           (f & NSEventModifierFlagOption ? PLAT_MOD_ALT : 0) | (f & NSEventModifierFlagCommand ? PLAT_MOD_CMD : 0);
+}
+
 - (void)keyDown:(NSEvent *)e
 {
-    plat_event ev = { PLAT_EV_KEY_DOWN, 0, 0, 0, map_key(e) };
+    plat_event ev = { PLAT_EV_KEY_DOWN, 0, 0, 0, map_key(e), map_mods(e) };
     if (ev.key && !e.isARepeat)
         push_event(ev);
 }
 
 - (void)keyUp:(NSEvent *)e
 {
-    plat_event ev = { PLAT_EV_KEY_UP, 0, 0, 0, map_key(e) };
+    plat_event ev = { PLAT_EV_KEY_UP, 0, 0, 0, map_key(e), map_mods(e) };
     if (ev.key)
         push_event(ev);
 }
@@ -128,13 +137,14 @@ static int map_key(NSEvent *e)
 @implementation XFWindowDelegate
 - (BOOL)windowShouldClose:(NSWindow *)w
 {
-    plat_event ev = { PLAT_EV_QUIT, 0, 0, 0, 0 };
+    plat_event ev = { PLAT_EV_QUIT, 0, 0, 0, 0, 0 };
     push_event(ev);
     return NO;
 }
 @end
 
 static XFWindowDelegate *g_delegate;
+static int g_headless;
 
 int plat_init(const char *title, int width, int height)
 {
@@ -145,6 +155,10 @@ int plat_init(const char *title, int width, int height)
     g_height = height;
     mach_timebase_info(&g_timebase);
     g_start = mach_absolute_time();
+    /* XF_HEADLESS: no window and no sound, for scripted test runs. */
+    g_headless = getenv("XF_HEADLESS") != NULL;
+    if (g_headless)
+        return 0;
 
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -184,6 +198,8 @@ void plat_shutdown(void)
 
 int plat_poll(plat_event *ev)
 {
+    if (g_headless)
+        return 0;
     @autoreleasepool {
         NSEvent *e;
         while ((e = [NSApp nextEventMatchingMask:NSEventMaskAny
@@ -201,6 +217,8 @@ int plat_poll(plat_event *ev)
 
 void plat_present(const u32 *pixels, int width, int height, int pitch)
 {
+    if (g_headless)
+        return;
     @autoreleasepool {
         CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
         CFDataRef data = CFDataCreate(NULL, (const UInt8 *)pixels, (CFIndex)pitch * height * 4);
@@ -244,6 +262,8 @@ int plat_audio_open(int rate, plat_audio_fn fn, void *user)
     AudioStreamBasicDescription fmt = { 0 };
     int i;
 
+    if (g_headless)
+        return -1;
     fmt.mSampleRate = rate;
     fmt.mFormatID = kAudioFormatLinearPCM;
     fmt.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
@@ -277,3 +297,16 @@ void plat_audio_close(void)
 
 void plat_audio_lock(void) { pthread_mutex_lock(&g_audio_mutex); }
 void plat_audio_unlock(void) { pthread_mutex_unlock(&g_audio_mutex); }
+
+int plat_font_path(const char *family, char *out, size_t size)
+{
+    static const char *const dirs[] = { "/System/Library/Fonts/Supplemental", "/System/Library/Fonts",
+                                        "/Library/Fonts" };
+    size_t i;
+    for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
+        snprintf(out, size, "%s/%s.ttf", dirs[i], family);
+        if (access(out, R_OK) == 0)
+            return 0;
+    }
+    return -1;
+}
