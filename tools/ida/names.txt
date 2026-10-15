@@ -404,3 +404,4 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4F5720 shot_count_rauch  Rauch's porch: counts the NSA agents still standing; 1 when both are down
 0x4F5A80 shot_count_woods  the woods: counts the NSA agents still standing; 1 when both are down
 0x4F3C60 queue_go_to_view  queues a go-to-view action
+0x4B0C00 suicide_note_show  one of three notes (table 0x657930) in the ZonkersHand font, on the trigger's item

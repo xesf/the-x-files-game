@@ -1352,6 +1352,20 @@ int game_shoot(game *g, u32 hot)
             shot = 0;
         if (!shot)
             return 0;
+        if (shot == 27) {
+            /* 0x4F5038: Willmore turns the gun on himself. RegViewState
+             * 'S', and one of two suicide note screens (layouts 62847
+             * and 62849, table 0x65BE88); a click on it ends the game. */
+            static const u32 notes[2] = { 62847, 62849 };
+            g->current.asset = 0;
+            g->current.conversation = 0;
+            g->queue_head = g->queue_tail;
+            set_reg_var(g, "RegViewState", 0, 'S');
+            g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+            host_interface(g, notes[(g->rand_seed >> 16) % 2], 0);
+            xf_info("shot 27: suicide note");
+            return 1;
+        }
         for (k = 0; k < XF_COUNT(g_shots); k++)
             if (g_shots[k].shot == shot) {
                 xf_info("shot %u: clip %u", g_shots[k].shot, g_shots[k].media);
@@ -2502,6 +2516,21 @@ static int host_call_function(void *user, const vc_action *a)
     }
     if (slot_function(g, name, argc, args))
         return 1;
+    /* 0x4BCA40 fn_SuicideNote(event) -> 0x4B0C00: one of three notes
+     * (table 0x657930), in the ZonkersHand font at 14 points, on the
+     * item whose trigger runs. ZonkersHand is not in the game data;
+     * the window draws Courier. */
+    if (strcmp(name, "SuicideNote") == 0) {
+        static const u32 notes[3] = { 62868, 62870, 62872 };
+        g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+        memset(&g->scroll, 0, sizeof(g->scroll));
+        g->scroll.item = g->trigger_item;
+        g->scroll.color = 'b';
+        g->scroll.font = 'c';
+        g->scroll.size = 14;
+        email_text(g, notes[(g->rand_seed >> 16) % 3], g->scroll.text, sizeof(g->scroll.text));
+        return 1;
+    }
     /* 0x4BBFA0 fn_SaveGameState: a checkpoint (save.c). */
     if (strcmp(name, "SaveGameState") == 0) {
         game_checkpoint(g);
