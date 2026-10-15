@@ -157,6 +157,9 @@ typedef struct {
     u32 view_asset;       /* the view's clip, whose triggers ran on entry */
     u8 lbox_tint[3];      /* SetLBoxTint colour */
     int lbox_tinted;
+    u32 smol_vars[3];     /* InitSmShootout: per area, set when clear */
+    int smol_clear[3], smol_visits[3], smol_area;
+    u32 shot_media, shot_view; /* the gun shot clip playing, and what follows */
     int flight_mode;      /* SetFLightProps: 1 day, 2 dark */
     char flight_place;    /* 'I' inside, 'O' outside */
 
@@ -205,6 +208,12 @@ int game_click_evidence(game *g, u32 id);
 
 /* The mail being read and the item it is shown in. */
 const char *game_email_body(game *g, u32 *item);
+
+/* Gunfights: the HOT rectangle of a clip at a point of the video frame
+ * and a clip time (0 for none), and a shot at one. game_shoot returns 0
+ * when the shot needs the gun and it is not in hand. */
+u32 game_hot_at(game *g, u32 asset, int x, int y, u32 ms);
+int game_shoot(game *g, u32 hot);
 
 /* Mouse moved: runs mouse over and off triggers of interface items. */
 void game_hover(game *g, int x, int y);

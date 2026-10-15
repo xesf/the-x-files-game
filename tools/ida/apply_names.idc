@@ -380,5 +380,11 @@ static main()
     set_name(0x6B7A14, "g_vc_root", SN_NOWARN);
     set_name(0x4EDAD0, "CharTeleport_run", SN_NOWARN);
     set_name(0x4EE100, "queue_teleport", SN_NOWARN);
+    set_name(0x4F4510, "hot_click_shot", SN_NOWARN);
+    set_name(0x4F4AC0, "shot_play", SN_NOWARN);
+    set_name(0x4B0650, "smol_next_area", SN_NOWARN);
+    set_name(0x4B07E0, "smol_will_shot", SN_NOWARN);
+    set_name(0x4B0A70, "smol_goon_shot", SN_NOWARN);
+    set_name(0x46AE30, "smol_init", SN_NOWARN);
     msg("names applied\n");
 }

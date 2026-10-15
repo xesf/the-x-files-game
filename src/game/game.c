@@ -9,6 +9,7 @@
 #include <strings.h>
 
 #include "xf_file.h"
+#include "media/hot.h"
 #include "xf_log.h"
 
 static void after_triggers(game *g);
@@ -413,6 +414,12 @@ void game_media_end(game *g)
             vc_run_triggers(&g->interp, c.triggers, 9);
             after_triggers(g);
         }
+    }
+    if (asset && asset == g->shot_media) {
+        u32 view = g->shot_view;
+        g->shot_media = g->shot_view = 0;
+        if (view)
+            game_enter_view(g, view);
     }
 }
 
@@ -1076,6 +1083,207 @@ int game_click_object(game *g, u32 id)
             return 1;
         }
     return 0;
+}
+
+/* --- Gunfights -------------------------------------------------------
+ * A clip can have a HOT file of moving rectangles (docs/formats/hot.md).
+ * The engine knows the rectangle IDs: 0x4F4510 turns a click on one into
+ * a shot number, most only with the gun in hand, and 0x4F4AC0 plays the
+ * clip of that shot. After the clip the scene goes on in a fixed view,
+ * starts the view again (the shot missed or only wounded), or leaves it
+ * to the clip's own end triggers (a goon is down). */
+
+#define SHOT_ANY 1  /* no gun needed */
+
+/* 0x4F4510: rectangle ID -> shot number. */
+static const struct {
+    u16 hot;
+    u8 shot, flags;
+} g_hot_shots[] = {
+    { 100, 27, 0 }, { 101, 1, 0 },  { 102, 2, 0 },  { 103, 1, 0 },  { 104, 2, 0 },
+    { 111, 4, 0 },  { 112, 5, 0 },  { 113, 4, 0 },  { 114, 5, 0 },  { 121, 4, 0 },
+    { 122, 5, 0 },  { 131, 4, 0 },  { 132, 5, 0 },  { 141, 4, 0 },  { 142, 5, 0 },
+    { 201, 9, 0 },  { 211, 10, 0 }, { 221, 6, 0 },  { 222, 7, 0 },  { 223, 8, 0 },
+    { 401, 11, 0 }, { 411, 12, 0 }, { 421, 13, 0 }, { 431, 14, 0 }, { 432, 15, 0 },
+    { 433, 16, 0 }, { 434, 23, 0 }, { 441, 18, SHOT_ANY }, { 442, 19, 0 },
+    { 451, 20, SHOT_ANY }, { 461, 21, 0 }, { 462, 24, 0 }, { 463, 25, SHOT_ANY },
+    { 470, 26, 0 }, { 500, 27, 0 }, { 600, 28, 0 },
+};
+
+/* 0x4F4AC0: shot number -> clip, and the view that follows it (0: none;
+ * GAME_SHOT_RESTART: the current view starts again). Shots 3, 20, 26 and
+ * 27 pick random clips or end the game; 0 to 5 also count hits. */
+#define GAME_SHOT_RESTART 0xFFFFFFFFu
+static const struct {
+    u8 shot;
+    u32 media, view;
+} g_shots[] = {
+    { 0, 21672, 0 },      /* Rauch */
+    { 1, 21664, GAME_SHOT_RESTART },
+    { 2, 21662, GAME_SHOT_RESTART },
+    { 4, 21718, GAME_SHOT_RESTART }, /* the woods */
+    { 5, 21716, GAME_SHOT_RESTART },
+    { 6, 21230, 0 },      /* Smolnikoff: a mobster gets shot, young */
+    { 7, 21232, 0 },      /* old */
+    { 8, 21234, 0 },      /* middle-aged */
+    { 9, 28456, GAME_SHOT_RESTART }, /* the big fall */
+    { 10, 21238, 5501 },  /* the mobster by the staircase */
+    { 11, 21812, GAME_SHOT_RESTART }, /* the secret base */
+    { 12, 21818, GAME_SHOT_RESTART },
+    { 13, 21808, GAME_SHOT_RESTART },
+    { 14, 44483, 44283 },
+    { 15, 49014, 14519 },
+    { 16, 80090, 0 },
+    { 17, 49013, 0 },
+    { 18, 21782, 0 },
+    { 19, 21784, 0 },
+    { 21, 80090, 0 },
+    { 22, 23434, 0 },
+    { 23, 49022, 49374 },
+    { 24, 49022, 49374 },
+    { 25, 23430, 0 },
+    { 28, 19656, 0 },
+};
+
+static int holding(game *g, const char *item)
+{
+    char name[48];
+    u32 id;
+    snprintf(name, sizeof(name), "Inventory_i%s", item);
+    id = vc_find_var(&g->interp, name);
+    return id && !hand_empty(g) && game_reg_value(g, "RegCurrInvVar", 0) == vc_get_var(&g->interp, id);
+}
+
+/* The Smolnikoff warehouse fight has three areas, each with three clips
+ * of a goon (0x657900). InitSmShootout (0x46AE30) takes a variable per
+ * area that tells the scripts the area is clear. */
+static const u32 g_smol_views[3][3] = {
+    { 62256, 62258, 62260 },
+    { 62262, 62264, 62266 },
+    { 62268, 62270, 62272 },
+};
+
+/* 0x4B0650 DoSmolShootout: a random area that is not clear yet (the next
+ * one when the pick is clear), its next clip; the first floor (view
+ * 5208) once all three are clear. */
+static void smol_next(game *g)
+{
+    int a, k;
+    if (g->smol_clear[0] && g->smol_clear[1] && g->smol_clear[2]) {
+        g->smol_area = 0;
+        host_go_to_view(g, 5208);
+        return;
+    }
+    g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+    a = (int)((g->rand_seed >> 16) % 3);
+    for (k = 0; k < 3 && g->smol_clear[a]; k++)
+        a = (a + 1) % 3;
+    g->smol_area = a + 1;
+    host_go_to_view(g, g_smol_views[a][g->smol_visits[a]]);
+    if (g->smol_visits[a] < 2)
+        g->smol_visits[a]++;
+}
+
+/* 0x4B07E0 SmIsWillShot1: the goon fires first. The chance grows with
+ * each try in the area and with the difficulty (var991: 'E'asy,
+ * 'S'tandard, 'H'ard); the third try always hits. Willmore's death
+ * clip 21168 plays and timer 10 stops. */
+static void smol_will_shot(game *g, u8 timer)
+{
+    static const int chance[2][3] = { { 20, 40, 60 }, { 50, 65, 80 } };
+    int a = g->smol_area - 1, d, tries, hit;
+    char level;
+    if (a < 0)
+        return;
+    tries = g->smol_visits[a];
+    level = (char)vc_get_var(&g->interp, 991);
+    d = level == 'E' ? 0 : level == 'H' ? 2 : 1;
+    g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+    hit = tries >= 3 || (tries >= 1 && (int)((g->rand_seed >> 16) % 100) < chance[tries - 1][d]);
+    if (!hit)
+        return;
+    xf_info("the goon shoots Willmore");
+    host_timer(g, timer, 0, 1);
+    game_queue_media(g, 21168);
+}
+
+/* The HOT file beside a clip: XV/19672.xmv -> XV/19672.hot. */
+static int load_hot(game *g, u32 asset, xf_hot *hot)
+{
+    vc_asset_ref a;
+    int i;
+    if (vc_read_asset_ref(&g->db, asset, &a) != 0)
+        return -1;
+    for (i = 0; i < a.entry_count; i++) {
+        char name[512], path[1024], *dot;
+        snprintf(name, sizeof(name), "%s", a.entries[i].path);
+        if (!(dot = strrchr(name, '.')))
+            continue;
+        snprintf(dot, sizeof(name) - (size_t)(dot - name), ".hot");
+        if (xf_path_resolve(g->data_dir, name, path, sizeof(path)) == 0 && xf_hot_load(hot, path) == 0)
+            return 0;
+    }
+    return -1;
+}
+
+/* The rectangle IDs in the HOT file of the view's clip: 0 when the clip
+ * has none, else the first ID; *has is set when `id` is among them. */
+static u32 view_hot(game *g, u32 id, int *has)
+{
+    xf_hot hot;
+    u32 i, first = 0;
+    *has = 0;
+    if (!g->view_asset || load_hot(g, g->view_asset, &hot) != 0)
+        return 0;
+    first = hot.count ? hot.spots[0].id : 0;
+    for (i = 0; i < hot.count; i++)
+        if (hot.spots[i].id == id)
+            *has = 1;
+    xf_hot_free(&hot);
+    return first;
+}
+
+int game_shoot(game *g, u32 hot)
+{
+    size_t i, k;
+    int has;
+    u32 first = view_hot(g, hot, &has);
+    if (!hot)
+        hot = first; /* the clip's own target */
+    else if (first && !has)
+        return 0;
+    for (i = 0; i < XF_COUNT(g_hot_shots); i++) {
+        if (g_hot_shots[i].hot != hot)
+            continue;
+        if (!(g_hot_shots[i].flags & SHOT_ANY) && !holding(g, "Gun"))
+            return 0;
+        for (k = 0; k < XF_COUNT(g_shots); k++)
+            if (g_shots[k].shot == g_hot_shots[i].shot) {
+                xf_info("shot %u: clip %u", g_shots[k].shot, g_shots[k].media);
+                g->shot_media = g_shots[k].media;
+                g->shot_view = g_shots[k].view == GAME_SHOT_RESTART ? g->view : g_shots[k].view;
+                game_queue_media(g, g_shots[k].media);
+                return 1;
+            }
+        xf_info("shot %u: not implemented", g_hot_shots[i].shot);
+        return 0;
+    }
+    return 0;
+}
+
+u32 game_hot_at(game *g, u32 asset, int x, int y, u32 ms)
+{
+    xf_hot hot;
+    u32 i, id = 0;
+    if (load_hot(g, asset, &hot) != 0)
+        return 0;
+    for (i = 0; i < hot.count && !id; i++) {
+        const xf_hotspot *h = &hot.spots[i];
+        if (x >= h->left && x < h->right && y >= h->top && y < h->bottom && ms >= h->start && ms < h->end)
+            id = h->id;
+    }
+    xf_hot_free(&hot);
+    return id;
 }
 
 /* --- Cell phone ------------------------------------------------------ */
@@ -1790,6 +1998,36 @@ static int host_call_function(void *user, const vc_action *a)
      * layers; not drawn yet. */
     if (strcmp(name, "FadeBack") == 0)
         return 1;
+    /* The Smolnikoff fight (see smol_next). */
+    if (strcmp(name, "InitSmShootout") == 0 && argc == 3) {
+        int i;
+        for (i = 0; i < 3; i++) {
+            g->smol_vars[i] = args[i].kind == VC_OPND_VARIABLE ? args[i].value : 0;
+            g->smol_clear[i] = 0;
+            g->smol_visits[i] = 0;
+            if (g->smol_vars[i])
+                vc_set_var(&g->interp, g->smol_vars[i], 0);
+        }
+        g->smol_area = 0;
+        return 1;
+    }
+    if (strcmp(name, "DoSmolShootout") == 0) {
+        smol_next(g);
+        return 1;
+    }
+    /* 0x4B0A70 SmolGoonShot1: the area of the goon is clear. */
+    if (strcmp(name, "SmolGoonShot1") == 0) {
+        if (g->smol_area) {
+            g->smol_clear[g->smol_area - 1] = 1;
+            if (g->smol_vars[g->smol_area - 1])
+                vc_set_var(&g->interp, g->smol_vars[g->smol_area - 1], 1);
+        }
+        return 1;
+    }
+    if (strcmp(name, "SmIsWillShot1") == 0 && argc == 1) {
+        smol_will_shot(g, (u8)arg_value(g, &args[0]));
+        return 1;
+    }
     /* 0x4B58E0 fn_CharTeleport(event, event, node, location, viewpoint,
      * view): 0x4EE100 queues a move to each of the four that differs
      * from where Willmore is, so it ends in that view. A character the

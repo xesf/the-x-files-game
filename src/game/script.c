@@ -587,6 +587,12 @@ int script_run(script *s, const char *path, int quiet)
             while (n && (path2[n - 1] == ' ' || path2[n - 1] == '\t' || path2[n - 1] == '\r'))
                 path2[--n] = '\0';
             ok = game_ing_search(g, file[0], what[0], path2) == (strcmp(cmd, "ing") == 0);
+        } else if (strcmp(cmd, "shoot") == 0) {
+            /* shoot [HOT rectangle ID]: a click on that rectangle of the
+             * view's clip (by default its first), with what is in hand */
+            if (sscanf(line, "%*s %ld", &a) != 1)
+                a = 0;
+            ok = game_shoot(g, (u32)a);
         } else if (strcmp(cmd, "dial") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             ok = game_dial(g, what);
         } else if (strcmp(cmd, "icon") == 0 && sscanf(line, "%*s %ld", &a) == 1) {

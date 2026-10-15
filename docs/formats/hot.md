@@ -32,8 +32,10 @@ All numbers are little-endian.
 - Coordinates are pixels in the video frame, not on the screen.
 - Start and end times fall on frame boundaries at 30 frames per second
   (for example 567, 1033, 1067).
-- The game data links each ID to an action. The most common IDs are 600
-  and 500.
+- The IDs are not in the game data. The engine maps each ID to a shot
+  (0x4F4510): most need the gun in hand, and each shot plays a fixed clip
+  (0x4F4AC0). See [Gunfights](../engine/game-ui.md#gunfights). The most
+  common IDs are 600 and 500.
 
 All 390 HOT files in the English CD release follow this layout exactly.
 

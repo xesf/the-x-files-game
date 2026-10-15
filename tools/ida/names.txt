@@ -379,3 +379,9 @@ data 0x6B6FEC g_app  the application object
 data 0x6B7A14 g_vc_root  global set after the database opens
 0x4EDAD0 CharTeleport_run
 0x4EE100 queue_teleport
+0x4F4510 hot_click_shot  maps a HOT rectangle ID to a shot number (gun in hand)
+0x4F4AC0 shot_play  plays the clip of a shot number, then a fixed view or the current one again
+0x4B0650 smol_next_area  DoSmolShootout: random area not yet clear, or view 5208
+0x4B07E0 smol_will_shot  SmIsWillShot1: the goon fires first, by try and difficulty
+0x4B0A70 smol_goon_shot  SmolGoonShot1: marks the area clear
+0x46AE30 smol_init  InitSmShootout: area variables and counters

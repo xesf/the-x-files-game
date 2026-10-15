@@ -107,6 +107,7 @@ A script has one command per line; `#` starts a comment.
 | `evidence <id>` | Hands a piece of evidence over from the lab's evidence bar |
 | `icon <id>` | Clicks an emotion or action icon |
 | `dial <number>` | Types a number on the cell phone and sends it |
+| `shoot [id]` | Shoots at a HOT rectangle of the view's clip (by default its first); most shots need the gun in hand |
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <database> <text>` / `noing ...` | Runs an ING search at the office computer and expects a record, or none |
 | `set <var> <value>` | Sets a GAM variable |

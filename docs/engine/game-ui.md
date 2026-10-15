@@ -256,6 +256,35 @@ The travel lists then move `iCurrNode` to the link that follows: node
 2 complete makes it 11, the warehouse at night. `SwapDisc`'s last
 argument is this node variable, not a disc number.
 
+## Gunfights
+
+A gunfight clip has a HOT file (see [HOT](../formats/hot.md)) with a
+rectangle that follows the target. A click inside the rectangle while it
+is active is a shot. The engine maps the rectangle ID to a shot number
+(0x4F4510); most shots need the gun in hand. Each shot plays a fixed clip
+(0x4F4AC0). After the clip, depending on the shot, the game goes to a fixed
+view, starts the current view again (a miss), or lets the clip's own end
+triggers go on.
+
+The Smolnikoff warehouse fight in node 6 has three areas with three goon
+clips each:
+
+1. `InitSmShootout(var, var, var)` resets the fight. Each variable is set
+   when its area is clear.
+2. `DoSmolShootout` goes to a random area that is not clear yet, and to
+   that area's next clip. When all three areas are clear, it goes to the
+   first floor (view 5208).
+3. A goon clip starts timers 10 and 11. Timer 11 calls `SmIsWillShot1`:
+   the goon may fire first. The chance depends on the try and on the
+   difficulty (var 991): 20, 40 or 60 percent on the first try, and 50,
+   65 or 80 percent on later tries. On a hit, Willmore's death clip plays.
+   Timer 10 plays a random second chance or the next round.
+4. The clip of a goon who is shot calls `SmolGoonShot1` when it starts,
+   which clears the area, and `DoSmolShootout` when it ends.
+
+Play scripts use `shoot [id]`: a shot at that rectangle of the view's
+clip, or at the clip's first rectangle.
+
 ## Fades
 
 `FadeToBlack(event)` (0x4B6140) fades the screen to black over 2

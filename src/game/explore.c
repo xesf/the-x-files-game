@@ -70,6 +70,7 @@ typedef struct {
     u32 start_ms, length_ms;
     int loop;
     u32 started;
+    u32 asset;            /* the media reference it shows */
 } view_anim;
 
 #define MAX_ANIMS 4
@@ -253,6 +254,27 @@ static void update_anim(view_anim *an, u32 now)
         xf_video_seek(&an->video, xf_mov_sample_at(an->track, (u32)media));
 }
 
+/* A click on a moving picture of the view: the HOT rectangle under it at
+ * the clip's current time, if any, takes the shot (game_shoot). */
+static int shoot_at(explorer *e, int x, int y)
+{
+    int i;
+    for (i = 0; i < e->anim_count; i++) {
+        const view_anim *an = &e->anims[i];
+        const xf_video *vd = &an->video;
+        int w = XF_MIN(vd->width, PICTURE_W), h = XF_MIN(vd->height, PICTURE_H);
+        int x0 = PICTURE_X + (PICTURE_W - w) / 2, y0 = PICTURE_Y + (PICTURE_H - h) / 2;
+        u32 t = plat_ticks_ms() - an->started, hot;
+        t = an->loop ? t % an->length_ms : XF_MIN(t, an->length_ms - 1);
+        if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h)
+            continue;
+        hot = game_hot_at(e->g, an->asset, x - x0, y - y0, an->start_ms + t);
+        if (hot && game_shoot(e->g, hot))
+            return 1;
+    }
+    return 0;
+}
+
 /* Loads the enabled media of the view: the navigation still (media type
  * bit 0x40, a frame of a .nmv file) and moving pictures (a range of a
  * movie; type bit 0x08 loops it). Uses the current disc, or the first
@@ -285,6 +307,7 @@ static void load_picture(explorer *e)
                     }
                 } else if (resolve_media(e, m->path, path, sizeof(path)) == 0 &&
                            open_anim(e, path, m->start, m->end, (a.kind & 0x08) != 0) == 0) {
+                    e->anims[e->anim_count - 1].asset = e->view_media[i];
                     done = 1;
                     if (!e->have_picture)
                         snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->g->view, m->disc,
@@ -1445,6 +1468,8 @@ static void run_frame(explorer *e)
                 game_click_inventory(e->g, e->inv_ids[inv]);
                 e->held_inv = e->inv_ids[inv];
             }
+            else if (shoot_at(e, ev.x, ev.y))
+                ;
             else {
                 u32 was = e->g->talking;
                 if (!game_click(e->g, ev.x, ev.y))
