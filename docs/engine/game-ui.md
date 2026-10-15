@@ -224,6 +224,9 @@ deletes it and `ScrollHeaders` scrolls the rows.
 attachment, and for them the engine shows the items that open it: Amis's
 Tarakan prints (61775, item 72722, which opens the fingerprint search),
 the coroner's crew prints (64527, item 91007) and mail 61765.
+The whole mail, headers included, goes into one scrolling text box
+(0x4A3AF0): on the computer item 54950, or the smaller 72758 when the
+mail has an attachment. Mail files end their lines with CR LF.
 
 `PlayAssetAt(media, x, y)` (0x491190) plays a small clip over the screen,
 such as the ING's progress bar; its start triggers start the search's
@@ -315,8 +318,33 @@ it.
 ## The end of the game
 
 `EndGame(var)` (0x4B6020) ends the game: death, or the credits after the
-last scene. When the variable is set, the engine offers to restore the
-last save; otherwise it returns to the main menu. Nothing runs after it.
+last scene. Nothing runs after it. When the variable is set (a death) and
+`SaveGameState` has taken a checkpoint, the engine asks "Try again?"
+(engine string 39). Yes goes back to the checkpoint; otherwise the game
+returns to the main menu.
+
+## Saving and loading
+
+Escape opens the main menu during a game; the game clock stops there.
+The menu's Save and Load items open the Save screen (layout 82537) and
+the Load screen (82634), each with three slots. On the Save screen the
+player clicks a slot and types its name. Previous loads the slot that
+was saved or loaded last. See [../formats/save.md](../formats/save.md)
+for the functions and the file format.
+
+Our saves go to the platform's save folder (`plat_save_dir`), or to
+`XF_SAVE_DIR` when it is set:
+
+| Platform | Folder |
+|---|---|
+| macOS | `~/Library/Application Support/The X-Files` |
+| Linux | `$XDG_DATA_HOME/the-x-files` (by default `~/.local/share/the-x-files`) |
+| Windows | `%APPDATA%\The X-Files`, or `The X-Files` beside the game on Windows 95 |
+| PS Vita | `ux0:data/xfiles/saves` |
+| DOS | `SAVES` beside the game |
+
+The engine's questions (no slot name, overwrite a slot, try again) come
+from `xfilese.dll` and show in a message box.
 
 The isolation chamber in the secret base reports its doors and power
 through `IsoChamberStat(door A, door B, power, eight outputs)` (0x4B6850),
@@ -343,3 +371,8 @@ view's media. It is off by default.
 - The question text colour and spacing in the box are estimates.
 - The position of the inventory bar comes from the help texts, not
   from the engine code.
+- The original shows its questions in a system message box; ours is
+  drawn in the game screen.
+- The original names each save file after its slot name; ours uses
+  `slot1.xfs` to `slot3.xfs`, with the name inside.
+- Original `.x` saves cannot be loaded yet.

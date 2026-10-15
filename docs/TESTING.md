@@ -83,7 +83,7 @@ media: every clip ends as soon as it starts, so its start and end
 triggers still run in order. The scripts in `tests/play` follow the
 story disc by disc, from the first scene to the credits (`disc7.txt`
 ends with `expect over 1` after the closing clips). `make playtest` runs
-all of them.
+all of them, with `XF_SAVE_DIR` set to `build/saves`.
 
 The DVD release has HOT files for only a few clips; the scripts name the
 rectangle in `shoot <id>`, which works without the file. The explorer
@@ -122,6 +122,9 @@ A script has one command per line; `#` starts a comment.
 | `save <file> [name]` / `load <file>` | Writes the game to a save file, or loads one |
 | `reload` | Saves to memory and loads again at once |
 | `restore` | Goes back to the last `SaveGameState` checkpoint |
+| `slots save` / `slots load` | Opens the Save or Load screen, as the menu does (needs `XF_SAVE_DIR`) |
+| `answer yes\|no\|ok` | Answers the message box |
+| `previous` | Loads the slot saved or loaded last |
 | `route <view>` | Prints the shortest way to a view over every move, and the enable state that closes each closed move |
 | `gate <id>` / `gate enable <id>` | Prints the GAM enable state of an object, or the object an enable state controls |
 | `var <id>` | Prints a GAM variable with its name |
@@ -137,6 +140,7 @@ A script has one command per line; `#` starts a comment.
 | `expect over 0\|1` | Checks whether the game has ended (`EndGame`: death, or the credits) |
 | `expect played <id>` | Checks that a clip was among the last 32 started |
 | `expect checkpoint 0\|1` | Checks whether `SaveGameState` has taken a checkpoint |
+| `expect message <string>` | Checks that the message box shows this engine string |
 | `expect choice <id>` / `nochoice <id>` | Checks that a question is or is not on offer |
 | `expect photo <id>` | Checks that the camera holds a photo of this media |
 

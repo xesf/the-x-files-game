@@ -25,6 +25,9 @@ Their items call these functions:
 | `SaveLoadComit(0)` | Cancel |
 | `SaveLoadComit(1)` | Saves or loads the selected slot |
 
+The Save screen's text cursor (item 82561) follows the typed name, which
+holds up to 21 characters. Slot `n` is drawn at y = 166 + 58·n.
+
 Before saving, the engine checks the name with engine strings 31, 32 and
 38: no name, a slot that is not empty, and a name that another slot
 already has.
@@ -64,3 +67,6 @@ Loading starts from a fresh game and applies each chunk. Then it puts
 the player back in the saved view without running entry triggers: the
 save already holds what those triggers did. A layout that was open, such
 as a close-up, is not saved.
+
+The slots are `slot1.xfs` to `slot3.xfs` in the save folder, and the
+file `previous` holds the number of the slot saved or loaded last.
