@@ -1055,7 +1055,14 @@ static void draw(explorer *e, int mx, int my)
     const game *g = e->g;
     int i, y;
 
-    memset(e->fb, 0, sizeof(e->fb));
+    if (g->lbox_tinted) {
+        /* SetLBoxTint: the letterbox takes the scene's tint */
+        u32 c = (u32)g->lbox_tint[0] << 16 | (u32)g->lbox_tint[1] << 8 | g->lbox_tint[2];
+        for (i = 0; i < SCREEN_W * SCREEN_H; i++)
+            e->fb[i] = c;
+    } else {
+        memset(e->fb, 0, sizeof(e->fb));
+    }
     refresh_icons(e);
     if (e->playing) {
         const u32 *f = e->have_clip ? xf_player_frame(&e->player) : NULL;

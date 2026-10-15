@@ -124,6 +124,11 @@ typedef struct {
     int label_count;
     u32 trigger_item;     /* layout item whose triggers are running */
     u32 focus_item;       /* layout item that receives key presses */
+    u32 view_asset;       /* the view's clip, whose triggers ran on entry */
+    u8 lbox_tint[3];      /* SetLBoxTint colour */
+    int lbox_tinted;
+    int flight_mode;      /* SetFLightProps: 1 day, 2 dark */
+    char flight_place;    /* 'I' inside, 'O' outside */
 
     game_registration regs[32];
     int reg_count;

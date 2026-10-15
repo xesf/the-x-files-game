@@ -159,6 +159,8 @@ int game_view_media(game *g, u32 *ids, int max)
 
 /* --- Views ----------------------------------------------------------- */
 
+static u32 first_enabled(game *g, u32 list);
+
 /* Removes layout k. Its items run their leave triggers (kind 9). */
 static void remove_layout(game *g, int k)
 {
@@ -198,6 +200,12 @@ int game_enter_view(game *g, u32 id)
         clear_spots(g);
         if (g->view)
             vc_run_triggers(&g->interp, g->view_triggers, 9);
+        if (g->view_asset) {
+            vc_asset_ref a;
+            if (vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
+                vc_run_triggers(&g->interp, a.triggers, 9);
+            g->view_asset = 0;
+        }
         if (from && (!to || to->viewpoint != from->viewpoint))
             vc_run_triggers(&g->interp, from->viewpoint_triggers, 9);
         if (from && (!to || to->location != from->location))
@@ -221,6 +229,14 @@ int game_enter_view(game *g, u32 id)
     g->view_triggers = v.triggers;
     g->entering = id;
     vc_run_triggers(&g->interp, v.triggers, 8);
+    /* The view's clip starts next, with its own start triggers: the
+     * office loop at the warehouse puts Skinner in the office. */
+    g->view_asset = first_enabled(g, v.assets);
+    if (g->view_asset) {
+        vc_asset_ref a;
+        if (vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
+            vc_run_triggers(&g->interp, a.triggers, 8);
+    }
     g->entering = 0;
     if (g->pending_view && g->pending_view != id) {
         u32 next = g->pending_view;
@@ -626,16 +642,22 @@ int game_inventory(game *g, u32 *ids, int max)
 /* VCInventory: name, icon, highlighted icon, 0, cursor, trigger list.
  * A click runs the kind 0 triggers: OnInvClick takes the item in hand,
  * OnIntInvClick opens tools such as the PDA. */
-int game_click_inventory(game *g, u32 id)
+static u32 inventory_triggers(game *g, u32 id)
 {
     xf_neo_reader r;
-    u32 triggers;
     int i;
     if (vc_class(&g->db, id) != VC_INVENTORY || xf_neo_object(&g->db, id, &r, NULL, NULL) != 0)
         return 0;
     for (i = 0; i < 5; i++)
         xf_neo_u32(&r);
-    triggers = xf_neo_u32(&r);
+    return xf_neo_u32(&r);
+}
+
+int game_click_inventory(game *g, u32 id)
+{
+    u32 triggers = inventory_triggers(g, id);
+    if (!triggers)
+        return 0;
     xf_info("click inventory %u", id);
     vc_run_triggers(&g->interp, triggers, 0);
     after_triggers(g);
@@ -1113,6 +1135,39 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x499E40 fn_OnInvClick(item): take the item in hand */
     if (strcmp(name, "OnInvClick") == 0 && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* 0x4BC230 fn_SelectInv(inventory object): puts the item in hand,
+     * as a click on it in the inventory bar does. */
+    if (strcmp(name, "SelectInv") == 0 && argc == 1) {
+        u32 triggers = inventory_triggers(g, (u32)arg_value(g, &args[0]));
+        if (triggers)
+            vc_run_triggers(&g->interp, triggers, 0);
+        return 1;
+    }
+    /* 0x4B7530 fn_OnFLightClick(item): takes the flashlight in hand,
+     * like OnInvClick; the cursor then lights the dark views. */
+    if (strcmp(name, "OnFLightClick") == 0 && argc == 1) {
+        set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* 0x44B4C0 fn_SetFLightProps(mode, 'I'nside or 'O'utside, 'M'):
+     * mode 1 by day, 2 in the dark. */
+    if (strcmp(name, "SetFLightProps") == 0 && argc == 3) {
+        g->flight_mode = arg_value(g, &args[0]);
+        g->flight_place = (char)arg_value(g, &args[1]);
+        return 1;
+    }
+    /* 0x4BC410 fn_SetLBoxTint(r, g, b), 0x4B5AA0 fn_ClearLBoxTint: the
+     * colour of the letterbox around the picture, darker at night. */
+    if (strcmp(name, "SetLBoxTint") == 0 && argc == 3) {
+        for (i = 0; i < 3; i++)
+            g->lbox_tint[i] = (u8)arg_value(g, &args[i]);
+        g->lbox_tinted = 1;
+        return 1;
+    }
+    if (strcmp(name, "ClearLBoxTint") == 0) {
+        g->lbox_tinted = 0;
         return 1;
     }
     /* 0x47D090 fn_LoginInit, 0x4B7250 fn_LoginClick, 0x46A000
