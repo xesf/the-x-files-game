@@ -1,4 +1,4 @@
-# Disc 5 (node 6), from the apartment on Friday morning. Object IDs are
+# Disc 5 (node 6, link 3), from the apartment on Friday morning. Object IDs are
 # from the English HDB (CD and DVD share them).
 include disc4.txt
 
@@ -90,3 +90,21 @@ askall 23763
 skip
 expect var 2667 1
 expect var 1219 13
+
+# Link 3: home. Astadourian comes to the door, angry; then X calls.
+inv 17451
+click 58726
+click 59694
+wait 5000
+walk 3842                       # through the hall: she knocks soon after
+wait 12000
+click 78871                     # open the door
+skip
+askall 78900                    # "Cook called you"
+skip
+expect var 2574 1               # X has called
+wait 5000
+walk 3974
+click 87437                     # to bed
+wait 10000
+expect var 1219 14              # Saturday: meet X at the hangar
