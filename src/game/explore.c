@@ -576,6 +576,24 @@ static void draw_ifaces(explorer *e)
               : l->font == 'P' && e->have_phn_font ? &e->phn_font
               : l->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
             px = (float)l->size * 96.0f / 72.0f;
+            if (l->align == 'w') {
+                /* a page of text: wrapped to the item, from its top */
+                const char *t = l->text;
+                int y = r->top + (int)px, lh = (int)(px * 1.2f);
+                while (*t && y <= r->bottom) {
+                    int starts[64], lens[64], nl, k;
+                    size_t plen = strcspn(t, "\n");
+                    char para[1024];
+                    snprintf(para, sizeof(para), "%.*s", (int)plen, t);
+                    nl = para[0] ? wrap_lines_font(f, para, px, r->right - r->left, starts, lens, 64) : 1;
+                    if (!para[0])
+                        lens[0] = starts[0] = 0;
+                    for (k = 0; k < nl && y <= r->bottom; k++, y += lh)
+                        xf_text_draw(&sf, f, px, r->left, y, para + starts[k], (size_t)lens[k], 0x000000);
+                    t += plen + (t[plen] == '\n');
+                }
+                continue;
+            }
             {
                 /* One line per newline, the block centred in the item. */
                 const char *line = l->text;

@@ -17,6 +17,7 @@ static int hand_empty(game *g);
 static u32 inventory_triggers(game *g, u32 id);
 static void set_item_text(game *g, u32 item, const char *text);
 static int photo_function(game *g, const char *name, int argc, const vc_operand *args);
+static int book_function(game *g, const char *name, int argc, const vc_operand *args);
 static void note_text(game *g, u32 asset, char *out, size_t size);
 static void media_search(game *g);
 static const u32 g_note_pages[23];
@@ -2148,6 +2149,90 @@ static int photo_function(game *g, const char *name, int argc, const vc_operand 
     return 0;
 }
 
+/* --- Books: Willmore's journal, Scully's Bible ------------------------- */
+
+/* A book shows two texts side by side: the enabled media of one item. */
+static int book_pages(game *g, u32 item, u32 *ids, int max)
+{
+    vc_iface_item it;
+    u32 all[128];
+    int n, i, k = 0;
+    if (vc_read_iface_item(&g->db, item, &it) != 0)
+        return 0;
+    n = vc_read_list(&g->db, it.assets, all, 128);
+    for (i = 0; i < n && k < max; i++)
+        if (vc_is_enabled(&g->interp, all[i]))
+            ids[k++] = all[i];
+    return k;
+}
+
+static void book_show(game *g, u32 item, u32 left, u32 right, int page)
+{
+    u32 ids[128];
+    int n = book_pages(g, item, ids, 128), side;
+    for (side = 0; side < 2; side++) {
+        char text[2048] = "";
+        game_item_label *l;
+        if (page + side < n)
+            note_text(g, ids[page + side], text, sizeof(text));
+        set_item_text(g, side ? right : left, text);
+        if ((l = (game_item_label *)game_item_label_of(g, side ? right : left))) {
+            l->font = 'c';
+            l->size = 10;
+            l->align = 'w'; /* wrapped, from the top */
+        }
+    }
+}
+
+static int book_function(game *g, const char *name, int argc, const vc_operand *args)
+{
+    /* 0x4B58A0 fn_BibleInit -> 0x507540, 0x4B5820 fn_BibleFlip(back):
+     * item 80907's texts in 80868 and 80869; 80870 and 80871 turn back
+     * and forward */
+    if (strcmp(name, "BibleInit") == 0 || (strcmp(name, "BibleFlip") == 0 && argc == 1)) {
+        u32 ids[128];
+        int n = book_pages(g, 80907, ids, 128);
+        if (name[5] == 'I')
+            g->bible_page = 0;
+        else
+            g->bible_page += arg_value(g, &args[0]) ? -2 : 2;
+        g->bible_page = XF_CLAMP(g->bible_page, 0, n > 2 ? (n - 1) & ~1 : 0);
+        vc_set_enabled(&g->interp, 80870, g->bible_page > 0);
+        vc_set_enabled(&g->interp, 80871, g->bible_page + 2 < n);
+        book_show(g, 80907, 80868, 80869, g->bible_page);
+        return 1;
+    }
+    /* 0x4B7150 fn_JournalInit(start at front) -> 0x4A4C40: item 49422's
+     * texts (the entries written so far) in 46370 and 46371; the book opens
+     * at the front or at the last entries */
+    if (strcmp(name, "JournalInit") == 0 && argc == 1) {
+        u32 ids[128];
+        int n = book_pages(g, 49422, ids, 128);
+        g->journal_page = arg_value(g, &args[0]) == 1 ? 0 : (n & 1) ? n - 1 : XF_MAX(n - 2, 0);
+        book_show(g, 49422, 46370, 46371, g->journal_page);
+        return 1;
+    }
+    /* 0x4B6F90 fn_JournalFlip(back, first page var, last page var) */
+    if (strcmp(name, "JournalFlip") == 0 && argc == 3) {
+        u32 ids[128];
+        int n = book_pages(g, 49422, ids, 128);
+        g->journal_page += arg_value(g, &args[0]) ? -2 : 2;
+        g->journal_page = XF_CLAMP(g->journal_page, 0, n > 2 ? (n - 1) & ~1 : 0);
+        if (args[1].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[1].value, g->journal_page == 0);
+        if (args[2].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[2].value, g->journal_page + 2 >= n);
+        book_show(g, 49422, 46370, 46371, g->journal_page);
+        return 1;
+    }
+    if (strcmp(name, "JournalDestroy") == 0)
+        return 1;
+    /* 0x4B7950 fn_PageTurnSound -> 0x4BFF40: one of the page sounds */
+    if (strcmp(name, "PageTurnSound") == 0)
+        return 1;
+    return 0;
+}
+
 /* --- Media Index ------------------------------------------------------- */
 
 /* 0x65D148: 16 items, each an article (first media) and the keywords that
@@ -3548,6 +3633,8 @@ static int host_call_function(void *user, const vc_action *a)
         return 1;
     }
     if (photo_function(g, name, argc, args))
+        return 1;
+    if (book_function(g, name, argc, args))
         return 1;
     /* The computer's Media Index (layout 15208): 0x42CBF0 fn_MediaInit,
      * 0x475CD0 fn_MSKeyPressed, 0x41EB60 fn_MediaSearch -> 0x4654A0,

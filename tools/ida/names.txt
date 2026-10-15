@@ -437,3 +437,5 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x484040 email_queue_reply  a reply waits until EmailFlushMess
 0x44A4E0 display_addrs  DisplayAddrs: the To/Cc lines, the pickers, the PDA list, the enclosure line
 0x44AA20 display_addrs_rows  draws a list of people into its rows, with check marks
+0x507540 bible_show  BibleInit: item 80907's texts two at a time in 80868 and 80869; the flip buttons 80870 and 80871
+0x4A4C40 journal_show  JournalInit: the enabled texts of item 49422 in 46370 and 46371, from the front or the last entries

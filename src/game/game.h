@@ -215,6 +215,7 @@ typedef struct {
     int pda_note_count;
     int note_page;        /* the PDA's notes page shown (0x6B6550) */
     int note_page_order;  /* that page's place in the page table */
+    int journal_page, bible_page; /* the left page of each book */
     int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;
