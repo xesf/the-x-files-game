@@ -11,6 +11,8 @@ click 22631
 state
 askall 22631                    # badge shown: ask her everything, then go to the rooms
 expect view 6578                # Mulder's room
+expect iface 83579              # her note with the rental car's plate
+click 83585                     # put it away
 walk 31395                      # the phone in the room: Willmore notes it
 expect enabled 21927 1          # idea: motel phone
 walk 6622                       # Scully's room, Skinner
@@ -20,6 +22,7 @@ click 39617
 walk 6548                       # back to the clerk
 askall 22631                    # motel phone: the record of calls
 expect iface 39183
+click 39202                     # put the record away
 dial 12025550149                # the D.C. number: Frohike answers
 
 # Back to the Field Office to trace the other number.
@@ -30,6 +33,10 @@ walk 1237                       # Willmore's desk; Scully's laptop stays by the 
 click 29855                     # the computer
 ing P 2065550182                # ING phone search (typed in the original)
 expect var 5051 1               # the Dockside Warehouse
+click 31620                     # leave the computer
 inv 17451
 click 58726
 expect enabled 34072 1          # the warehouse is on the Seattle map
+click 34072                     # the Dockside Warehouse
+expect view 26014
+expect noiface 17365
