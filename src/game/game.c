@@ -3636,6 +3636,38 @@ static int host_call_function(void *user, const vc_action *a)
         return 1;
     if (book_function(g, name, argc, args))
         return 1;
+    /* 0x4B7930 fn_PDAInitAddr -> 0x4C9D40, 0x4B78B0 fn_PDAFlipAddr(mode)
+     * -> 0x4C9AD0: the PDA's address book, a card at a time from the
+     * enabled media of item 45307, shown in item 35320. Mode 0 is the
+     * next card, 1 the previous, 4 reads the cards again; 2 and 3 turn
+     * media 42906 and 42908 on and off. */
+    if (strcmp(name, "PDAInitAddr") == 0 || (strcmp(name, "PDAFlipAddr") == 0 && argc == 1)) {
+        u32 ids[64];
+        int n = book_pages(g, 45307, ids, 64), mode = name[3] == 'I' ? -1 : arg_value(g, &args[0]);
+        if (mode == 2 || mode == 3) {
+            vc_set_enabled(&g->interp, 42906, mode == 2);
+            vc_set_enabled(&g->interp, 42908, mode == 2);
+            return 1;
+        }
+        if (mode == 0 && n > 1)
+            g->pda_card = (g->pda_card + 1) % n;
+        else if (mode == 1 && n > 1)
+            g->pda_card = (g->pda_card + n - 1) % n;
+        if (g->pda_card >= n)
+            g->pda_card = 0;
+        {
+            char text[512] = "";
+            game_item_label *l;
+            if (n)
+                game_text(g, ids[g->pda_card], text, sizeof(text));
+            set_item_text(g, 35320, text);
+            if ((l = (game_item_label *)game_item_label_of(g, 35320))) {
+                l->size = 12;
+                l->align = 'w';
+            }
+        }
+        return 1;
+    }
     /* 0x4BBEE0 fn_SBaseInit, 0x4BBF00 fn_SBaseKeyPress(key): the secret
      * base terminal's password box (layout 53263) shows a mark per letter
      * typed, 31 at most; OK always leads to layout 53268. */

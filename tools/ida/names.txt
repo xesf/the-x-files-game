@@ -439,3 +439,5 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x44AA20 display_addrs_rows  draws a list of people into its rows, with check marks
 0x507540 bible_show  BibleInit: item 80907's texts two at a time in 80868 and 80869; the flip buttons 80870 and 80871
 0x4A4C40 journal_show  JournalInit: the enabled texts of item 49422 in 46370 and 46371, from the front or the last entries
+0x4C9D40 pda_addr_init  PDAInitAddr: the address cards (enabled media of item 45307), card 0x6B6540 in item 35320
+0x4C9AD0 pda_addr_flip  PDAFlipAddr: 0 next, 1 previous, 4 read the cards again, 2/3 media 42906 and 42908 on/off

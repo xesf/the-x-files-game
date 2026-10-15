@@ -217,6 +217,7 @@ typedef struct {
     int note_page_order;  /* that page's place in the page table */
     int journal_page, bible_page; /* the left page of each book */
     int sbase_typed;      /* letters in the secret base password box */
+    int pda_card;         /* the PDA address book's card shown (0x6B6540) */
     int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;

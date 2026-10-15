@@ -440,5 +440,7 @@ static main()
     set_name(0x44AA20, "display_addrs_rows", SN_NOWARN);
     set_name(0x507540, "bible_show", SN_NOWARN);
     set_name(0x4A4C40, "journal_show", SN_NOWARN);
+    set_name(0x4C9D40, "pda_addr_init", SN_NOWARN);
+    set_name(0x4C9AD0, "pda_addr_flip", SN_NOWARN);
     msg("names applied\n");
 }
