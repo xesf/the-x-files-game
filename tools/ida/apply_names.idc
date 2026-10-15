@@ -424,5 +424,9 @@ static main()
     set_name(0x503E40, "evkit_popup", SN_NOWARN);
     set_name(0x51F960, "phone_key", SN_NOWARN);
     set_name(0x51F640, "phone_book", SN_NOWARN);
+    set_name(0x4CF8E0, "notes_show", SN_NOWARN);
+    set_name(0x4D0250, "notes_flip", SN_NOWARN);
+    set_name(0x4CFE30, "notes_add", SN_NOWARN);
+    set_name(0x4CFFE0, "notes_all", SN_NOWARN);
     msg("names applied\n");
 }

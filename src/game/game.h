@@ -200,6 +200,7 @@ typedef struct {
     int text_off;         /* TextOn(0): the text windows are hidden */
     u32 pda_notes[GAME_MAX_NOTES]; /* EnablePDANote: notes in the PDA */
     int pda_note_count;
+    int note_page;        /* the PDA's notes page shown (0x6B6550) */
     int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;

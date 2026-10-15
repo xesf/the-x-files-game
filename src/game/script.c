@@ -961,6 +961,18 @@ int script_run(script *s, const char *path, int quiet)
             reach(g);
         } else if (strcmp(cmd, "state") == 0) {
             print_state(g);
+        } else if (strcmp(cmd, "assets") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            /* A layout item's media, with their text and enable state. */
+            vc_iface_item it;
+            u32 ids[64];
+            int k, m;
+            ok = vc_read_iface_item(&g->db, (u32)a, &it) == 0;
+            m = ok ? vc_read_list(&g->db, it.assets, ids, 64) : 0;
+            for (k = 0; k < m; k++) {
+                char t[512];
+                game_text(g, ids[k], t, sizeof(t));
+                printf("  %u %s: %.60s\n", ids[k], vc_is_enabled(&g->interp, ids[k]) ? "on " : "off", t);
+            }
         } else if (strcmp(cmd, "text") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             char t[512];
             printf("  text %ld: %s\n", a, game_text(g, (u32)a, t, sizeof(t)));

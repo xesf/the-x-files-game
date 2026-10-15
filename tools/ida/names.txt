@@ -423,3 +423,7 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x503E40 evkit_popup  opens (1, rectangle) or closes (0) the evidence popup
 0x51F960 phone_key  a keypad digit onto the number (13 at most) and the display, the key tone, the button sound
 0x51F640 phone_book  the address book: entry "NAME\nNUMBER" of item 45309's media, the name shown
+0x4CF8E0 notes_show  NotePadInit: page order by route (vars 5328-5330, 5325), the page's notes into item 51444, the page number into 67486
+0x4D0250 notes_flip  NoteFlipDay: the next or previous open page
+0x4CFE30 notes_add  EnablePDANote: stores the note; a note of the next page opens it
+0x4CFFE0 notes_all  EnableAllNotes: every note of every page

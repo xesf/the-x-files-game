@@ -2056,6 +2056,87 @@ static void shanks_var(game *g, u32 flag)
 #undef V
 }
 
+/* --- PDA field notes ---------------------------------------------------- */
+
+/* 0x658F28: the 23 pages of notes, each a layout item whose media are
+ * the notes (inline text, or a file under Text/Pda Notes). */
+#define NOTE_PAGES 23
+static const u32 g_note_pages[NOTE_PAGES] = {
+    45344, 45345, 45346, 45348, 45347, 45349, 45350, 50378, 63395, 63389, 63393, 63397,
+    63399, 63401, 63403, 63405, 63409, 63411, 63413, 63415, 63417, 63419, 63421,
+};
+
+/* The text of a note: a file it names, or the text itself. */
+static void note_text(game *g, u32 asset, char *out, size_t size)
+{
+    email_text(g, asset, out, size);
+    if (!out[0])
+        game_text(g, asset, out, size);
+}
+
+/* 0x4CF8E0: pages 5 to 8 follow the order the player visited places in
+ * (variables 5328, 5329, 5330), pages 13 and 14 swap with variable 5325
+ * (0x6B6558 holds the order). Only the pages up to the first one without
+ * a note are open. step moves to the next (1) or previous (-1) page. */
+static void notes_show(game *g, int step)
+{
+    int order[NOTE_PAGES], open = 0, p, k, n;
+    char *t = g->scroll.text;
+    size_t used = 0;
+    u32 ids[64];
+    char page[8];
+    for (p = 0; p < NOTE_PAGES; p++)
+        order[p] = p;
+    if (vc_get_var(&g->interp, 5330) == 1) {
+        order[5] = 6; order[6] = 7; order[7] = 8; order[8] = 5;
+    } else if (vc_get_var(&g->interp, 5329) == 1) {
+        order[5] = 6; order[6] = 7; order[7] = 5;
+    } else if (vc_get_var(&g->interp, 5328) == 1) {
+        order[5] = 6; order[6] = 5;
+    }
+    if (vc_get_var(&g->interp, 5325) == 1) {
+        order[13] = 14; order[14] = 13;
+    }
+    for (p = 0; p < NOTE_PAGES; p++) {
+        vc_iface_item it;
+        int any = 0;
+        if (vc_read_iface_item(&g->db, g_note_pages[order[p]], &it) != 0)
+            break;
+        n = vc_read_list(&g->db, it.assets, ids, 64);
+        for (k = 0; k < n && !any; k++)
+            any = in_list(g->pda_notes, g->pda_note_count, ids[k]);
+        if (!any)
+            break;
+        open++;
+    }
+    if (!open)
+        open = 1;
+    g->note_page = XF_CLAMP(g->note_page + step, 0, open - 1);
+    memset(&g->scroll, 0, sizeof(g->scroll));
+    g->scroll.item = 51444;
+    g->scroll.color = 'k';
+    g->scroll.font = 'c';
+    g->scroll.size = 10;
+    t[0] = '\0';
+    {
+        vc_iface_item it;
+        if (vc_read_iface_item(&g->db, g_note_pages[order[g->note_page]], &it) == 0) {
+            n = vc_read_list(&g->db, it.assets, ids, 64);
+            for (k = 0; k < n; k++) {
+                char line[1024];
+                if (!in_list(g->pda_notes, g->pda_note_count, ids[k]))
+                    continue;
+                note_text(g, ids[k], line, sizeof(line));
+                used += (size_t)snprintf(t + used, sizeof(g->scroll.text) - used, "%s%s", used ? "\n\n" : "", line);
+                if (used >= sizeof(g->scroll.text))
+                    break;
+            }
+        }
+    }
+    snprintf(page, sizeof(page), "%d", g->note_page + 1);
+    set_item_text(g, 67486, page);
+}
+
 /* --- Save and Load screens -------------------------------------------- */
 
 /* Layout 82537 is the Save screen, 82634 the Load screen; three slots
@@ -2692,6 +2773,32 @@ static int host_call_function(void *user, const vc_action *a)
         u32 note = (u32)arg_value(g, &args[0]);
         if (!in_list(g->pda_notes, g->pda_note_count, note) && g->pda_note_count < GAME_MAX_NOTES)
             g->pda_notes[g->pda_note_count++] = note;
+        return 1;
+    }
+    /* 0x4B7350 fn_NotePadInit -> 0x4CF8E0, 0x4B72D0 fn_NoteFlipDay(back)
+     * -> 0x4D0250: the PDA's field notes, a page at a time. */
+    if (strcmp(name, "NotePadInit") == 0) {
+        notes_show(g, 0);
+        return 1;
+    }
+    if (strcmp(name, "NoteFlipDay") == 0 && argc == 1) {
+        notes_show(g, arg_value(g, &args[0]) ? -1 : 1);
+        return 1;
+    }
+    /* 0x4B5F00 fn_EnableAllNotes -> 0x4CFFE0: every note of every page
+     * (a debug click on item 64022). */
+    if (strcmp(name, "EnableAllNotes") == 0) {
+        int p, k, n;
+        u32 ids[64];
+        for (p = 0; p < NOTE_PAGES; p++) {
+            vc_iface_item it;
+            if (vc_read_iface_item(&g->db, g_note_pages[p], &it) != 0)
+                continue;
+            n = vc_read_list(&g->db, it.assets, ids, 64);
+            for (k = 0; k < n; k++)
+                if (!in_list(g->pda_notes, g->pda_note_count, ids[k]) && g->pda_note_count < GAME_MAX_NOTES)
+                    g->pda_notes[g->pda_note_count++] = ids[k];
+        }
         return 1;
     }
     /* 0x459960 fn_RollHdCredits: 0x45A290 opens the scrolling credits
