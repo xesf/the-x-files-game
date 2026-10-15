@@ -867,6 +867,9 @@ int script_run(script *s, const char *path, int quiet)
                 game_answer(g, strcmp(what, "yes") == 0 || strcmp(what, "ok") == 0);
         } else if (strcmp(cmd, "previous") == 0) {
             ok = game_load_previous(g) == 0;
+        } else if (strcmp(cmd, "rollover") == 0 && sscanf(line, "%*s %31s", what) == 1) {
+            /* The pointer onto an inventory item, or off (none). */
+            game_hover_inventory(g, strcmp(what, "none") == 0 ? 0 : (u32)strtoul(what, NULL, 10), 0);
         } else if (strcmp(cmd, "restore") == 0) {
             ok = game_restore_checkpoint(g) == 0;
         } else if (strcmp(cmd, "view") == 0 && sscanf(line, "%*s %ld", &a) == 1) {

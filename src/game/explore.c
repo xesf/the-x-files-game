@@ -542,7 +542,9 @@ static void start_next_media(explorer *e)
             for (j = 0; j < a.entry_count && !e->have_clip; j++) {
                 char path[1024];
                 if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
-                    xf_player_open(&e->player, path, plat_ticks_ms()) == 0) {
+                    xf_player_open_range(&e->player, path, plat_ticks_ms(),
+                                         a.entries[j].start + game_clip_offset(e->g, m.asset),
+                                         a.entries[j].end) == 0) {
                     e->have_clip = 1;
                     xf_info("playing %s (%s)", a.logical, a.entries[j].path);
                 }
@@ -1739,8 +1741,12 @@ static void run_frame(explorer *e)
         } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
             e->mx = ev.x;
             e->my = ev.y;
-            if (!e->playing)
+            if (!e->playing) {
+                int reveal = e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL;
+                int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
                 game_hover(e->g, e->mx, e->my);
+                game_hover_inventory(e->g, inv >= 0 ? e->inv_ids[inv] : 0, inv >= e->inv_items);
+            }
         } else if (e->playing && ev.type == PLAT_EV_MOUSE_DOWN && icon_at(e, ev.x, ev.y) >= 0) {
             /* An emotion icon answers at once: the clip ends first. */
             u32 icon = e->icon_ids[icon_at(e, ev.x, ev.y)];

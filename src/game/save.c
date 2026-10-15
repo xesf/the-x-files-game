@@ -293,10 +293,12 @@ int game_reset(game *g)
     size_t cp_size = g->checkpoint_size;
     char save_dir[sizeof(g->save_dir)];
     u32 now = g->now;
+    u8 play_once[sizeof(g->play_once)];
     serials[0] = g->iface_serial;
     serials[1] = g->sound_serial;
     serials[2] = g->fade_serial;
     serials[3] = g->overlay_serial;
+    memcpy(play_once, g->play_once, sizeof(play_once)); /* per session, like the original */
     memcpy(dir, g->data_dir, sizeof(dir));
     memcpy(save_dir, g->save_dir, sizeof(save_dir));
     g->checkpoint = NULL;
@@ -312,6 +314,7 @@ int game_reset(game *g)
     g->checkpoint = cp;
     g->checkpoint_size = cp_size;
     g->now = now;
+    memcpy(g->play_once, play_once, sizeof(play_once));
     memcpy(g->save_dir, save_dir, sizeof(save_dir));
     return 0;
 }

@@ -10,6 +10,11 @@
 
 int xf_player_open(xf_player *p, const char *path, u32 now_ticks)
 {
+    return xf_player_open_range(p, path, now_ticks, 0, 0);
+}
+
+int xf_player_open_range(xf_player *p, const char *path, u32 now_ticks, u32 start_ms, u32 end_ms)
+{
     xf_mov_track *t;
 
     memset(p, 0, sizeof(*p));
@@ -17,6 +22,12 @@ int xf_player_open(xf_player *p, const char *path, u32 now_ticks)
     if (xf_mov_open(&p->mov, path) != 0)
         return -1;
     p->duration_ms = (u32)((u64)p->mov.duration * 1000 / p->mov.timescale);
+    if (start_ms < p->duration_ms) {
+        p->base_ms = start_ms;
+        if (end_ms > start_ms && end_ms < p->duration_ms)
+            p->duration_ms = end_ms;
+        p->duration_ms -= start_ms;
+    }
 
     t = xf_mov_find(&p->mov, XF_TRACK_VIDEO);
     if (t && xf_video_open(&p->video, &p->mov, t) == 0)
@@ -28,7 +39,8 @@ int xf_player_open(xf_player *p, const char *path, u32 now_ticks)
         p->channel = p->pcm ? xf_mixer_open((int)t->sample_rate, t->channels) : -1;
         if (p->channel >= 0) {
             p->has_audio = 1;
-            p->audio_skip = xf_audio_seek(&p->audio, xf_mov_media_start(t));
+            p->audio_skip = xf_audio_seek(&p->audio, xf_mov_media_start(t) +
+                                                     (u32)((u64)p->base_ms * t->timescale / 1000));
         } else {
             xf_audio_close(&p->audio);
         }
@@ -92,7 +104,7 @@ int xf_player_update(xf_player *p, u32 now_ticks)
 
     if (p->has_video) {
         const xf_mov_track *t = p->video.track;
-        u64 media = xf_mov_media_start(t) + (u64)p->now_ms * t->timescale / 1000;
+        u64 media = xf_mov_media_start(t) + (u64)(p->base_ms + p->now_ms) * t->timescale / 1000;
         u32 index = xf_mov_sample_at(t, (u32)media);
         if (index + 1 != p->video.next && xf_video_seek(&p->video, index) != 0) {
             xf_warn("player: cannot decode frame %u", index);
@@ -113,6 +125,6 @@ const u32 *xf_player_frame(const xf_player *p) { return p->has_video ? p->video.
 
 const char *xf_player_subtitle(const xf_player *p)
 {
-    const xf_subtitle *s = xf_subtitles_at(&p->subs, p->now_ms);
+    const xf_subtitle *s = xf_subtitles_at(&p->subs, p->base_ms + p->now_ms);
     return s ? s->text : NULL;
 }

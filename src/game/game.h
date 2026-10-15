@@ -168,6 +168,9 @@ typedef struct {
     game_scroll scroll;               /* ScrollTextList, InitEmailRead */
     u32 ing_notes;                    /* media of the ING record's field notes */
     int show_evidence;                /* DispEvIcons */
+    int kit_open;                     /* RollOnEvKit: the kit's evidence popup */
+    int pointer_on_evidence;          /* set by the window: keeps the popup open */
+    u32 inv_hover;                    /* inventory item under the pointer */
     u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */
     int evidence_count;
     u32 photos[GAME_MAX_PHOTOS]; /* TakePhoto: media of each photo */
@@ -182,6 +185,11 @@ typedef struct {
     int smol_clear[3], smol_visits[3], smol_area;
     u32 shot_media, shot_view, shot_epoch; /* the gun shot clip playing, and what follows */
     int woods_down;          /* NSA agents down in the woods: bits 1 and 2 */
+    struct {
+        u32 asset, ms;
+    } clip_offsets[8];       /* PrepBombTime: clips that start part-way */
+    int clip_offset_count;
+    u8 play_once[3];         /* GetPlayFBIShot, GetPlayBones, GetPlayCancer */
     int rauch_down;          /* NSA agents down at Rauch's porch: bits 1 and 2 */
     int game_over;           /* EndGame: 1 to the menu, 2 offer to restore */
     int text_off;         /* TextOn(0): the text windows are hidden */
@@ -249,6 +257,9 @@ int game_evidence(game *g, u32 *ids, int max);
 /* Hands one piece of evidence over: runs its click triggers. */
 int game_click_evidence(game *g, u32 id);
 
+/* Extra start time of a clip in ms (PrepBombTime), 0 for most. */
+u32 game_clip_offset(const game *g, u32 asset);
+
 /* The scrolling text box, or NULL when there is none. */
 const game_scroll *game_scroll_box(game *g);
 
@@ -262,6 +273,9 @@ int game_view_has_hot(game *g, u32 hot);
 
 /* Mouse moved: runs mouse over and off triggers of interface items. */
 void game_hover(game *g, int x, int y);
+/* The inventory item under the pointer (0 for none); on_evidence when it
+ * is a piece of evidence, which keeps the kit's popup open. */
+void game_hover_inventory(game *g, u32 id, int on_evidence);
 
 /* Advances the clock and fires the timers that are due. */
 void game_tick(game *g, u32 now_ms);

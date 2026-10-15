@@ -406,5 +406,21 @@ static main()
     set_name(0x4F5A80, "shot_count_woods", SN_NOWARN);
     set_name(0x4F3C60, "queue_go_to_view", SN_NOWARN);
     set_name(0x4B0C00, "suicide_note_show", SN_NOWARN);
+    set_name(0x4B0B30, "play_once_fbi_shot", SN_NOWARN);
+    set_name(0x4B0B80, "play_once_bones", SN_NOWARN);
+    set_name(0x4B0BD0, "play_once_cancer", SN_NOWARN);
+    set_name(0x4D0F80, "bomb_clip_offset", SN_NOWARN);
+    set_name(0x4B0460, "smol_goon_shoots", SN_NOWARN);
+    set_name(0x4B0410, "rauch_draw_gun", SN_NOWARN);
+    set_name(0x50C6B0, "alien_blast", SN_NOWARN);
+    set_name(0x51E160, "shanks_var", SN_NOWARN);
+    set_name(0x51DD40, "reg_shanks_node2_set", SN_NOWARN);
+    set_name(0x51DF60, "reg_shanks_node3_set", SN_NOWARN);
+    set_name(0x48E0A0, "reg_shanks_node6_set", SN_NOWARN);
+    set_name(0x41A980, "email_deliver", SN_NOWARN);
+    set_name(0x484110, "email_flush", SN_NOWARN);
+    set_name(0x49FDB0, "evkit_rollover", SN_NOWARN);
+    set_name(0x49FCA0, "evkit_click", SN_NOWARN);
+    set_name(0x503E40, "evkit_popup", SN_NOWARN);
     msg("names applied\n");
 }

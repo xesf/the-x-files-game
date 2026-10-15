@@ -14,6 +14,7 @@
 
 static void after_triggers(game *g);
 static int hand_empty(game *g);
+static u32 inventory_triggers(game *g, u32 id);
 static void update_evidence(game *g);
 static u32 first_enabled(game *g, u32 list);
 static const game_iface_item *find_item(game *g, u32 id);
@@ -204,7 +205,7 @@ static void update_evidence(game *g)
  * Amis leans on the window turns it on. */
 int game_evidence(game *g, u32 *ids, int max)
 {
-    return g->show_evidence ? collected_evidence(g, ids, max) : 0;
+    return g->show_evidence || g->kit_open ? collected_evidence(g, ids, max) : 0;
 }
 
 int game_click_evidence(game *g, u32 id)
@@ -709,6 +710,22 @@ void game_hover(game *g, int x, int y)
     g->iface_hover = id;
     if (it)
         vc_run_triggers(&g->interp, it->item.triggers, 4);
+    after_triggers(g);
+}
+
+/* The pointer moved onto an inventory item, or off it (0): kinds 4 and 5
+ * of the item's triggers run, as for layout items (the evidence kit pops
+ * up its evidence). */
+void game_hover_inventory(game *g, u32 id, int on_evidence)
+{
+    g->pointer_on_evidence = on_evidence;
+    if (id == g->inv_hover)
+        return;
+    if (g->inv_hover)
+        vc_run_triggers(&g->interp, inventory_triggers(g, g->inv_hover), 5);
+    g->inv_hover = id;
+    if (id)
+        vc_run_triggers(&g->interp, inventory_triggers(g, id), 4);
     after_triggers(g);
 }
 
@@ -1870,6 +1887,84 @@ static void email_read(game *g, u32 item, u32 asset)
     }
 }
 
+/* --- Shanks's reports ------------------------------------------------ */
+
+/* The GAM id that a registration holds in argument i, or 0. */
+static u32 reg_id(game *g, const char *name, int i)
+{
+    int k;
+    for (k = 0; k < g->reg_count; k++)
+        if (strcmp(g->regs[k].name, name) == 0 && i < g->regs[k].argc)
+            return g->regs[k].vars[i];
+    return 0;
+}
+
+/* 0x4BC4F0 fn_SetShanksVar(flag) -> 0x51E160: works out one of the flags
+ * that decide what Shanks has to say, from the variables that
+ * RegShanksNode2, 3 and 6 registered (in argument order, through the
+ * setters 0x51DD40, 0x51DF60 and 0x48E0A0) and the story node. In node 2
+ * it also mails Willmore (88440) about the warehouse, once. */
+static void shanks_var(game *g, u32 flag)
+{
+#define N(i) reg_id(g, "RegShanksNode2", i)
+#define M(i) reg_id(g, "RegShanksNode3", i)
+#define P(i) reg_id(g, "RegShanksNode6", i)
+#define V(id) vc_get_var(&g->interp, id)
+    i32 node = game_reg_value(g, "RegCurrNode", 0);
+    int set = 1, on = 0;
+    if (flag == N(13))
+        on = node == 2 && !(V(N(1)) && V(N(0)));
+    else if (flag == N(14))
+        on = node == 2 && !V(N(2));
+    else if (flag == 5053) /* SHANKSN2_bTellWillCallComputerC */
+        on = node == 2 && V(N(0)) == 1 && !V(5054);
+    else if (flag == N(15))
+        on = node == 2 && V(N(3)) == 1 && !V(4553);
+    else if (flag == N(16))
+        on = node == 2 && V(N(10)) == 1 && !V(N(11));
+    else if (flag == N(18))
+        on = node == 2 && V(N(3)) == 1 && V(N(4)) == 1 && V(N(5)) == 1 && V(N(6)) == 1 &&
+             (!V(N(7)) || !V(N(8)) || !V(N(9)));
+    else if (flag == N(17))
+        on = node == 2 && V(N(11)) == 1 && !V(1990) && !V(N(12));
+    else if (flag == N(19))
+        on = 1;
+    else if (flag == M(13))
+        on = node == 3 && !V(M(0));
+    else if (flag == M(17))
+        on = node == 3 && V(M(1)) == 1 && !V(M(2));
+    else if (flag == M(14))
+        on = node == 3 && V(M(2)) == 1 && !V(M(4));
+    else if (flag == M(15))
+        on = node == 3 && V(M(4)) == 1 && !V(M(5));
+    else if (flag == M(16))
+        on = node == 3 && V(M(5)) == 1 && (!V(M(6)) || !V(M(7)) || !V(M(8)));
+    else if (flag == M(12))
+        on = node == 3 && V(M(6)) == 1 && (!V(M(9)) || !V(M(10)) || !V(M(11)));
+    else if (flag == P(3))
+        on = node == 6 && V(P(0)) == 1 && !V(5155);
+    else if (flag == P(4))
+        on = node == 6 && V(P(1)) == 1 && !V(P(2));
+    else
+        set = 0;
+    if (set && flag)
+        vc_set_var(&g->interp, flag, on);
+    /* 0x51E88B: SHANKSN2_bFoundWarehouseInING (5051) and
+     * SHANKSN2_bSentWarehouseEmail (5052) both unset */
+    if (node == 2 && !V(N(13)) && !V(5051) && !V(5052)) {
+        if (email_find(g, 88440) < 0 && g->email_count < GAME_MAX_EMAILS) {
+            g->emails[g->email_count].asset = 88440;
+            g->emails[g->email_count++].read = 0;
+            xf_info("e-mail 88440 arrives");
+        }
+        vc_set_var(&g->interp, 5052, 1);
+    }
+#undef N
+#undef M
+#undef P
+#undef V
+}
+
 /* --- Save and Load screens -------------------------------------------- */
 
 /* Layout 82537 is the Save screen, 82634 the Load screen; three slots
@@ -2028,6 +2123,15 @@ void game_close_slots(game *g)
 {
     if (g->slot_mode)
         slot_close(g, 1);
+}
+
+u32 game_clip_offset(const game *g, u32 asset)
+{
+    int j;
+    for (j = 0; j < g->clip_offset_count; j++)
+        if (g->clip_offsets[j].asset == asset)
+            return g->clip_offsets[j].ms;
+    return 0;
 }
 
 /* The menu's Save and Load items open these screens. */
@@ -2531,6 +2635,82 @@ static int host_call_function(void *user, const vc_action *a)
     }
     if (slot_function(g, name, argc, args))
         return 1;
+    /* 0x4B5D70 fn_DrawGunRauch(state, letter) -> 0x4B0410: drawing the
+     * gun on Rauch's porch while the NSA agents talk (state 1) starts the
+     * gunfight: the letter becomes 'b' and view 39746 follows. */
+    if (strcmp(name, "DrawGunRauch") == 0 && argc == 2) {
+        if (arg_value(g, &args[0]) == 1) {
+            if (args[1].kind == VC_OPND_VARIABLE)
+                vc_set_var(&g->interp, args[1].value, 'b');
+            host_go_to_view(g, 39746);
+        }
+        return 1;
+    }
+    /* 0x4B5780 fn_AlienBlast(n) -> 0x50C6B0: while the alien's blast plays,
+     * moves already queued are dropped and two screen layers hide; the
+     * argument is not used. */
+    if (strcmp(name, "AlienBlast") == 0) {
+        g->pending_view = 0;
+        return 1;
+    }
+    /* 0x4BBE30 fn_RollOnEvKit(item, on) -> 0x49FDB0: with the pointer on
+     * the evidence kit, the collected evidence pops up beside it
+     * (0x503E40 with the kit's rectangle); it closes when the pointer
+     * leaves both the kit and the popup. */
+    if (strcmp(name, "RollOnEvKit") == 0 && argc == 2) {
+        if (arg_value(g, &args[1]))
+            g->kit_open = 1;
+        else if (!g->pointer_on_evidence)
+            g->kit_open = 0;
+        return 1;
+    }
+    /* 0x4B6120 fn_EvKitIconClick -> 0x49FCA0: a click on the kit closes
+     * the popup (0x503E40 with 0) along with any tool screen. */
+    if (strcmp(name, "EvKitIconClick") == 0) {
+        g->kit_open = 0;
+        return 1;
+    }
+    if (strcmp(name, "SetShanksVar") == 0 && argc == 1) {
+        if (args[0].kind == VC_OPND_VARIABLE)
+            shanks_var(g, args[0].value);
+        return 1;
+    }
+    /* 0x4B6520 fn_GetPlayFBIShot, 0x4B6260 fn_GetPlayBones, 0x4B6420
+     * fn_GetPlayCancer (var): whether to play a clip that shows only once
+     * a session. Each flag starts at 1 (0x6B579C, 0x6B57A0, 0x6B57A4) and
+     * reads 1 the first time only. */
+    if ((strcmp(name, "GetPlayFBIShot") == 0 || strcmp(name, "GetPlayBones") == 0 ||
+         strcmp(name, "GetPlayCancer") == 0) && argc == 1) {
+        int k = name[7] == 'F' ? 0 : name[7] == 'B' ? 1 : 2;
+        if (args[0].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[0].value, g->play_once[k]);
+        g->play_once[k] = 0;
+        return 1;
+    }
+    /* 0x4B9B80 fn_PrepBombTime(timer, media) -> 0x4D0F80: the bomb's
+     * countdown clip runs three minutes; while the timer runs, the clip
+     * starts where the countdown is (180000 ms less the time left). */
+    if (strcmp(name, "PrepBombTime") == 0 && argc == 2) {
+        u8 id = (u8)arg_value(g, &args[0]);
+        u32 media = (u32)arg_value(g, &args[1]);
+        int k;
+        for (k = 0; k < g->timer_count; k++)
+            if (g->timers[k].id == id) {
+                i32 left = (i32)(g->timers[k].due - g->now);
+                u32 elapsed = left <= 0 ? 180000u : left >= 180000 ? 0u : 180000u - (u32)left;
+                int j;
+                for (j = 0; j < g->clip_offset_count && g->clip_offsets[j].asset != media; j++)
+                    ;
+                if (j == g->clip_offset_count && g->clip_offset_count < (int)XF_COUNT(g->clip_offsets))
+                    g->clip_offset_count++;
+                if (j < g->clip_offset_count) {
+                    g->clip_offsets[j].asset = media;
+                    g->clip_offsets[j].ms = elapsed;
+                }
+                break;
+            }
+        return 1;
+    }
     /* 0x4BCA40 fn_SuicideNote(event) -> 0x4B0C00: one of three notes
      * (table 0x657930), in the ZonkersHand font at 14 points, on the
      * item whose trigger runs. ZonkersHand is not in the game data;
@@ -2596,6 +2776,24 @@ static int host_call_function(void *user, const vc_action *a)
             if (g->smol_vars[g->smol_area - 1])
                 vc_set_var(&g->interp, g->smol_vars[g->smol_area - 1], 1);
         }
+        return 1;
+    }
+    /* 0x4BC6D0 fn_SmGoonShoots(result, try, view) -> 0x4B0460: on the
+     * second and third try a goon may hit Willmore (result 1): 20, 40 or
+     * 60 percent on the second, 50, 65 or 80 on the third, by difficulty
+     * (var991 'E', 'S', 'H'). A miss goes on to `view`. */
+    if (strcmp(name, "SmGoonShoots") == 0 && argc == 3) {
+        i32 tries = arg_value(g, &args[1]);
+        char level = (char)vc_get_var(&g->interp, 991);
+        int d = level == 'E' ? 0 : level == 'H' ? 2 : 1, hit = 0;
+        static const int chance[2][3] = { { 20, 40, 60 }, { 50, 65, 80 } };
+        g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+        if (tries == 2 || tries == 3)
+            hit = (int)((g->rand_seed >> 16) % 100) < chance[tries - 2][d];
+        if (args[0].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[0].value, hit);
+        if (!hit)
+            host_go_to_view(g, (u32)arg_value(g, &args[2]));
         return 1;
     }
     if (strcmp(name, "SmIsWillShot1") == 0 && argc == 1) {
@@ -3000,6 +3198,7 @@ int game_open(game *g, const char *data_dir)
     memset(g, 0, sizeof(*g));
     snprintf(g->data_dir, sizeof(g->data_dir), "%s", data_dir);
     g->disc = 1;
+    memset(g->play_once, 1, sizeof(g->play_once));
     host.user = g;
     if (xf_path_resolve(data_dir, "XFILES.HDB", path, sizeof(path)) != 0 || xf_neo_open(&g->db, path) != 0) {
         xf_error("game: cannot open XFILES.HDB in %s", data_dir);
