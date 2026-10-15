@@ -1,0 +1,33 @@
+# Saves and the checkpoint: the warehouse raid on disc 5 keeps a
+# checkpoint (SaveGameState) as Willmore arrives.
+include disc4.txt
+
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+wait 3000
+walk 1022
+click 78394
+askall 44971
+wait 30000
+click 1226
+
+inv 17451
+click 58726
+click 59681                     # Smolnikoff's warehouse
+expect checkpoint 1
+click 47779                     # "Cover me"
+expect var 2383 1               # bAskedCookToCover
+
+# Back to the checkpoint: before "Cover me".
+restore
+expect view 26186
+expect var 2383 0
+
+# A save file keeps the same state.
+click 47779
+save build/test-save.xfs Warehouse
+set 2383 0
+load build/test-save.xfs
+expect view 26186
+expect var 2383 1

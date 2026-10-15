@@ -119,6 +119,9 @@ A script has one command per line; `#` starts a comment.
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <database> <text>` / `noing ...` | Runs an ING search at the office computer and expects a record, or none |
 | `set <var> <value>` | Sets a GAM variable |
+| `save <file> [name]` / `load <file>` | Writes the game to a save file, or loads one |
+| `reload` | Saves to memory and loads again at once |
+| `restore` | Goes back to the last `SaveGameState` checkpoint |
 | `route <view>` | Prints the shortest way to a view over every move, and the enable state that closes each closed move |
 | `gate <id>` / `gate enable <id>` | Prints the GAM enable state of an object, or the object an enable state controls |
 | `var <id>` | Prints a GAM variable with its name |
@@ -133,6 +136,7 @@ A script has one command per line; `#` starts a comment.
 | `expect iface <id>` / `noiface <id>` | Checks that a layout is or is not up |
 | `expect over 0\|1` | Checks whether the game has ended (`EndGame`: death, or the credits) |
 | `expect played <id>` | Checks that a clip was among the last 32 started |
+| `expect checkpoint 0\|1` | Checks whether `SaveGameState` has taken a checkpoint |
 | `expect choice <id>` / `nochoice <id>` | Checks that a question is or is not on offer |
 | `expect photo <id>` | Checks that the camera holds a photo of this media |
 
@@ -156,6 +160,11 @@ location card of a new game.
 The run stops at the first failing step and prints the state there. At
 the end it lists the engine functions the story called that are not
 implemented yet.
+
+With `XF_PLAY_RELOAD=1`, a script saves and loads the game after every
+step that ends at rest: no layout open and no conversation running. All
+seven disc scripts reach the credits this way, which shows that a save
+keeps everything the story needs (see [formats/save.md](formats/save.md)).
 
 To find the IDs for a walkthrough step, `tools/re/vc_map.py` prints the
 views around a view, their moves and objects, and what clicking each
