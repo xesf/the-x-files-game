@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Decoding of VCAction data (see docs/engine/actions.md). */
 #ifndef XF_VC_ACTION_H
 #define XF_VC_ACTION_H

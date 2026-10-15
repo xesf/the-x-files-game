@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Basic types shared by the whole engine. */
 #ifndef XF_TYPES_H
 #define XF_TYPES_H

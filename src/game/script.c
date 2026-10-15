@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Story scripts: steps of play (walk, click, ask, wait...) and checks,
  * run against the game logic. xftool play runs them headless; the
  * explorer runs them in its window and can take screenshots. See

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Cinepak ('cvid') video decoder. */
 #ifndef XF_CINEPAK_H
 #define XF_CINEPAK_H

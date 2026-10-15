@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* xftool: command-line access to the game's files. */
 #ifndef XFTOOL_H
 #define XFTOOL_H

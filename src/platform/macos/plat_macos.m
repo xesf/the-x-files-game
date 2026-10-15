@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* macOS backend: Cocoa window, Core Graphics blit, Audio Queue output. */
 #import <Cocoa/Cocoa.h>
 #import <AudioToolbox/AudioToolbox.h>

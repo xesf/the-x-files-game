@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Prints the entries of a vtable: python3 -I tools/re/vtable.py exe addr [count]"""
 import sys
 

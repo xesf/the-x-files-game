@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Minimal PE reader for RE scripts: maps virtual addresses to file bytes."""
 import struct
 

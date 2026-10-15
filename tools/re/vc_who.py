@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Finds the actions that read or write a GAM variable or enable state,
 and what runs them: the trigger list, its kind and its owner object.
 

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Software mixer. Each channel has a ring buffer that the game thread
  * fills with 16-bit PCM at the source rate; the audio thread resamples
  * and mixes all channels to stereo at the output rate. */

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Checks class field layouts against every object in an HDB file.
 
 Field codes: B = u8, S = u16, D = u32, I = object id (u32), T = blob

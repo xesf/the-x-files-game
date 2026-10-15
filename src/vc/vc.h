@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* VirtualCinema game model: typed views of the objects in XFILES.HDB
  * (see docs/engine/scene-graph.md). */
 #ifndef XF_VC_H

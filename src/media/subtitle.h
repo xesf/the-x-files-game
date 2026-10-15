@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Subtitles from the QuickTime text tracks of a scene. */
 #ifndef XF_SUBTITLE_H
 #define XF_SUBTITLE_H

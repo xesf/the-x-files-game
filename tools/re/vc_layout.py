@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Prints an interface layout: its items, their regions, pictures and
 what each trigger kind does.
 

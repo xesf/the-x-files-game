@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 xesf and contributors
 // Rebuild functions that end right after a call. A real function never
 // ends that way: these were cut short while a callee was wrongly flagged
 // as no-return (see fix_noreturn.idc), and IDA can set the flag again on

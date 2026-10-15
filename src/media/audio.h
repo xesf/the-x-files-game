@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Decodes the sound track of a QuickTime movie to 16-bit PCM, one chunk
  * at a time. Supports 'ima4' (IMA ADPCM) and 'twos' (signed PCM). */
 #ifndef XF_AUDIO_H

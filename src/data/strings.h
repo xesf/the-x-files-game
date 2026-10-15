@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Windows string tables (RT_STRING resources) of the game's DLLs.
  * xfilest.dll holds the game's text: dialogue lines, interface labels,
  * search keywords. Media references of type 6 point into it. */

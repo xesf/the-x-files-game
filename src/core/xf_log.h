@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Logging to stderr. */
 #ifndef XF_LOG_H
 #define XF_LOG_H

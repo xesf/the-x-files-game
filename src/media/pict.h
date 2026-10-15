@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Macintosh PICT version 2 decoder for the images in PFF bundles
  * (see docs/formats/pff.md). */
 #ifndef XF_PICT_H

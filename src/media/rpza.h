@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Apple Video ('rpza', "Road Pizza") decoder. */
 #ifndef XF_RPZA_H
 #define XF_RPZA_H

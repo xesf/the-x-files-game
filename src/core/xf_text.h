@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Text encoding helpers. Game text is Windows-1252. */
 #ifndef XF_TEXT_H
 #define XF_TEXT_H

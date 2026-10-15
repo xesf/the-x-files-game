@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Checks that action operands and enable targets resolve in the GAM.
 
 usage: python3 -I tools/re/check_refs.py XFILES.HDB XFILES.GAM

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 xesf and contributors
 // Rejoin functions that IDA split at a call it wrongly took for no-return.
 // Run after fix_noreturn.idc. Run in IDA: File > Script file...
 //

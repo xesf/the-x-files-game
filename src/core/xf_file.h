@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* File access. Game files are looked up without regard to case, because
  * the original discs used upper-case names and installs vary. */
 #ifndef XF_FILE_H

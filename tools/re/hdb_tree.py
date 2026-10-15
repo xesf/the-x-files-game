@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Prints the object graph below an object, decoding fields with the
 layouts from hdb_layouts.py.
 

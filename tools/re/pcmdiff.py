@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 """Compares a WAV file from xftool with raw s16le from ffmpeg:
 python3 -I tools/re/pcmdiff.py ours.wav ref.raw"""
 import struct
