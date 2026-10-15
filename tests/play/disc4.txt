@@ -60,3 +60,52 @@ click 87437
 wait 10000
 expect var 2055 1
 expect var 1219 5               # node 5: Astadourian wakes Willmore
+
+# Node 5, Thursday: Astadourian brings a videotape of new burn victims.
+askall 24285
+askall 77893
+click 45535                     # play the tape
+askall 41195
+hold FaxLeadSphere              # show her Amis's fax: her idea counter
+click 41195                     # reaches 6, "Okay cowboy, let's go"
+hold none
+wait 5000
+
+# Gordon's Hauling, on the second page of the PDA map.
+inv 17451
+click 58726
+click 35343                     # the map's second page
+click 58766                     # zoom in
+click 58982                     # Gordon's Hauling
+walk 6875
+askall 90162
+walk 6963
+walk 7026
+click 41081                     # the manifest; Rauch jumps Willmore
+walk 7052
+click 41019                     # take the shovel
+expect var 3970 1
+walk 7047
+hold Shovel
+click 41003                     # dig out under the grate before the bomb
+hold none
+wait 30000
+expect var 1992 1
+
+# The coroner: more radiation victims.
+click 90538
+click 35406
+click 59146
+askall 68836
+askall 84055
+expect var 2050 1
+
+# Home to bed: node 6, Friday.
+inv 17451
+click 58726
+click 59694
+wait 10000
+walk 3974
+click 87437
+wait 10000
+expect var 1219 6
