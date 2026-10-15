@@ -149,20 +149,21 @@ static int has_iface(const game *g, u32 id)
 
 /* Walks to `target` through the moves that are enabled now: a breadth-
  * first search over the views, then one click per move. */
-static int walk(script *s, u32 target)
+/* Shortest list of moves from the current view to a view, through the
+ * moves that are enabled now, or through every move when `any` is set.
+ * Returns the number of moves, or -1 when there is no way. */
+static int find_path(game *g, u32 target, int any, u32 *path, int max)
 {
     enum { MAXV = 4096 };
     static u32 queue[MAXV], prev[MAXV], via[MAXV];
-    u32 path[256];
-    int head = 0, tail = 0, i, found = -1, n = 0;
-    game *g = s->g;
+    int head = 0, tail = 0, i, k, found = -1, n = 0;
     queue[tail] = g->view;
     prev[tail++] = (u32)-1;
     while (head < tail && found < 0) {
         int cur = head++;
         vc_view v;
         u32 navs[64];
-        int k, m;
+        int m;
         if (queue[cur] == target) {
             found = cur;
             break;
@@ -173,7 +174,7 @@ static int walk(script *s, u32 target)
         for (k = 0; k < m && tail < MAXV; k++) {
             vc_nav nav;
             int seen = 0;
-            if (!vc_is_enabled(&g->interp, navs[k]) || vc_read_nav(&g->db, navs[k], &nav) != 0)
+            if ((!any && !vc_is_enabled(&g->interp, navs[k])) || vc_read_nav(&g->db, navs[k], &nav) != 0)
                 continue;
             for (i = 0; i < tail && !seen; i++)
                 seen = queue[i] == nav.target;
@@ -185,16 +186,54 @@ static int walk(script *s, u32 target)
         }
     }
     if (found < 0)
+        return -1;
+    for (i = found; prev[i] != (u32)-1; i = (int)prev[i])
+        n++;
+    if (n > max)
+        return -1;
+    i = found;
+    for (k = n; k-- > 0; i = (int)prev[i])
+        path[k] = via[i];
+    return n;
+}
+
+static int walk(script *s, u32 target)
+{
+    u32 path[256];
+    game *g = s->g;
+    int n = find_path(g, target, 0, path, 256), i;
+    if (n < 0)
         return 0;
-    for (i = found; prev[i] != (u32)-1 && n < 256; i = (int)prev[i])
-        path[n++] = via[i];
-    while (n-- > 0) {
-        printf("  move %u\n", path[n]);
-        if (!game_click_object(g, path[n]))
+    for (i = 0; i < n; i++) {
+        printf("  move %u\n", path[i]);
+        if (!game_click_object(g, path[i]))
             return 0;
         settle(s);
     }
     return g->view == target;
+}
+
+/* Prints the shortest way to a view over every move, enabled or not,
+ * with the GAM enable state that gates each closed move. */
+static void route(game *g, u32 target)
+{
+    u32 path[256];
+    int n = find_path(g, target, 1, path, 256), i;
+    u32 k;
+    if (n < 0) {
+        printf("  no way to view %ld\n", (long)target);
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        vc_nav nav;
+        vc_read_nav(&g->db, path[i], &nav);
+        printf("  move %u -> view %u", path[i], nav.target);
+        if (!vc_is_enabled(&g->interp, path[i]))
+            for (k = 0; k < g->interp.enable_count; k++)
+                if (g->interp.enables[k].target == path[i])
+                    printf("  (off: enable #%u)", g->interp.enables[k].id);
+        printf("\n");
+    }
 }
 
 /* Talks to a character and asks every question that has not been asked
@@ -341,7 +380,7 @@ int script_run(script *s, const char *path, int quiet)
             /* Plays another script first, quietly: a disc starts where
              * the previous one ends. */
             char inc[512];
-            const char *slash = strrchr(path, '/');
+            const char *slash = file[0] == '/' ? NULL : strrchr(path, '/');
             snprintf(inc, sizeof(inc), "%.*s%s", slash ? (int)(slash - path + 1) : 0, path, file);
             ok = script_run(s, inc, 1) == 0;
         } else if (strcmp(cmd, "new") == 0) {
@@ -406,6 +445,16 @@ int script_run(script *s, const char *path, int quiet)
             reach(g);
         } else if (strcmp(cmd, "state") == 0) {
             print_state(g);
+        } else if (strcmp(cmd, "route") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            route(g, (u32)a);
+        } else if (strcmp(cmd, "gate") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            /* The GAM enable state of an object, to look up what sets it
+             * (tools/re/vc_who.py enable <id>). */
+            u32 i;
+            for (i = 0; i < g->interp.enable_count; i++)
+                if (g->interp.enables[i].target == (u32)a)
+                    printf("  object %ld: enable #%u is %s\n", a, g->interp.enables[i].id,
+                           g->interp.enables[i].enabled ? "on" : "off");
         } else if (strcmp(cmd, "expect") == 0 && (n = sscanf(line, "%*s %31s %ld %ld", what, &a, &b)) >= 2) {
             ok = expect(g, what, a, b, n == 3);
         } else {
