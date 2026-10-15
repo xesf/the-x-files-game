@@ -138,4 +138,29 @@ click 34072
 expect var 2045 1
 expect var 1219 11
 
-# Next: the stakeout.
+# The stakeout: a car pulls up and two men carry a box in.
+wait 5000
+expect view 73759
+wait 26000
+expect view 2738
+walk 2655                       # round the back
+hold Lockpick
+click 33767
+hold none
+click 84779                     # in through the back door
+inv 21829                       # night vision
+walk 2497
+click 35976                     # the men empty a compartment; stay hidden
+wait 45000
+expect view 2475
+click 33989                     # the loose floorboard: empty now
+
+# Home to bed; the alarm wakes Willmore on Wednesday.
+inv 17451
+click 58726
+click 59694                     # Willmore's apartment
+walk 3974
+click 87437                     # the bed
+wait 10000
+expect var 1219 3               # node 3: Disc 3
+expect view 3974
