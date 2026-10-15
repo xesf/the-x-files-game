@@ -275,6 +275,20 @@ static int shoot_at(explorer *e, int x, int y)
     return 0;
 }
 
+/* A click on the clip being played: the HOT rectangle under it, if any,
+ * takes the shot. Scene clips fill the picture area. */
+static int clip_shot(explorer *e, int x, int y)
+{
+    u32 hot, t;
+    if (!e->g->current.asset || e->player.video.width != PICTURE_W || e->player.video.height != PICTURE_H)
+        return 0;
+    if (x < PICTURE_X || y < PICTURE_Y || x >= PICTURE_X + PICTURE_W || y >= PICTURE_Y + PICTURE_H)
+        return 0;
+    t = e->player.now_ms;
+    hot = game_hot_at(e->g, e->g->current.asset, x - PICTURE_X, y - PICTURE_Y, t);
+    return hot && game_shoot(e->g, hot);
+}
+
 /* Loads the enabled media of the view: the navigation still (media type
  * bit 0x40, a frame of a .nmv file) and moving pictures (a range of a
  * movie; type bit 0x08 loops it). Uses the current disc, or the first
@@ -1448,6 +1462,9 @@ static void run_frame(explorer *e)
             u32 icon = e->icon_ids[icon_at(e, ev.x, ev.y)];
             finish_media(e);
             game_click_icon(e->g, icon);
+        } else if (e->playing && e->have_clip && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT &&
+                   clip_shot(e, ev.x, ev.y)) {
+            stop_media(e); /* a shot: the clip ends without its end triggers */
         } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
             if (!e->card_active)
                 finish_media(e); /* skip the clip; the location card cannot be skipped */

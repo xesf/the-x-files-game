@@ -1279,8 +1279,10 @@ static u32 view_hot(game *g, u32 id, int *has)
 {
     xf_hot hot;
     u32 i, first = 0;
+    u32 clip = g->current.asset ? g->current.asset :
+               game_media_pending(g) ? g->queue[g->queue_head].asset : g->view_asset;
     *has = 0;
-    if (!g->view_asset || load_hot(g, g->view_asset, &hot) != 0)
+    if (!clip || load_hot(g, clip, &hot) != 0)
         return 0;
     first = hot.count ? hot.spots[0].id : 0;
     for (i = 0; i < hot.count; i++)
@@ -1323,6 +1325,11 @@ int game_shoot(game *g, u32 hot)
         for (k = 0; k < XF_COUNT(g_shots); k++)
             if (g_shots[k].shot == shot) {
                 xf_info("shot %u: clip %u", g_shots[k].shot, g_shots[k].media);
+                /* 0x4F4B84: the clip being played stops at once, without
+                 * its end triggers (Cook stops strangling Willmore). */
+                g->current.asset = 0;
+                g->current.conversation = 0;
+                g->queue_head = g->queue_tail;
                 if (g_shots[k].state) /* 0x50D0E0 */
                     set_reg_var(g, "RegViewState", 0, g_shots[k].state);
                 g->shot_media = g_shots[k].media;

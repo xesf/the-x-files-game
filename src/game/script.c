@@ -496,7 +496,7 @@ static void probe(script *s, const char *item)
  * move sequence after which a variable has the wanted value. States that
  * end the game are dropped, and states already seen are not tried again. */
 
-enum { SOLVE_MOVE_VIEW, SOLVE_MOVE_ASK, SOLVE_MOVE_ICON, SOLVE_MOVE_SHOOT, SOLVE_MOVE_WAIT };
+enum { SOLVE_MOVE_VIEW, SOLVE_MOVE_ASK, SOLVE_MOVE_ICON, SOLVE_MOVE_SHOOT, SOLVE_MOVE_WAIT, SOLVE_MOVE_ITEM };
 
 typedef struct {
     int kind;
@@ -579,9 +579,20 @@ static int solve_moves(game *g, solve_move *out, int max)
             out[n].id = g_hot_ids[k];
             out[n++].item = g_solve_items[it];
         }
+    if (g->iface_count) {
+        /* A layout is up (a keypad, a console): its items. */
+        const game_iface *f = &g->ifaces[g->iface_count - 1];
+        for (k = 0; k < f->count && n < max; k++) {
+            out[n].kind = SOLVE_MOVE_ITEM;
+            out[n].id = f->items[k].id;
+            out[n++].item = NULL;
+        }
+    }
     out[n].kind = SOLVE_MOVE_WAIT;
     out[n].id = 0;
     out[n++].item = NULL;
+    if (g->iface_count)
+        return n;
     queue[tail++] = g->view;
     while (head < tail) {
         u32 v = queue[head++], navs[64];
@@ -641,6 +652,9 @@ static int solve_apply(script *s, const solve_move *mv)
     case SOLVE_MOVE_ICON:
         ok = game_click_icon(g, mv->id);
         break;
+    case SOLVE_MOVE_ITEM:
+        ok = game_click_object(g, mv->id);
+        break;
     case SOLVE_MOVE_SHOOT:
         if (!game_hold(g, mv->item))
             return 0;
@@ -666,6 +680,7 @@ static void solve_print(const solve_move *mv)
         break;
     case SOLVE_MOVE_ASK: printf("    ask %u\n", mv->id); break;
     case SOLVE_MOVE_ICON: printf("    icon %u\n", mv->id); break;
+    case SOLVE_MOVE_ITEM: printf("    click %u\n", mv->id); break;
     case SOLVE_MOVE_SHOOT: printf("    hold %s; shoot %u\n", mv->item, mv->id); break;
     case SOLVE_MOVE_WAIT: printf("    wait 10000\n"); break;
     }
@@ -783,6 +798,7 @@ int script_run(script *s, const char *path, int quiet)
     while (fgets(line, sizeof(line), fp)) {
         char cmd[32] = "", what[32] = "", path2[32] = "";
         long a = 0, b = 0, c = 0;
+        int hold_clip = 0;
         int n, ok = 1;
         char *hash = strchr(line, '#');
         lineno++;
@@ -850,6 +866,16 @@ int script_run(script *s, const char *path, int quiet)
             game_back(g);
         } else if (strcmp(cmd, "wait") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             advance(s, (u32)a);
+        } else if (strcmp(cmd, "until-clip") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            /* until-clip <ms>: lets time pass until a clip is queued and
+             * leaves it unplayed, so the next step can shoot into it */
+            u32 end = s->now + (u32)a;
+            while (s->now < end && !game_media_pending(g)) {
+                s->now += 100;
+                game_tick(g, s->now);
+            }
+            ok = game_media_pending(g);
+            hold_clip = 1;
         } else if (strcmp(cmd, "play") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             /* Lets the window play the clips for a while, without ending
              * them after the step. */
@@ -914,7 +940,7 @@ int script_run(script *s, const char *path, int quiet)
         }
         /* Clips end with the step, unless `clips on` lets the window play
          * them (until `skip` or until they end). */
-        if (!s->keep_clips)
+        if (!s->keep_clips && !hold_clip)
             settle(s);
         if (!ok) {
             printf("%s:%d: %s  FAILED\n", path, lineno, line);
