@@ -213,6 +213,15 @@ that `RegNodeNVars` registered and set the last one:
 | 4, 6 | The node's last scene is finished |
 | 5 | The hauling yard and the coroner's office are done |
 
+The links between nodes have their own checks: `SetIsLink2Done` and
+`SetIsLink3Done` (0x4BC330, 0x4BC350) set the second variable of
+`RegLink2Vars` or `RegLink3Vars` when the current node is 12 or 13 and
+the first variable is set. `RandGen(var, n)` gives the variable a random
+value from 0 to n, and `RandGenRange(var, lo, hi)` one from lo to hi.
+
+Sounds run their end triggers too: the alarm clock's end plays the
+morning and shows the location card. A sound under `Loops/` never ends.
+
 The travel lists then move `iCurrNode` to the link that follows: node
 2 complete makes it 11, the warehouse at night. `SwapDisc`'s last
 argument is this node variable, not a disc number.

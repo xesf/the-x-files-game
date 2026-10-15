@@ -479,10 +479,14 @@ static void update_sound(explorer *e)
             xf_info("sound %s%s", a.logical, e->sound_open ? "" : ": no file on disk");
         }
     }
-    if (!e->sound_open || xf_player_update(&e->sound, now))
+    if (e->sound_open && xf_player_update(&e->sound, now))
         return;
-    xf_player_close(&e->sound);
+    if (e->sound_open)
+        xf_player_close(&e->sound);
     e->sound_open = e->sound_loop && xf_player_open(&e->sound, e->sound_path, now) == 0;
+    /* A sound that ended, or has no file, runs its end triggers. */
+    if (!e->sound_open && e->g->sound)
+        game_sound_end(e->g);
 }
 
 static void stop_sound(explorer *e)
@@ -1421,9 +1425,13 @@ static void script_settle(void *user)
     explorer *e = user;
     int guard = 0;
     run_frame(e);
-    while ((e->playing || game_media_pending(e->g)) && guard++ < 256) {
+    while ((e->playing || game_media_pending(e->g) || e->g->sound) && guard++ < 256) {
         if (e->playing)
             finish_media(e);
+        else if (!game_media_pending(e->g) && e->g->sound) {
+            stop_sound(e);
+            game_sound_end(e->g);
+        }
         start_next_media(e);
     }
     run_frame(e);

@@ -128,6 +128,7 @@ typedef struct {
     u32 focus_item;       /* layout item that receives key presses */
     u32 kit_icons[GAME_MAX_EVIDENCE]; /* EnableKitIcon: icons in the kit */
     int kit_count;
+    u32 rand_seed;                    /* RandGen */
     u32 ing_notes;                    /* media of the ING record's field notes */
     int show_evidence;                /* DispEvIcons */
     u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */
@@ -194,6 +195,8 @@ void game_tick(game *g, u32 now_ms);
  * its end triggers. game_media_start returns 0 when the queue is empty. */
 int game_media_start(game *g, game_media *m);
 void game_media_end(game *g);
+/* The sound started by the last sound action ended (loops never end). */
+void game_sound_end(game *g);
 int game_media_pending(const game *g);
 void game_queue_media(game *g, u32 asset);
 

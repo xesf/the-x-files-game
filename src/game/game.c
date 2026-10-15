@@ -414,6 +414,21 @@ void game_media_end(game *g)
     }
 }
 
+/* A sound that is not a loop ends: its kind 9 triggers run (the alarm
+ * clock's end shows the morning). */
+void game_sound_end(game *g)
+{
+    vc_asset_ref a;
+    u32 sound = g->sound;
+    if (!sound || vc_read_asset_ref(&g->db, sound, &a) != 0)
+        return;
+    g->sound = 0;
+    if (strstr(a.logical, "/Loops/"))
+        return;
+    vc_run_triggers(&g->interp, a.triggers, 9);
+    after_triggers(g);
+}
+
 /* A media list holds alternatives: the first entry that is enabled
  * plays. Actions switch entries on and off, for example a clerk's line
  * before and after the badge is shown. Returns 0 when none is enabled. */
@@ -1516,6 +1531,31 @@ static int host_call_function(void *user, const vc_action *a)
      * RegNodeNVars registered, and sets the last one. */
     if (strncmp(name, "SetIsNode", 9) == 0 && strcmp(name + 10, "Done") == 0) {
         set_node_done(g, name[9] - '0');
+        return 1;
+    }
+    /* 0x4BC330 fn_SetIsLink2Done, 0x4BC350 fn_SetIsLink3Done: in node 12
+     * (or 13), the link is done when the first variable of RegLinkNVars
+     * is set (0x4CA350, 0x4CA3F0). */
+    if ((strcmp(name, "SetIsLink2Done") == 0 || strcmp(name, "SetIsLink3Done") == 0)) {
+        char reg[16];
+        int link = name[9] - '0';
+        snprintf(reg, sizeof(reg), "RegLink%dVars", link);
+        set_reg_var(g, reg, 1,
+                    game_reg_value(g, "RegCurrNode", 0) == 10 + link && game_reg_value(g, reg, 0) == 1);
+        return 1;
+    }
+    /* 0x4BCE10 fn_WillmoreSleeps: does nothing in this build. */
+    if (strcmp(name, "WillmoreSleeps") == 0)
+        return 1;
+    /* 0x4B9DC0 fn_RandGen(var, n) and 0x4B9EF0 fn_RandGenRange(var, lo,
+     * hi): a random value from 0 to n, or lo to hi, both included
+     * (0x468550, the C library generator). */
+    if ((strcmp(name, "RandGen") == 0 && argc == 2) || (strcmp(name, "RandGenRange") == 0 && argc == 3)) {
+        i32 lo = argc == 3 ? arg_value(g, &args[1]) : 0, hi = arg_value(g, &args[argc - 1]);
+        u32 span = hi >= lo ? (u32)(hi - lo) + 1 : 1;
+        g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+        if (args[0].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[0].value, lo + (i32)(g->rand_seed % span));
         return 1;
     }
     /* 0x4B5B40 fn_DispEvIcons(on): shows or hides the evidence bar */

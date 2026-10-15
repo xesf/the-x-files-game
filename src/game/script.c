@@ -15,8 +15,14 @@ static void drain_media(game *g)
 {
     game_media m;
     int guard = 0;
-    while (guard++ < 256 && game_media_start(g, &m))
-        game_media_end(g);
+    while (guard++ < 256) {
+        if (game_media_start(g, &m))
+            game_media_end(g);
+        else if (g->sound)
+            game_sound_end(g);
+        else
+            break;
+    }
 }
 
 /* Short name of a view: the production path of its first enabled media. */
