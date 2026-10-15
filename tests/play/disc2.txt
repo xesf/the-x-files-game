@@ -20,3 +20,4 @@ click 39617
 walk 6548                       # back to the clerk
 askall 22631                    # motel phone: the record of calls
 expect iface 39183
+dial 12025550149                # the D.C. number: Frohike answers

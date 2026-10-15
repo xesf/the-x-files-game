@@ -102,6 +102,8 @@ typedef struct {
     game_asked asked[GAME_MAX_ASKED];
     int asked_count;
 
+    char phone[24];       /* digits typed on the cell phone */
+
     game_registration regs[32];
     int reg_count;
     char missing[64][16]; /* unimplemented functions seen, by name */
@@ -151,6 +153,9 @@ int game_click_inventory(game *g, u32 id);
 /* Takes an inventory item in hand by name ("CaseFiles" for the GAM
  * constant Inventory_iCaseFiles), or empties the hand with NULL. */
 int game_hold(game *g, const char *item);
+/* Types a number on the cell phone and sends it (PhoneSend). Returns 1
+ * when the number is in the phone directory. */
+int game_dial(game *g, const char *number);
 /* The value of the engine variable registered by Reg<name>, argument i. */
 i32 game_reg_value(game *g, const char *name, int i);
 

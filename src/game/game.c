@@ -722,6 +722,91 @@ int game_click_object(game *g, u32 id)
     return 0;
 }
 
+/* --- Cell phone ------------------------------------------------------ */
+
+/* 0x65ECB0: the phone directory of the engine, {number, trigger, action
+ * list}. The number is a VCAssetRef in category 72 ("Phone Number:
+ * ...") whose path holds the digits; the action list plays the call. */
+static const u32 g_phone_book[][3] = {
+    { 67269, 67324, 67326 }, /* Amis */
+    { 67271, 67331, 67333 }, /* Arley */
+    { 67273, 67338, 67340 }, /* Asta */
+    { 67275, 67345, 67347 }, /* Truit */
+    { 67277, 67352, 67354 }, /* diner */
+    { 67279, 67361, 67363 }, /* Cook */
+    { 67281, 67368, 67370 }, /* Skinner in DC */
+    { 67283, 67375, 67377 }, /* Shanks */
+    { 67287, 67382, 67384 }, /* Willmore */
+    { 67285, 67389, 67391 }, /* crime lab */
+    { 67289, 67398, 67400 }, /* Barbara */
+    { 67443, 74576, 74580 }, /* Lone Gunmen */
+    { 83868, 83863, 83865 }, /* McGaffey */
+};
+
+/* The digits of a phone number media reference. */
+static void phone_number(game *g, u32 asset, char *out, size_t size)
+{
+    vc_asset_ref a;
+    out[0] = '\0';
+    if (vc_read_asset_ref(&g->db, asset, &a) == 0)
+        snprintf(out, size, "%s", a.logical);
+}
+
+/* A number matches with or without the long-distance 1 and, for local
+ * Seattle numbers, without the area code. */
+static int number_matches(const char *typed, const char *number)
+{
+    size_t lt = strlen(typed), ln = strlen(number);
+    if (lt == 0 || lt > ln)
+        return 0;
+    return strcmp(typed, number + (ln - lt)) == 0 && (lt == ln || lt == 10 || lt == 7);
+}
+
+/* 0x51FCD0: looks the typed number up. On a match the trigger and the
+ * action list of the call go into two variables, which the data then
+ * runs with DoActionListID. */
+static int phone_send(game *g, u32 trigger_var, u32 list_var)
+{
+    size_t i;
+    for (i = 0; i < XF_COUNT(g_phone_book); i++) {
+        char number[32];
+        phone_number(g, g_phone_book[i][0], number, sizeof(number));
+        if (number_matches(g->phone, number)) {
+            xf_info("phone: %s answers", g->phone);
+            if (trigger_var)
+                vc_set_var(&g->interp, trigger_var, (i32)g_phone_book[i][1]);
+            if (list_var)
+                vc_set_var(&g->interp, list_var, (i32)g_phone_book[i][2]);
+            return 1;
+        }
+    }
+    xf_info("phone: %s does not answer", g->phone);
+    return 0;
+}
+
+static void run_trigger_list_pair(game *g, i32 trigger, i32 list)
+{
+    xf_neo_reader r;
+    u32 l = (u32)list;
+    if (!l && vc_class(&g->db, (u32)trigger) == VC_TRIGGER && xf_neo_object(&g->db, (u32)trigger, &r, NULL, NULL) == 0)
+        l = xf_neo_u32(&r);
+    vc_run_action_list(&g->interp, l);
+}
+
+/* The phone screen calls PhoneSend(number, var4467, var4468) and then
+ * DoActionListID(var4467, var4468) (English HDB). game_dial does both. */
+int game_dial(game *g, const char *number)
+{
+    int ok;
+    snprintf(g->phone, sizeof(g->phone), "%s", number);
+    ok = phone_send(g, 4467, 4468);
+    if (ok)
+        run_trigger_list_pair(g, vc_get_var(&g->interp, 4467), vc_get_var(&g->interp, 4468));
+    g->phone[0] = '\0';
+    after_triggers(g);
+    return ok;
+}
+
 /* --- Engine functions ------------------------------------------------ */
 
 /* Day of the week for a date in the Gregorian calendar (0 = Sunday). */
@@ -801,6 +886,31 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x499E40 fn_OnInvClick(item): take the item in hand */
     if (strcmp(name, "OnInvClick") == 0 && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* Cell phone: keys, clear, send */
+    if (strcmp(name, "PhoneKeyPress") == 0 && argc >= 1) {
+        i32 key = arg_value(g, &args[0]);
+        size_t n = strlen(g->phone);
+        if (key >= '0' && key <= '9' && n + 1 < sizeof(g->phone)) {
+            g->phone[n] = (char)key;
+            g->phone[n + 1] = '\0';
+        }
+        return 1;
+    }
+    if (strcmp(name, "PhoneClear") == 0) {
+        g->phone[0] = '\0';
+        return 1;
+    }
+    if (strcmp(name, "PhoneSend") == 0 && argc == 3) {
+        phone_send(g, args[1].kind == VC_OPND_VARIABLE ? args[1].value : 0,
+                   args[2].kind == VC_OPND_VARIABLE ? args[2].value : 0);
+        return 1;
+    }
+    /* 0x4B5BC0 fn_DoActionListID(trigger, list): DoActionList with IDs
+     * taken from variables */
+    if (strcmp(name, "DoActionListID") == 0 && argc == 2) {
+        run_trigger_list_pair(g, arg_value(g, &args[0]), arg_value(g, &args[1]));
         return 1;
     }
     /* DeselectInv: empty the hand */
