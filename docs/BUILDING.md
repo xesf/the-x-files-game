@@ -19,6 +19,59 @@ The build writes two programs to `build/`:
 | `build/xfiles` | The game. |
 | `build/xftool` | A command-line tool that lists, checks and extracts game files. |
 
+## Linux, Steam Deck and Steam Machine
+
+You need a C compiler, `make` and the X11 and ALSA headers (on Debian or
+Ubuntu: `sudo apt install build-essential libx11-dev libasound2-dev`).
+
+```sh
+make
+```
+
+The backend (`src/platform/linux`) opens an X11 window, which also runs
+under Wayland through XWayland, and plays sound through ALSA. On a Steam
+Deck or a Steam Machine, add `build/xfiles` to Steam as a non-Steam
+game.
+
+## Windows
+
+Cross-build from macOS or Linux with MinGW-w64:
+
+```sh
+make PLATFORM=windows CC=x86_64-w64-mingw32-gcc
+```
+
+The backend (`src/platform/windows`) draws with GDI and plays sound with
+`waveOut`, using only calls that Windows 95 already had.
+
+## Windows 9x and DOS
+
+Both build with Open Watcom 2.0 (`export WATCOM=<install>` with its
+`binl64` or `bino64` folder on `PATH`):
+
+```sh
+make win9x   # build/win9x/XFILES.EXE, the Win32 backend
+make dos     # build/dos/XFILES.EXE and XFTOOL.EXE, DOS/4GW programs
+```
+
+The DOS program needs `DOS4GW.EXE` from Open Watcom beside it, VESA 2.0
+with a 640x480 mode at 32, 16 or 15 bits per pixel and a linear
+framebuffer, and a mouse driver. For sound it reads the Sound Blaster
+settings from the `BLASTER` variable. Under DOS, run it with the game
+folder: `XFILES --explore C:\XFILES 0 1`.
+
+## PlayStation Vita
+
+```sh
+docker run --rm -v "$PWD:/src" -w /src vitasdk/vitasdk make vita
+```
+
+This builds `build/vita/xfiles.vpk` with VitaSDK. Copy the game files to
+`ux0:data/xfiles`. The front touch panel is the pointer; the left stick
+moves it, Cross and Circle are the mouse buttons and Start is Escape.
+The Vita has no Courier New: copy `cour.ttf` into the game folder for
+the location captions.
+
 ## Game data
 
 The engine does not ship any game files. You need your own copy of

@@ -13,14 +13,21 @@ drawn like the original yet. See
 
 ## Running a release
 
-1. Download `xfiles-<version>-macos.zip` from the GitHub releases and
-   unzip it.
+Each GitHub release has a package for macOS, Linux (desktop, Steam Deck
+and Steam Machine), Windows, Windows 9x, DOS and the PlayStation Vita.
+
+1. Download the package for your system and unpack it.
 2. Copy the files of your installed game into a folder named `game`
-   beside `X-Files.app`, or set `XF_GAME_DIR` to your game folder. If your
-   install keeps its video clips in another folder (the DVD edition),
-   set `XF_MEDIA_DIR` to that folder too.
-3. Open `X-Files.app`. The app is not signed: the first time, open it
-   with Control-click > Open.
+   beside the program (beside `X-Files.app` on macOS), or set
+   `XF_GAME_DIR` to your game folder. If your install keeps its video
+   clips in another folder (the DVD edition), set `XF_MEDIA_DIR` to that
+   folder too. On the Vita, copy the game files to `ux0:data/xfiles`.
+   Under DOS, pass the folder: `XFILES --explore C:\XFILES 0 1`.
+3. Start the program. The macOS app is not signed: the first time, open
+   it with Control-click > Open.
+
+The DOS, Windows 9x and Vita builds are new and have only been tried in
+DOSBox-X, Wine and the VitaSDK build.
 
 To build from source, see [docs/BUILDING.md](docs/BUILDING.md).
 
@@ -49,6 +56,12 @@ licenses allow this use, and their notices are kept here:
 - **Zeffuro/x-files-pc-enhancement-patch** (MIT): a QuickTime and
   DirectDraw wrapper, used to run the original game for comparison.
   https://github.com/Zeffuro/x-files-pc-enhancement-patch
+- **Ecstatica engine** (GPL-3.0-or-later, same author): the DOS and Vita
+  platform layers are adapted from its backends.
+- **Open Watcom** (Sybase Open Watcom Public License): the DOS and
+  Windows 9x compiler. The DOS package includes `DOS4GW.EXE`, the DOS
+  extender that Open Watcom distributes for programs built with it.
+- **VitaSDK**: the PlayStation Vita toolchain.
 - **ScummVM wiki, The X-Files Game page:** file format notes.
   https://wiki.scummvm.org/index.php?title=The_X-Files_Game
 

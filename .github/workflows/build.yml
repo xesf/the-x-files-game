@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Builds the engine and runs the unit tests on every push and pull request.
-# The story tests (make playtest) need the game files, so they run locally.
+# Builds every platform and runs the unit tests on every push and pull
+# request. The story tests (make playtest) need the game files, so they
+# run locally.
 name: build
 
 on:
@@ -13,9 +14,40 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Build
-        run: make -j4
-      - name: Unit tests
-        run: make test
+      - run: make -j4
+      - run: make test
       - name: Debug build with sanitizers
         run: make -j4 BUILD=build/debug DEBUG=1
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libx11-dev libasound2-dev
+      - run: make -j4
+      - run: make test
+
+  windows:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+      - run: make -j4 PLATFORM=windows CC=x86_64-w64-mingw32-gcc
+
+  watcom:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: open-watcom/setup-watcom@v1
+        with:
+          version: "2.0-64"
+      - run: make -j4 dos win9x
+
+  vita:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build in the VitaSDK image
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src vitasdk/vitasdk:latest \
+            sh -c 'apk add --no-cache make git && git config --global --add safe.directory /src && make vita'
