@@ -11,4 +11,4 @@ shipped game and its data. File layouts are in [../formats](../formats).
 | [actions.md](actions.md) | Action data, expressions and the built-in function table |
 | [game-state.md](game-state.md) | Variables and enabled states in `XFILES.GAM` |
 | [runtime.md](runtime.md) | Start-up, main loop and the event system |
-- [game-ui.md](game-ui.md): the location card, the dialogue box, emotion and action icons, the inventory
+| [game-ui.md](game-ui.md) | The location card, the dialogue box, emotion and action icons, the inventory |
