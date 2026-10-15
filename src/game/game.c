@@ -1790,6 +1790,14 @@ static int host_call_function(void *user, const vc_action *a)
      * layers; not drawn yet. */
     if (strcmp(name, "FadeBack") == 0)
         return 1;
+    /* 0x4B58E0 fn_CharTeleport(event, event, node, location, viewpoint,
+     * view): 0x4EE100 queues a move to each of the four that differs
+     * from where Willmore is, so it ends in that view. A character the
+     * player clicks uses it to walk Willmore to where they talk. */
+    if (strcmp(name, "CharTeleport") == 0 && argc == 6) {
+        host_go_to_view(g, (u32)arg_value(g, &args[5]));
+        return 1;
+    }
     /* 0x4BCE10 fn_WillmoreSleeps: does nothing in this build. */
     if (strcmp(name, "WillmoreSleeps") == 0)
         return 1;

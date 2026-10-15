@@ -378,5 +378,7 @@ static main()
     set_name(0x6B6B10, "g_game_in_progress", SN_NOWARN);
     set_name(0x6B6FEC, "g_app", SN_NOWARN);
     set_name(0x6B7A14, "g_vc_root", SN_NOWARN);
+    set_name(0x4EDAD0, "CharTeleport_run", SN_NOWARN);
+    set_name(0x4EE100, "queue_teleport", SN_NOWARN);
     msg("names applied\n");
 }

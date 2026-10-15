@@ -377,3 +377,5 @@ data 0x6C14A8 g_fired_timers  numbers of the timers that fired since the last ti
 data 0x6B6B10 g_game_in_progress  1 when a game runs; the menu then shows "return"
 data 0x6B6FEC g_app  the application object
 data 0x6B7A14 g_vc_root  global set after the database opens
+0x4EDAD0 CharTeleport_run
+0x4EE100 queue_teleport
