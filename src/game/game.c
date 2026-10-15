@@ -2670,6 +2670,30 @@ static int host_call_function(void *user, const vc_action *a)
         g->kit_open = 0;
         return 1;
     }
+    /* 0x4BBB70 fn_RelocateIFacID(left, top, right, bottom, item): moves a
+     * layout item, like RelocateIFace for another item than the one whose
+     * trigger runs. */
+    if (strcmp(name, "RelocateIFacID") == 0 && argc == 5) {
+        game_iface_item *it = (game_iface_item *)find_item(g, (u32)arg_value(g, &args[4]));
+        if (it) {
+            it->item.region.left = (i16)arg_value(g, &args[0]);
+            it->item.region.top = (i16)arg_value(g, &args[1]);
+            it->item.region.right = (i16)arg_value(g, &args[2]);
+            it->item.region.bottom = (i16)arg_value(g, &args[3]);
+            g->iface_serial++;
+        }
+        return 1;
+    }
+    /* 0x495F40 fn_ReturnMainMenu, 0x4BBE10 fn_ReturnFromHelp: the main
+     * menu (MainMenu_ctor through 0x48FC20 and 0x4BFEC0). */
+    if (strcmp(name, "ReturnMainMenu") == 0 || strcmp(name, "ReturnFromHelp") == 0) {
+        g->ui_request = GAME_UI_MENU;
+        return 1;
+    }
+    /* Only in the catalogue list 42584, which no story trigger runs. */
+    if (strcmp(name, "AddIFLExcept") == 0 || strcmp(name, "ClearIFLExcept") == 0 ||
+        strcmp(name, "RefNVisionAss") == 0 || strcmp(name, "BreakPoint") == 0)
+        return 1;
     if (strcmp(name, "SetShanksVar") == 0 && argc == 1) {
         if (args[0].kind == VC_OPND_VARIABLE)
             shanks_var(g, args[0].value);
