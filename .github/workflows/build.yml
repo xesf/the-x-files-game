@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Builds the engine and runs the unit tests on every push and pull request.
+# The story tests (make playtest) need the game files, so they run locally.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make -j4
+      - name: Unit tests
+        run: make test
+      - name: Debug build with sanitizers
+        run: make -j4 BUILD=build/debug DEBUG=1

@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Builds a universal macOS app and publishes it as a GitHub release when a
+# version tag (v0.1.0, ...) is pushed. The zip holds the app, xftool, the
+# README and the licence; it never holds game files.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Unit tests
+        run: make -j4 test
+      - name: Package
+        run: make dist VERSION=${GITHUB_REF_NAME}
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "build/dist/xfiles-${GITHUB_REF_NAME}-macos.zip" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Engine build for macOS 11 or later (Apple silicon and Intel). You need your own copy of The X-Files Game; see the README."
