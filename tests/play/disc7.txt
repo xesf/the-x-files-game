@@ -23,3 +23,14 @@ expect view 8138
 icon 24577                      # over the rail and into the woods
 skip
 wait 5000
+
+# The woods: two NSA agents give chase.
+walk 36583
+hold Gun
+shoot 111                       # the first agent
+skip
+shoot 112                       # the second: Sc114L, on to the secret base
+skip
+hold none
+wait 3000
+expect var 1219 10              # node 10: the secret base, with Scully

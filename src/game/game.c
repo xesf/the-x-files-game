@@ -1310,6 +1310,17 @@ int game_shoot(game *g, u32 hot)
                 g->shot_media = g_shots[k].media;
                 g->shot_view = g_shots[k].view == GAME_SHOT_RESTART ? g->view : g_shots[k].view;
                 game_queue_media(g, g_shots[k].media);
+                if (g_shots[k].shot == 4 || g_shots[k].shot == 5) {
+                    /* The woods: two NSA agents (0x4F5A80 counts who is
+                     * left); with both down Sc114L plays and the chase
+                     * ends. */
+                    g->woods_down |= g_shots[k].shot == 4 ? 1 : 2;
+                    set_reg_var(g, "RegViewState", 0, g_shots[k].shot == 4 ? 't' : 'd');
+                    if (g->woods_down == 3) {
+                        g->shot_view = 0;
+                        game_queue_media(g, 38448);
+                    }
+                }
                 return 1;
             }
         xf_info("shot %u: not implemented", g_hot_shots[i].shot);
