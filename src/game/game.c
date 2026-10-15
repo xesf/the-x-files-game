@@ -608,7 +608,12 @@ const game_iface_item *game_iface_item_at(game *g, int x, int y)
             if (!it->item.triggers || !vc_is_enabled(&g->interp, it->id) || x < r->left || x >= r->right ||
                 y < r->top || y >= r->bottom)
                 continue;
-            if (!best || item_order(it) >= item_order(best))
+            /* A plain hotspot (no picture) takes the pointer before a
+             * picture under it: the PDA maps lay a hotspot over each dot,
+             * and only the hotspot's triggers are up to date (the dot's
+             * own list is an older version). */
+            if (!best || (!it->item.assets && best->item.assets) ||
+                (!it->item.assets == !best->item.assets && item_order(it) >= item_order(best)))
                 best = it;
         }
         if (best)

@@ -37,7 +37,7 @@ click 31620                     # leave the computer
 inv 17451
 click 58726
 expect enabled 34072 1          # the warehouse is on the Seattle map
-click 34072                     # the Dockside Warehouse
+click 59712                     # the Dockside Warehouse
 expect view 26014
 expect noiface 17365
 walk 3197                       # the back door
@@ -134,7 +134,7 @@ click 31620
 # Node 2 is complete: the warehouse at night.
 inv 17451
 click 58726
-click 34072
+click 59712
 expect var 2045 1
 expect var 1219 11
 

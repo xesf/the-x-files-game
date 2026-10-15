@@ -345,6 +345,122 @@ static void reach(game *g)
     }
 }
 
+
+/* --- Probe -------------------------------------------------------------
+ * Tries every object and character the player can reach now, one at a
+ * time, from a snapshot of the game: walks there, clicks it (with an item
+ * in hand if one is named), and reports the clips it queued, how many
+ * variables and enable states changed, and the view it ends in. The game
+ * is restored after each try. */
+
+typedef struct {
+    game *copy;
+    vc_var *vars;
+    vc_enable *enables;
+} snapshot;
+
+static int snap_take(game *g, snapshot *sn)
+{
+    sn->copy = malloc(sizeof(*g));
+    sn->vars = malloc(sizeof(vc_var) * g->interp.var_count + 1);
+    sn->enables = malloc(sizeof(vc_enable) * g->interp.enable_count + 1);
+    if (!sn->copy || !sn->vars || !sn->enables)
+        return -1;
+    *sn->copy = *g;
+    memcpy(sn->vars, g->interp.vars, sizeof(vc_var) * g->interp.var_count);
+    memcpy(sn->enables, g->interp.enables, sizeof(vc_enable) * g->interp.enable_count);
+    return 0;
+}
+
+static void snap_restore(game *g, const snapshot *sn)
+{
+    *g = *sn->copy; /* the arrays the interpreter points to are the same */
+    memcpy(g->interp.vars, sn->vars, sizeof(vc_var) * g->interp.var_count);
+    memcpy(g->interp.enables, sn->enables, sizeof(vc_enable) * g->interp.enable_count);
+}
+
+static void snap_free(snapshot *sn)
+{
+    free(sn->copy);
+    free(sn->vars);
+    free(sn->enables);
+}
+
+static void probe_one(script *s, const snapshot *sn, u32 view, u32 id, const char *item)
+{
+    game *g = s->g;
+    u32 path[256];
+    int n = find_path(g, view, 0, path, 256), i, vars = 0, en = 0;
+    char clips[256] = "";
+    if (n < 0)
+        return;
+    for (i = 0; i < n; i++) {
+        game_click_object(g, path[i]);
+        drain_media(g);
+    }
+    if (g->view != view)
+        return;
+    if (item && !game_hold(g, item))
+        return;
+    game_click_object(g, id);
+    for (i = g->queue_head; i != g->queue_tail; i = (i + 1) % GAME_MEDIA_QUEUE) {
+        vc_asset_ref a;
+        if (vc_read_asset_ref(&g->db, g->queue[i].asset, &a) == 0 && strlen(clips) + 40 < sizeof(clips)) {
+            const char *base = strrchr(a.logical, '/');
+            strcat(clips, " ");
+            strcat(clips, base ? base + 1 : a.logical);
+        }
+    }
+    drain_media(g);
+    for (i = 0; i < (int)g->interp.var_count; i++)
+        vars += g->interp.vars[i].value != sn->vars[i].value;
+    for (i = 0; i < (int)g->interp.enable_count; i++)
+        en += g->interp.enables[i].enabled != sn->enables[i].enabled;
+    printf("  %u at view %u:%s  vars %d, enables %d%s", id, view, clips, vars, en,
+           g->view != view ? "" : "\n");
+    if (g->view != view)
+        printf(" -> view %u\n", g->view);
+}
+
+static void probe(script *s, const char *item)
+{
+    enum { MAXV = 512 };
+    static u32 queue[MAXV];
+    game *g = s->g;
+    snapshot sn;
+    int head = 0, tail = 0, i;
+    if (snap_take(g, &sn) != 0)
+        return;
+    queue[tail++] = g->view;
+    while (head < tail) {
+        u32 v = queue[head++], navs[64], objs[64];
+        vc_view vw;
+        int k, m, pass;
+        if (vc_read_view(&g->db, v, &vw) != 0)
+            continue;
+        for (pass = 0; pass < 2; pass++) {
+            m = vc_read_list(&g->db, pass ? vw.characters : vw.explorables, objs, 64);
+            for (k = 0; k < m; k++)
+                if (vc_is_enabled(&g->interp, objs[k])) {
+                    probe_one(s, &sn, v, objs[k], item);
+                    snap_restore(g, &sn);
+                }
+        }
+        m = vc_read_list(&g->db, vw.navs, navs, 64);
+        for (k = 0; k < m && tail < MAXV; k++) {
+            vc_nav nav;
+            int seen = 0;
+            if (!vc_is_enabled(&g->interp, navs[k]) || vc_read_nav(&g->db, navs[k], &nav) != 0)
+                continue;
+            for (i = 0; i < tail && !seen; i++)
+                seen = queue[i] == nav.target;
+            if (!seen)
+                queue[tail++] = nav.target;
+        }
+    }
+    snap_free(&sn);
+}
+
 /* Checks one "expect" line. Returns 1 when it holds. */
 static int expect(game *g, const char *what, long a, long b, int have_b)
 {
@@ -492,6 +608,9 @@ int script_run(script *s, const char *path, int quiet)
             for (i = 0; i < g->interp.var_count; i++)
                 if (g->interp.vars[i].id == (u32)a)
                     printf("  var %ld %s = %d\n", a, g->interp.vars[i].name, g->interp.vars[i].value);
+        } else if (strcmp(cmd, "probe") == 0) {
+            int has = sscanf(line, "%*s %31s", what) == 1;
+            probe(s, has ? what : NULL);
         } else if (strcmp(cmd, "route") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             route(g, (u32)a);
         } else if (strcmp(cmd, "gate") == 0 && (sscanf(line, "%*s %ld", &a) == 1 || sscanf(line, "%*s enable %ld", &b) == 1)) {
