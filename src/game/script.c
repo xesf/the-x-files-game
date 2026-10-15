@@ -227,14 +227,23 @@ static int walk(script *s, u32 target)
 {
     u32 path[256];
     game *g = s->g;
-    int n = find_path(g, target, 0, path, 256), i;
-    if (n < 0)
-        return 0;
-    for (i = 0; i < n; i++) {
-        printf("  move %u\n", path[i]);
-        if (!game_click_object(g, path[i]))
+    int tries;
+    /* A view can send Willmore elsewhere on entry (a scene); then the
+     * way is planned again from there. */
+    for (tries = 0; tries < 8 && g->view != target; tries++) {
+        int n = find_path(g, target, 0, path, 256), i;
+        if (n < 0)
             return 0;
-        settle(s);
+        for (i = 0; i < n; i++) {
+            vc_nav nav;
+            u32 want = vc_read_nav(&g->db, path[i], &nav) == 0 ? nav.target : 0;
+            printf("  move %u\n", path[i]);
+            if (!game_click_object(g, path[i]))
+                return 0;
+            settle(s);
+            if (g->view != want)
+                break;
+        }
     }
     return g->view == target;
 }
