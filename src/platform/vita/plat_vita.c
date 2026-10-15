@@ -289,3 +289,15 @@ int plat_font_path(const char *family, char *out, size_t size)
 }
 
 void plat_show_cursor(int show) { (void)show; }
+
+/* plat_save_dir: see plat.h. */
+int plat_save_dir(char *out, size_t size)
+{
+    if (size < 32)
+        return -1;
+    snprintf(out, size, "ux0:data/xfiles");
+    sceIoMkdir(out, 0777);
+    snprintf(out, size, "ux0:data/xfiles/saves");
+    sceIoMkdir(out, 0777);
+    return 0;
+}

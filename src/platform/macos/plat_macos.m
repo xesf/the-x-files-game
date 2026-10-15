@@ -5,6 +5,7 @@
 #import <AudioToolbox/AudioToolbox.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -324,4 +325,18 @@ void plat_show_cursor(int show)
     else
         [NSCursor hide];
     hidden = !show;
+}
+
+/* plat_save_dir: see plat.h. */
+int plat_save_dir(char *out, size_t size)
+{
+    const char *home = getenv("HOME");
+    int n;
+    if (!home)
+        return -1;
+    n = snprintf(out, size, "%s/Library/Application Support/The X-Files", home);
+    if (n < 0 || (size_t)n >= size)
+        return -1;
+    mkdir(out, 0755);
+    return 0;
 }

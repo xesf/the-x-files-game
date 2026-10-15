@@ -59,6 +59,10 @@ void plat_present(const u32 *pixels, int width, int height, int pitch);
  * 0 and its path, or -1 when the system has no such font. */
 int plat_font_path(const char *family, char *out, size_t size);
 
+/* The folder for saved games, created if needed. Returns 0 and its
+ * path, or -1. */
+int plat_save_dir(char *out, size_t size);
+
 /* Shows or hides the system pointer over the window (the game draws its
  * own cursors). */
 void plat_show_cursor(int show);

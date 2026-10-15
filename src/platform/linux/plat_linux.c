@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -342,4 +343,24 @@ void plat_show_cursor(int show)
     else
         XDefineCursor(g_dpy, g_win, g_blank);
     hidden = !show;
+}
+
+/* plat_save_dir: see plat.h. */
+int plat_save_dir(char *out, size_t size)
+{
+    const char *data = getenv("XDG_DATA_HOME"), *home = getenv("HOME");
+    char base[512];
+    int n;
+    if (data && data[0])
+        snprintf(base, sizeof(base), "%s", data);
+    else if (home)
+        snprintf(base, sizeof(base), "%s/.local/share", home);
+    else
+        return -1;
+    mkdir(base, 0755);
+    n = snprintf(out, size, "%s/the-x-files", base);
+    if (n < 0 || (size_t)n >= size)
+        return -1;
+    mkdir(out, 0755);
+    return 0;
 }

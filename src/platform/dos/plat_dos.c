@@ -17,6 +17,7 @@
 #include <conio.h>
 #include <ctype.h>
 #include <dos.h>
+#include <direct.h>
 #include <i86.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -599,3 +600,13 @@ int plat_font_path(const char *family, char *out, size_t size)
 
 /* The game draws its own cursor; the mouse driver's stays hidden. */
 void plat_show_cursor(int show) { (void)show; }
+
+/* plat_save_dir: see plat.h. */
+int plat_save_dir(char *out, size_t size)
+{
+    if (size < 8)
+        return -1;
+    snprintf(out, size, "SAVES");
+    mkdir(out);
+    return 0;
+}

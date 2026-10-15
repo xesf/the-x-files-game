@@ -391,3 +391,18 @@ void plat_show_cursor(int show)
             SetCursor(show ? LoadCursor(NULL, IDC_ARROW) : NULL);
     }
 }
+
+/* plat_save_dir: see plat.h. */
+int plat_save_dir(char *out, size_t size)
+{
+    char base[MAX_PATH];
+    DWORD n = GetEnvironmentVariableA("APPDATA", base, sizeof(base));
+    int k;
+    if (n == 0 || n >= sizeof(base)) /* Windows 95 has no APPDATA: next to the game */
+        snprintf(base, sizeof(base), ".");
+    k = snprintf(out, size, "%s\\The X-Files", base);
+    if (k < 0 || (size_t)k >= size)
+        return -1;
+    CreateDirectoryA(out, NULL);
+    return 0;
+}
