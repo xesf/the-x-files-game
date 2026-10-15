@@ -43,6 +43,17 @@ Pure blue (0x0000FF) is transparent in these pictures.
 keeps it on screen, and puts its top at y 285. The box shows again as
 soon as an answer has played, with the remaining questions.
 
+The TALK tab lists the questions not asked yet; the HISTORY tab lists
+the ones already asked. Clicking a tab label switches between them. The
+box closes with Escape, the close box at the top right, or a click
+outside it.
+
+The text of a question is its icons field, a type 6 media reference:
+the number of a string in `xfilest.dll`. That DLL holds 1015 strings in
+`RT_STRING` blocks of 16. The other DLLs hold the error texts
+(`xfilese.dll`), the credits (`xfilesc.dll`) and the subliminal words
+(`xfiless.dll`).
+
 `RegDlgAss` names six dialogue assets in the data, but this build of
 the engine ignores the call.
 
@@ -65,8 +76,9 @@ start of the game, Cook's greeting (`SC03C.mov`) enables three: Funny,
 Indifferent and Paranoid. If the player does not choose within 30
 seconds, timer 0 disables them and Cook goes for a second cup of
 coffee. The help text says rolling over an icon shows the emotion. The
-explorer shows the enabled icons in a row above the video, and the name
-after the dash on rollover. Action icons only appear with Artificial
+explorer shows the enabled icons in a row 10 pixels below the video, and the name
+after the dash under the icon on rollover. Choosing one disables all
+the icons shown. Action icons only appear with Artificial
 Intuition on.
 
 ## Inventory
@@ -78,6 +90,39 @@ of the screen, and the item in hand stays on screen. The explorer shows
 the icons of the items the player carries along the bottom when the
 pointer is below y 420.
 
+## Cursors
+
+A `VCCursor` holds the hot spot x and y (16 bits each), a name and a
+media list. The pictures are `.pic` files in `x.pff`; a `.pff` cursor
+is an animation from its start frame to its end frame.
+`VCDefaultCursors` (321) names the cursor for characters (290, lips)
+and for objects (7164, eye). Moves use the cursor of their hotspot, and
+the backdrop of a close-up uses 287 (back up). With an item in hand,
+the cursor is the item's cursor picture.
+
+## Computer
+
+Willmore's computer is a set of interface layouts. Typing goes to the
+item with focus (`SetIItemFocus`): the item's kind 3 triggers run with
+the key as the event value.
+
+| Function | Address | Use |
+|---|---|---|
+| `LoginInit` | 0x47D090 | Clears the name and password fields |
+| `LoginClick` | 0x4B7250 | Moves the focus to the clicked field |
+| `LoginKeyPress(field, key)` | 0x46A000 | Adds the key to the field; backspace removes one |
+| `PswdConnect(result)` | 0x4598B0 | Checks the login |
+
+`PswdConnect` compares the name, ignoring case, with media 57905
+(string 937, "craig willmore") and the password with media 68915
+("shiloh"). The password field shows stars.
+
+`SetIItemText(item, text, color, font, size, bold, align)` writes a
+label on a layout item: `font` is `'H'` (`Hcd.ttr`) or `'c'` (Courier),
+`size` is in points, `bold` is `'y'` or `'n'`, and `align` is `'l'`,
+`'c'` or `'r'`. `RelocateIFace(left, top, right, bottom, event)` moves
+the item whose trigger is running.
+
 ## Debug overlay
 
 Ctrl+Shift+D (or `XF_DEBUG_OVERLAY=1`) shows the hotspot outlines (green
@@ -86,7 +131,8 @@ view's media. It is off by default.
 
 ## Not yet like the original
 
-- The HISTORY tab, the scroll bar thumb and idea icons are not drawn.
+- The scroll bar thumb and idea icons are not drawn.
+- The colours of `SetIItemText` labels are guesses (`'b'` is drawn white).
 - The question text colour and spacing in the box are estimates.
-- The position of the emotion icons and the inventory bar come from the
-  help texts, not from the engine code.
+- The position of the inventory bar comes from the help texts, not
+  from the engine code.
