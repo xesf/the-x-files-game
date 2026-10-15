@@ -106,6 +106,7 @@ A script has one command per line; `#` starts a comment.
 | `inv <id>` | Clicks a `VCInventory` item in the inventory bar |
 | `icon <id>` | Clicks an emotion or action icon |
 | `dial <number>` | Types a number on the cell phone and sends it |
+| `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <text>` | Runs an ING search at the office computer |
 | `set <var> <value>` | Sets a GAM variable |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
@@ -144,4 +145,11 @@ object does:
 
 ```sh
 python3 -I tools/re/vc_map.py XFILES.HDB 691 40
+```
+
+`tools/re/vc_layout.py` prints an interface layout: its items, their
+regions and pictures, and what each trigger does:
+
+```sh
+python3 -I tools/re/vc_layout.py XFILES.HDB 15108
 ```
