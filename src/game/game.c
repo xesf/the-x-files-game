@@ -17,6 +17,9 @@ static int hand_empty(game *g);
 static u32 inventory_triggers(game *g, u32 id);
 static void set_item_text(game *g, u32 item, const char *text);
 static int photo_function(game *g, const char *name, int argc, const vc_operand *args);
+static void note_text(game *g, u32 asset, char *out, size_t size);
+static void media_search(game *g);
+static void run_trigger_list_pair(game *g, i32 trigger, i32 list);
 static void update_evidence(game *g);
 static u32 first_enabled(game *g, u32 list);
 static const game_iface_item *find_item(game *g, u32 id);
@@ -968,6 +971,10 @@ const char *game_item_text(game *g, u32 item, char *buf, size_t size)
             if (vc_read_action(&g->db, acts[j], &a) == 0 && a.valid && a.type == VC_ACT_FUNCTION &&
                 strcmp(a.u.function.name, "INGKeyPressed") == 0) {
                 snprintf(buf, size, "%s", g->ing);
+                return buf;
+            }
+            if (a.valid && a.type == VC_ACT_FUNCTION && strcmp(a.u.function.name, "MSKeyPressed") == 0) {
+                snprintf(buf, size, "%s", g->media_query);
                 return buf;
             }
             if (a.valid && a.type == VC_ACT_FUNCTION &&
@@ -2139,6 +2146,63 @@ static int photo_function(game *g, const char *name, int argc, const vc_operand 
     return 0;
 }
 
+/* --- Media Index ------------------------------------------------------- */
+
+/* 0x65D148: 16 items, each an article (first media) and the keywords that
+ * find it (the other media, when enabled). */
+static const u32 g_media_index[16] = {
+    55604, 55574, 55575, 55576, 55577, 55578, 55579, 55580, 55581, 55582,
+    91114, 91117, 91118, 91125, 91127, 91131,
+};
+
+static int same_words(const char *a, const char *b)
+{
+    while (*a && tolower((unsigned char)*a) == tolower((unsigned char)*b))
+        a++, b++;
+    return *a == '\0' && *b == '\0';
+}
+
+/* 0x4654A0: the typed words must equal a keyword (case aside). A match
+ * shows the article in the text box (item 55041) and turns the Forward
+ * button (55036) on; the Tarakan article (55591) also plays clip 21068.
+ * No match shows article 58348. Each plays its sound (90693/90694 or
+ * 90037/90038). */
+static void media_search(game *g)
+{
+    u32 ids[64], article = 0;
+    int i, k, n;
+    for (i = 0; i < 16 && !article; i++) {
+        vc_iface_item it;
+        if (vc_read_iface_item(&g->db, g_media_index[i], &it) != 0)
+            continue;
+        n = vc_read_list(&g->db, it.assets, ids, 64);
+        for (k = 1; k < n && !article; k++) {
+            char kw[256];
+            if (!vc_is_enabled(&g->interp, ids[k]))
+                continue;
+            game_text(g, ids[k], kw, sizeof(kw));
+            if (same_words(kw, g->media_query))
+                article = ids[0];
+        }
+    }
+    memset(&g->scroll, 0, sizeof(g->scroll));
+    g->scroll.item = 55041;
+    g->scroll.color = 'k';
+    g->scroll.font = 'c';
+    g->scroll.size = 10;
+    note_text(g, article ? article : 58348, g->scroll.text, sizeof(g->scroll.text));
+    set_item_text(g, 55039, g->media_query);
+    g->media_query[0] = '\0';
+    vc_set_enabled(&g->interp, 55036, article != 0);
+    if (article) {
+        run_trigger_list_pair(g, 90693, 90694);
+        if (article == 55591)
+            game_queue_media(g, 21068);
+    } else
+        run_trigger_list_pair(g, 90037, 90038);
+    g->media_article = article;
+}
+
 /* --- PDA field notes ---------------------------------------------------- */
 
 /* 0x658F28: the 23 pages of notes, each a layout item whose media are
@@ -3225,6 +3289,28 @@ static int host_call_function(void *user, const vc_action *a)
     }
     if (photo_function(g, name, argc, args))
         return 1;
+    /* The computer's Media Index (layout 15208): 0x42CBF0 fn_MediaInit,
+     * 0x475CD0 fn_MSKeyPressed, 0x41EB60 fn_MediaSearch -> 0x4654A0,
+     * 0x42E180 fn_MediaDestroy. */
+    if (strcmp(name, "MediaInit") == 0 || strcmp(name, "MediaDestroy") == 0) {
+        g->media_query[0] = '\0';
+        return 1;
+    }
+    if (strcmp(name, "MSKeyPressed") == 0 && argc >= 1) {
+        i32 key = arg_value(g, &args[0]);
+        size_t n = strlen(g->media_query);
+        if (key == 8 && n)
+            g->media_query[n - 1] = '\0';
+        else if (key >= 32 && key < 127 && n + 1 < sizeof(g->media_query)) {
+            g->media_query[n] = (char)key;
+            g->media_query[n + 1] = '\0';
+        }
+        return 1;
+    }
+    if (strcmp(name, "MediaSearch") == 0) {
+        media_search(g);
+        return 1;
+    }
     /* 0x4BC230 fn_SelectInv(inventory object): puts the item in hand.
      * The item's value is the argument of the On...Click call in its
      * click list (OnInvClick, OnCameraClick, OnFLightClick). */

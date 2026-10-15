@@ -428,3 +428,5 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4CFE30 notes_add  EnablePDANote: stores the note; a note of the next page opens it
 0x4CFFE0 notes_all  EnableAllNotes: every note of every page
 0x4B2370 photo_init  PhotoInit: counts downloaded and new photos (class 0x59), sets the Download and Delete buttons, draws the thumbnails
+0x4654A0 media_search  MediaSearch: the typed words against the keywords of 16 items (0x65D148); the article into the text box
+0x4A3E90 media_keyword_match  whether a keyword item has a keyword equal to the typed words

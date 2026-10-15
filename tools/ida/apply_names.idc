@@ -429,5 +429,7 @@ static main()
     set_name(0x4CFE30, "notes_add", SN_NOWARN);
     set_name(0x4CFFE0, "notes_all", SN_NOWARN);
     set_name(0x4B2370, "photo_init", SN_NOWARN);
+    set_name(0x4654A0, "media_search", SN_NOWARN);
+    set_name(0x4A3E90, "media_keyword_match", SN_NOWARN);
     msg("names applied\n");
 }

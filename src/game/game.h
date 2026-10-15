@@ -147,6 +147,8 @@ typedef struct {
     int phone_entry;      /* address book entry shown */
     int phone_replace;    /* the next digit starts a new number */
     char ing[64];         /* text typed in the ING search field */
+    char media_query[64]; /* text typed in the Media Index field */
+    u32 media_article;    /* the article the Media Index shows, or 0 */
     char login[2][32];    /* computer login: name and password */
     xf_strings strings;   /* xfilest.dll: the game's text */
     game_item_label labels[GAME_MAX_LABELS];

@@ -1,0 +1,25 @@
+# The Media Index at the office computer (guide Part 2, Day 3): a keyword
+# finds an article and turns Forward on; other words find nothing.
+include disc2.txt
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+walk 1237
+click 29855                     # the computer
+click 31624
+click 50747
+type Craig Willmore
+click 50748
+type shiloh
+click 39474                     # connect
+click 36304                     # MEDIA
+click 50746
+type Tarakan
+click 55038                     # Search
+wait 4000
+expect enabled 55036 1          # Forward: an article was found
+click 50746
+type pizza
+click 55038
+wait 4000
+expect enabled 55036 0          # No Data Found
