@@ -34,3 +34,31 @@ skip
 hold none
 wait 3000
 expect var 1219 10              # node 10: the secret base, with Scully
+
+# The lab: Cook attacks; zap him with the cattle prod (shooting him
+# lets the alien take Willmore at the end).
+walk 14915
+click 43656
+wait 16000
+inv 17459                       # reach for the gun: Cook jumps Willmore
+until-clip 5000
+shoot 441                       # the cattle prod, while he bends over
+skip
+hold none
+wait 2000
+expect over 0
+
+# Mulder, taken by the alien, in the blast room: Scully runs, Willmore
+# shoots the guard.
+walk 70520
+click 70523
+ask 70562                       # "Scully, run!"
+skip
+hold Gun
+walk 13845
+shoot 401                       # the guard
+skip
+hold none
+wait 2000
+expect var 1689 1
+expect over 0
