@@ -424,6 +424,5 @@ static main()
     set_name(0x503E40, "evkit_popup", SN_NOWARN);
     set_name(0x51F960, "phone_key", SN_NOWARN);
     set_name(0x51F640, "phone_book", SN_NOWARN);
-    set_name(0x51FCD0, "Phone_lookup", SN_NOWARN);
     msg("names applied\n");
 }
