@@ -2120,6 +2120,45 @@ static int host_call_function(void *user, const vc_action *a)
     /* fn_SetAIGlow(n): only changes how the icon is drawn. */
     if (strcmp(name, "SetAIGlow") == 0)
         return 1;
+    /* 0x48A580 fn_PDAEscape(on): 0x47C750 runs one of two fixed lists.
+     * 1 locks the PDA's travel (list 75533, trigger 75532: no leaving
+     * during a scene), anything else unlocks it again (list 75530). */
+    if (strcmp(name, "PDAEscape") == 0 && argc == 1) {
+        if (arg_value(g, &args[0]) == 1)
+            vc_run_trigger_list(&g->interp, 75532, 75533);
+        else
+            vc_run_trigger_list(&g->interp, 75524, 75530);
+        return 1;
+    }
+    /* 0x4BCD40 fn_TextOn(on): 0x4F6370 shows or hides the icon bar and
+     * the dialogue box during scenes. */
+    if (strcmp(name, "TextOn") == 0 && argc == 1) {
+        g->text_off = arg_value(g, &args[0]) == 0;
+        return 1;
+    }
+    /* 0x4BC950 fn_StopEnvSounds: 0x4EF750 stops the sound beside the
+     * clips (ambience, music). */
+    if (strcmp(name, "StopEnvSounds") == 0) {
+        if (g->sound) {
+            g->sound = 0;
+            g->sound_serial++;
+        }
+        return 1;
+    }
+    /* 0x4B5FA0 fn_EnablePDANote(media): 0x4CFE30 adds a note (a text
+     * media) to the PDA's notes. */
+    if (strcmp(name, "EnablePDANote") == 0 && argc == 1) {
+        u32 note = (u32)arg_value(g, &args[0]);
+        if (!in_list(g->pda_notes, g->pda_note_count, note) && g->pda_note_count < GAME_MAX_NOTES)
+            g->pda_notes[g->pda_note_count++] = note;
+        return 1;
+    }
+    /* 0x459960 fn_RollHdCredits: 0x45A290 opens the scrolling credits
+     * window. */
+    if (strcmp(name, "RollHdCredits") == 0) {
+        g->credits_rolling = 1;
+        return 1;
+    }
     /* 0x4B6850 fn_IsoChamberStat(door A, door B, power, out x8): the
      * state of the isolation chamber for the scripts (0x50C5B0). Without
      * power (third argument not 1) outputs 1 and 4 are set; otherwise

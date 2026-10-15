@@ -87,6 +87,7 @@ typedef struct {
 /* The Artificial Intuition icon (a VCEvidenceIcon) in the inventory row. */
 #define GAME_AI_ICON 56185
 #define GAME_PLAYED 32
+#define GAME_MAX_NOTES 128
 #define GAME_MAX_EMAILS 64
 #define GAME_EMAIL_ROWS 8
 
@@ -167,6 +168,10 @@ typedef struct {
     u32 shot_media, shot_view, shot_epoch;
     int woods_down;
     int game_over;
+    int text_off;         /* TextOn(0): icons and dialogue box hidden */
+    u32 pda_notes[GAME_MAX_NOTES]; /* EnablePDANote: notes in the PDA */
+    int pda_note_count;
+    int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;        /* EndGame: 1 to the menu, 2 offer to restore */       /* NSA agents down in the woods: bits 1 and 2 */ /* the gun shot clip playing, and what follows */
     int flight_mode;      /* SetFLightProps: 1 day, 2 dark */
