@@ -767,6 +767,8 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
     }
     if (strcmp(what, "view") == 0)
         return g->view == (u32)a;
+    if (strcmp(what, "disc") == 0)
+        return g->disc == (int)a;
     if (strcmp(what, "played") == 0) {
         u32 i;
         for (i = 0; i < GAME_PLAYED && i < g->played_count; i++)
@@ -847,6 +849,15 @@ int script_run(script *s, const char *path, int quiet)
             const char *slash = file[0] == '/' ? NULL : strrchr(path, '/');
             snprintf(inc, sizeof(inc), "%.*s%s", slash ? (int)(slash - path + 1) : 0, path, file);
             ok = script_run(s, inc, 1) == 0;
+        } else if (strcmp(cmd, "need") == 0 && sscanf(line, "%*s %255s", file) == 1) {
+            /* need <file>: the rest of the script needs a file that is
+             * not part of the game (an original saved game, say). */
+            FILE *nf = fopen(file, "rb");
+            if (!nf) {
+                printf("  skipped: no %s\n", file);
+                break;
+            }
+            fclose(nf);
         } else if (strcmp(cmd, "new") == 0) {
             ok = game_new(g) == 0;
         } else if (strcmp(cmd, "save") == 0 && sscanf(line, "%*s %255s %31[^\n#]", file, what) >= 1) {

@@ -1,0 +1,28 @@
+# The original engine's saved games (.x files): a copy of the GAM with a
+# game state object. These are saves from a 1998 build, kept outside the
+# repository; the script stops early without them.
+need ../Others/x-files-the-game/startcd2.x
+
+# Disc 2: the Comity Inn, room 3, with Mulder's old phone number.
+load ../Others/x-files-the-game/startcd2.x
+expect view 6548
+expect disc 2
+expect var 1219 2                 # node 2
+
+# Disc 3: the Field Office; three photos in the camera.
+load ../Others/x-files-the-game/startcd3.x
+expect view 691
+expect var 1219 3
+expect photo 79662
+expect photo 23486
+
+# Disc 7: outside Rauch's house in Alaska, the hint icon set.
+load ../Others/x-files-the-game/startcd7.x
+expect view 8153
+expect disc 7
+expect var 1411 104               # iAstaScore: under the threshold (106)
+
+# A file moved as text (CR before every LF) is repaired.
+need ../Others/x-files-the-game/afterraidcd5.x
+load ../Others/x-files-the-game/afterraidcd5.x
+expect view 5501

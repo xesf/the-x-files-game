@@ -125,7 +125,8 @@ A script has one command per line; `#` starts a comment.
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <database> <text>` / `noing ...` | Runs an ING search at the office computer and expects a record, or none |
 | `set <var> <value>` | Sets a GAM variable |
-| `save <file> [name]` / `load <file>` | Writes the game to a save file, or loads one |
+| `save <file> [name]` / `load <file>` | Writes the game to a save file, or loads one (ours, or an original `.x` save) |
+| `need <file>` | Stops the script, as passed, when the file is missing: for files that are not part of the game |
 | `reload` | Saves to memory and loads again at once |
 | `restore` | Goes back to the last `SaveGameState` checkpoint |
 | `slots save` / `slots load` | Opens the Save or Load screen, as the menu does (needs `XF_SAVE_DIR`) |
@@ -140,6 +141,7 @@ A script has one command per line; `#` starts a comment.
 | `solve <depth> var <id> <value>` / `solve <depth> view <id>` | Searches for moves (clicks with or without an item, questions, icons, shots, waits) that reach the goal, and prints the first sequence found |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
+| `expect disc <n>` | Fails unless the game is on disc `n` |
 | `expect var <id> <value>` | Fails unless the GAM variable has the value |
 | `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |
 | `expect spot <id>` / `nospot <id>` | Checks that a hotspot is or is not in the view |
@@ -183,6 +185,11 @@ again (`bomb-death.txt`), the kiss (`kiss.txt`), lying to Scully
 the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
 (`suicide.txt`), the phone (`phone.txt`), the Options screen
 (`options.txt`) and saving (`save.txt`).
+
+`xsave.txt` loads saves written by the original engine. These files are
+not part of the game, so the script looks for them in
+`../Others/x-files-the-game` and stops early, as passed, when they are
+missing.
 
 With `XF_PLAY_RELOAD=1`, a script saves and loads the game after every
 step that ends at rest: no layout open and no conversation running. All
