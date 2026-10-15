@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 xesf and contributors */
 /* Entry point.
  *   xfiles --play <movie> [--data <game folder>]   play one movie
  *   xfiles --explore <game folder> <view> [disc] [--media <folder>]...
@@ -5,7 +7,8 @@
  *                                                   starts a new game; --media
  *                                                   adds folders to search for clips;
  *                                                   --script <file> plays a story script
- * Without arguments it shows a test pattern. */
+ * Without arguments it starts a new game from the first game folder it
+ * finds (see find_game_dir), or shows a test pattern when there is none. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,6 +96,33 @@ static int play_movie(const char *path, const char *data_dir)
     return 0;
 }
 
+/* A folder holds the game when XFILES.HDB is in it. */
+static int is_game_dir(const char *dir)
+{
+    char path[1024];
+    return xf_path_resolve(dir, "XFILES.HDB", path, sizeof(path)) == 0;
+}
+
+/* Where a release looks for the game: $XF_GAME_DIR, then a folder named
+ * "game" beside the program, beside the app bundle (the program is in
+ * X-Files.app/Contents/MacOS), or in the current folder. */
+static const char *find_game_dir(const char *argv0, char *buf, size_t size)
+{
+    static const char *const rel[] = { "game", "../../../game" };
+    const char *env = getenv("XF_GAME_DIR"), *slash = strrchr(argv0, '/');
+    size_t i;
+    if (env && is_game_dir(env))
+        return env;
+    for (i = 0; slash && i < XF_COUNT(rel); i++) {
+        snprintf(buf, size, "%.*s/%s", (int)(slash - argv0), argv0, rel[i]);
+        if (is_game_dir(buf))
+            return buf;
+    }
+    if (is_game_dir("game"))
+        return "game";
+    return NULL;
+}
+
 static void test_pattern(u32 quit_at)
 {
     int running = 1, mx = 0, my = 0;
@@ -150,8 +180,21 @@ int main(int argc, char **argv)
     }
     else if (argc > 2 && strcmp(argv[1], "--play") == 0)
         r = play_movie(argv[2], argc > 4 && strcmp(argv[3], "--data") == 0 ? argv[4] : NULL);
-    else
-        test_pattern(argc > 1 ? (u32)atoi(argv[1]) : 0);
+    else {
+        char buf[1024];
+        const char *dir = argc == 1 ? find_game_dir(argv[0], buf, sizeof(buf)) : NULL;
+        if (dir) {
+            /* XF_MEDIA_DIR adds a folder of clips, for installs that
+             * keep them apart (the DVD build streams them from the disc). */
+            const char *media[3] = { dir, getenv("XF_MEDIA_DIR"), NULL };
+            r = xf_explore(dir, media, 0, 1, NULL);
+        } else {
+            if (argc == 1)
+                xf_warn("no game folder: set XF_GAME_DIR or put the game files in a folder named "
+                        "\"game\" beside the program");
+            test_pattern(argc > 1 ? (u32)atoi(argv[1]) : 0);
+        }
+    }
     plat_shutdown();
     return r;
 }
