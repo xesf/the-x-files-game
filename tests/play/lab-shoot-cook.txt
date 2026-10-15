@@ -1,0 +1,117 @@
+# The guide's warning in the secret base lab: shooting Cook instead of
+# zapping him loses the ending. With Cook dead the alien leaves Mulder
+# for Willmore.
+include disc6.txt
+
+# Node 8: Rauch's house. Rauch upstairs, Mulder in the attic.
+walk 8055
+click 88339                     # Rauch's face
+skip
+click 68941                     # up the ladder
+skip
+walk 7978
+askall 23803                    # Mulder
+skip
+expect var 2022 1
+inv 17455                       # the phone rings: answer it
+skip
+wait 5000
+walk 8210
+click 93020                     # out on the porch: the NSA
+skip
+wait 3000
+expect view 8138
+icon 24577                      # over the rail and into the woods
+skip
+wait 5000
+
+# The woods: two NSA agents give chase.
+walk 36583
+hold Gun
+shoot 111                       # the first agent
+skip
+shoot 112                       # the second: Sc114L, on to the secret base
+skip
+hold none
+wait 3000
+expect var 1219 10              # node 10: the secret base, with Scully
+
+# The lab: Cook attacks; zap him with the cattle prod (shooting him
+# lets the alien take Willmore at the end).
+walk 14915
+click 43656
+wait 16000
+inv 17459                       # reach for the gun: Cook jumps Willmore
+until-clip 5000
+shoot 442                       # shoot Cook instead of the cattle prod
+skip
+hold none
+wait 2000
+expect over 0
+
+# Mulder, taken by the alien, in the blast room: Scully runs, Willmore
+# shoots the guard.
+walk 70520
+click 70523
+ask 70562                       # "Scully, run!"
+skip
+hold Gun
+walk 13845
+shoot 401                       # the guard
+skip
+hold none
+wait 2000
+expect var 1689 1
+expect over 0
+
+# Scully in the red room: a guard behind her.
+walk 13846
+click 70590
+skip
+walk 26313
+askall 47199                    # "I think he's looking for what's stored here"
+skip
+hold Gun
+shoot 421                       # the guard
+skip
+hold none
+wait 3000
+expect over 0
+
+# Power and lights for the isolation chamber, then both doors.
+walk 14637
+askall 58036                    # Scully at the control room
+skip
+walk 29331
+click 94185                     # the main power
+skip
+click 94184
+skip
+walk 14176
+click 93875                     # life support
+skip
+click 93873
+skip
+walk 14726
+click 44470                     # the first chamber door
+skip
+walk 14827
+click 44464                     # the second
+skip
+walk 16131
+askall 58052                    # Scully: the plan
+skip
+
+# Mulder and a guard at the blast door: shoot the guard, take his key.
+hold Gun
+walk 43896
+shoot 431
+skip
+hold none
+wait 2000
+expect over 0
+click 44286                     # the key
+skip
+click 14468
+icon 24574                      # lure Mulder into the chamber
+expect over 1                   # the alien takes Willmore
