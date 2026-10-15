@@ -1017,6 +1017,19 @@ int script_run(script *s, const char *path, int quiet)
                 if (by_id ? g->interp.enables[i].id == (u32)b : g->interp.enables[i].target == (u32)a)
                     printf("  object %u: enable #%u is %s\n", g->interp.enables[i].target, g->interp.enables[i].id,
                            g->interp.enables[i].enabled ? "on" : "off");
+        } else if (strcmp(cmd, "key") == 0 && sscanf(line, "%*s %31s", what) == 1) {
+            /* key escape | return | <character>: a key press in the window */
+            int key = strcmp(what, "escape") == 0 ? 27 : strcmp(what, "return") == 0 ? 13 : (unsigned char)what[0];
+            ok = s->host.input != NULL;
+            if (ok)
+                s->host.input(s->host.user, key, 0, 0);
+        } else if (strcmp(cmd, "press") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
+            /* press <x> <y>: a left click in the window, through its input */
+            ok = s->host.input != NULL;
+            if (ok)
+                s->host.input(s->host.user, 0, (int)a, (int)b);
+        } else if (strcmp(cmd, "expect") == 0 && sscanf(line, "%*s window %31s %ld", what, &a) == 2) {
+            ok = s->host.window && s->host.window(s->host.user, what) == a;
         } else if (strcmp(cmd, "expect") == 0 && (n = sscanf(line, "%*s %31s %ld %ld", what, &a, &b)) >= 2) {
             ok = expect(g, what, a, b, n == 3);
         } else {

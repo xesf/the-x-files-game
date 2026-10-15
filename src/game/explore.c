@@ -57,6 +57,15 @@ static const struct {
 /* Frame ranges in RIGHT.mov: 0-65 labels animate in, 66-89 plain menu,
  * then one rollover animation per item (measured frame by frame). */
 #define RIGHT_INTRO_END 66
+#define MENU_RETURN 72895 /* return.pic */
+/* The main menu icon: the spinning blue X (25541) in the top-right
+ * corner, as the Help screen shows it; it appears when the pointer comes
+ * there, as the inventory does at the bottom, and a click opens the
+ * menu. */
+#define MENU_ICON 25541
+#define MENU_ICON_X 565
+#define MENU_ICON_Y 29
+#define MENU_ICON_REVEAL_X 500
 static const struct {
     int first, last;
 } g_menu_rollover[] = {
@@ -105,6 +114,10 @@ typedef struct {
     u32 card_start, card_until;
     /* the main menu */
     int in_menu;
+    int media_paused;     /* the game's clips and sounds hold while the menu is up */
+    u32 media_pause_from;
+    int from_menu;        /* Options or Help, opened from the menu during a game */
+    xf_image return_img;  /* return.pic: "Return" over the Previous row */
     xf_player menu[MENU_PARTS];
     int menu_open[MENU_PARTS];
     int menu_hover;
@@ -565,6 +578,40 @@ static void draw_photos(explorer *e)
                     big->item.region.right - big->item.region.left, big->item.region.bottom - big->item.region.top);
 }
 
+/* The Options screen's Graphics tab (layout 49783) has a Closed
+ * Captioning row: button 49939 (PrefClosedCap) and its lights 49889
+ * (off) and 49891 (on). The tab's background lies in front of them and
+ * has no label for the row, so the shipped game never shows it. We draw
+ * the row over the background, with a label like the others. */
+#define OPTIONS_GRAPHICS 49783
+static const u32 g_caption_row[] = { 49939, 49889, 49891 };
+
+static void draw_caption_option(explorer *e)
+{
+    static const char label[] = "Closed Captioning";
+    int k, i, j;
+    for (k = 0; k < e->g->iface_count; k++) {
+        if (e->g->ifaces[k].layout != OPTIONS_GRAPHICS)
+            continue;
+        for (j = 0; j < (int)XF_COUNT(g_caption_row); j++)
+            for (i = 0; i < e->g->ifaces[k].count; i++) {
+                const game_iface_item *it = &e->g->ifaces[k].items[i];
+                if (it->id == g_caption_row[j] && vc_is_enabled(&e->g->interp, it->id))
+                    blit_keyed(e, &e->iface_img[k][i], it->item.region.left, it->item.region.top);
+            }
+        if (e->have_font) {
+            /* letter-spaced grey, as the tab's own labels */
+            xf_surface sf = screen_surface(e);
+            int x = 79;
+            const char *c;
+            for (c = label; *c; c++) {
+                xf_text_draw(&sf, &e->font, 14, x, 424, c, 1, 0xC0C0C0);
+                x += xf_text_width(&e->font, 14, c, 1) + 3;
+            }
+        }
+    }
+}
+
 static void draw_ifaces(explorer *e)
 {
     int k, i, order;
@@ -576,6 +623,7 @@ static void draw_ifaces(explorer *e)
                 if ((it->item.flags & 0xFF) == order && vc_is_enabled(&e->g->interp, it->id))
                     blit_keyed(e, &e->iface_img[k][i], it->item.region.left, it->item.region.top);
             }
+    draw_caption_option(e);
     /* SetIItemText labels: font 'H' is Hcd.ttr, 'c' Courier New; size in
      * points (96 dots per inch). */
     for (k = 0; k < e->g->iface_count; k++)
@@ -1512,6 +1560,29 @@ static void ui_piece(explorer *e, int x, int y, int w, int h, int anchor)
     scr_add_piece(&e->layout, r, anchor, px);
 }
 
+static int menu_icon_shown(const explorer *e, int mx, int my)
+{
+    const game *g = e->g;
+    return e->in_menu == 0 && g->view && !g->iface_count && !g->slot_mode && !g->ask && my < PICTURE_Y &&
+           mx >= MENU_ICON_REVEAL_X;
+}
+
+static int menu_icon_at(const explorer *e, int x, int y)
+{
+    return menu_icon_shown(e, x, y) && x >= MENU_ICON_X - 22 && x < MENU_ICON_X + 22 && y < MENU_ICON_Y + 22;
+}
+
+static void draw_menu_icon(explorer *e, int mx, int my)
+{
+    const cursor_art *c;
+    const xf_image *f;
+    if (!menu_icon_shown(e, mx, my) || !(c = get_cursor(e, MENU_ICON)))
+        return;
+    f = &c->frames[(plat_ticks_ms() / 100) % (u32)c->count];
+    blit_keyed(e, f, MENU_ICON_X - f->width / 2, MENU_ICON_Y - f->height / 2);
+    ui_piece(e, MENU_ICON_X - 40, 0, SCREEN_W - (MENU_ICON_X - 40), MENU_ICON_Y + 30, SCR_ANCHOR_TOP_RIGHT);
+}
+
 static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
@@ -1562,6 +1633,7 @@ static void draw(explorer *e, int mx, int my)
         draw_icons(e, mx, my);
         if (e->icon_count)
             ui_piece(e, 0, ICON_Y, SCREEN_W, ICON_H, SCR_ANCHOR_BELOW);
+        draw_menu_icon(e, mx, my);
         if (!wide)
             draw_cursor(e, mx, my);
         return;
@@ -1624,6 +1696,7 @@ static void draw(explorer *e, int mx, int my)
                  SCR_ANCHOR_BOTTOM_LEFT);
     }
     draw_ifaces(e);
+    draw_menu_icon(e, mx, my);
     draw_message(e, mx, my);
     if (g->ask)
         ui_piece(e, (SCREEN_W - 360) / 2, (SCREEN_H - 150) / 2, 360, 150, SCR_ANCHOR_CENTER);
@@ -1797,6 +1870,39 @@ static int open_asset_player(explorer *e, u32 asset, xf_player *p)
     return -1;
 }
 
+/* A game is going on: the menu shows Return and holds the game. */
+static int game_running(const explorer *e) { return e->g->view && !e->g->game_over; }
+
+/* Holds or resumes the game's clip, sounds and location card. */
+static void pause_game_media(explorer *e, int paused)
+{
+    u32 now = plat_ticks_ms();
+    if (paused == e->media_paused)
+        return;
+    if (e->have_clip)
+        xf_player_pause(&e->player, paused, now);
+    if (e->sound_open)
+        xf_player_pause(&e->sound, paused, now);
+    if (e->overlay_open)
+        xf_player_pause(&e->overlay, paused, now);
+    if (paused)
+        e->media_pause_from = now;
+    else if (e->card_until) {
+        e->card_start += now - e->media_pause_from;
+        e->card_until += now - e->media_pause_from;
+    }
+    e->media_paused = paused;
+}
+
+/* The game's media stop for good: a new game or a load. */
+static void drop_game_media(explorer *e)
+{
+    pause_game_media(e, 0);
+    stop_media(e);
+    stop_sound(e);
+    e->from_menu = 0;
+}
+
 static void menu_close(explorer *e)
 {
     int i;
@@ -1816,8 +1922,11 @@ static void menu_close(explorer *e)
 static void menu_enter(explorer *e)
 {
     int i;
-    stop_media(e);
-    stop_sound(e);
+    if (game_running(e))
+        pause_game_media(e, 1); /* the game waits behind the menu */
+    else
+        drop_game_media(e);
+    e->from_menu = 0;
     for (i = 0; i < MENU_PARTS; i++)
         if (i != MENU_RIGHT)
             e->menu_open[i] = open_asset_player(e, g_menu_parts[i].asset, &e->menu[i]) == 0;
@@ -1842,7 +1951,7 @@ static void menu_enter(explorer *e)
 static void menu_leave(explorer *e)
 {
     menu_close(e);
-    e->g->sound_serial++;
+    pause_game_media(e, 0);
     e->g->iface_serial++;
 }
 
@@ -1916,6 +2025,16 @@ static void menu_draw(explorer *e)
     if (e->right_open && e->right_frame >= 0)
         for (y = 0; y < e->right.height; y++)
             memcpy(&e->fb[y * SCREEN_W + 472], e->right.frame + y * e->right.width, (size_t)e->right.width * 4);
+    /* MainMenu_load_media: during a game, return.pic (72895) covers the
+     * Previous row, at (472, 215) (0x6C3F50). */
+    if (game_running(e) && e->right_frame >= RIGHT_INTRO_END) {
+        if (!e->return_img.pixels)
+            load_asset_image(e, MENU_RETURN, &e->return_img);
+        if (e->return_img.pixels)
+            for (y = 0; y < e->return_img.height && 215 + y < SCREEN_H; y++)
+                memcpy(&e->fb[(215 + y) * SCREEN_W + 472], e->return_img.pixels + y * e->return_img.width,
+                       (size_t)XF_MIN(e->return_img.width, SCREEN_W - 472) * 4);
+    }
 }
 
 static int menu_item_at(int x, int y)
@@ -1982,13 +2101,177 @@ static void present_frame(explorer *e)
     plat_present(e->shown, e->shown_w, e->shown_h, e->shown_w);
 }
 
+/* One input event: from the platform, or from a script. Mouse positions
+ * are in the pixels of the frame shown last. */
+static void handle_event(explorer *e, plat_event ev)
+{
+    if (ev.type == PLAT_EV_MOUSE_MOVE || ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_MOUSE_UP) {
+        /* Events come in the pixels of the frame shown last. */
+        e->out_mx = ev.x;
+        e->out_my = ev.y;
+        scr_to_screen(&e->layout, ev.x, ev.y, &ev.x, &ev.y);
+    }
+    if (ev.type == PLAT_EV_QUIT)
+        e->running = 0;
+    else if (e->g->ask && ev.type == PLAT_EV_KEY_DOWN && (ev.key == PLAT_KEY_ESCAPE || ev.key == '\r'))
+        game_answer(e->g, ev.key == '\r'); /* Return: Yes or OK; Escape: No */
+    else if (e->g->ask && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
+        int b = msg_button_at(e, ev.x, ev.y);
+        if (b >= 0)
+            game_answer(e->g, b == 0);
+    } else if (e->g->ask && ev.type == PLAT_EV_MOUSE_MOVE) {
+        e->mx = ev.x;
+        e->my = ev.y;
+    } else if (e->g->ask)
+        ; /* the message box takes every input */
+    else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->talking)
+        game_end_talk(e->g); /* Escape closes the dialogue box first */
+    else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->slot_mode)
+        game_close_slots(e->g);
+    else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->in_menu == 1) {
+        if (e->g->view && !e->g->game_over)
+            menu_leave(e); /* back to the game */
+        else
+            e->running = 0;
+    } else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->in_menu == 0 && e->g->view)
+        menu_enter(e); /* the main menu over the game, a clip included: it waits */
+    else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE)
+        ; /* a clip is playing: a click skips it */
+    else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'd' &&
+             (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
+        e->debug = !e->debug;
+        xf_info("debug overlay %s", e->debug ? "on" : "off");
+    } else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'w' &&
+               (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
+        /* Ctrl+Shift+W: the wide layout on or off */
+        e->wide_pref = !e->wide_pref;
+        game_set_screen_wide(e->g, e->wide_pref);
+        xf_info("screen: %s", e->wide_pref ? "wide" : "original");
+    }
+    else if (ev.type == PLAT_EV_KEY_DOWN && !e->playing && e->g->iface_count && ev.key &&
+             (ev.key < 0x100) && !(ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_CMD))) {
+        /* Typing into a layout's text field (login, ING search). */
+        int key = ev.key;
+        if ((ev.mods & PLAT_MOD_SHIFT) && key >= 'a' && key <= 'z')
+            key -= 'a' - 'A';
+        game_key(e->g, key);
+    }
+    else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE)
+        menu_set_hover(e, menu_item_at(ev.x, ev.y));
+    else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
+        int item = menu_item_at(ev.x, ev.y);
+        if (item >= 0)
+            xf_info("menu: %s", g_menu_items[item].name);
+        if (item == 0) { /* New */
+            drop_game_media(e);
+            menu_close(e);
+            if (e->g->view)
+                game_reset(e->g); /* a game was running: start clean */
+            game_new(e->g);
+        } else if (item == 1) { /* Load */
+            menu_close(e);
+            e->from_menu = game_running(e);
+            game_open_slots(e->g, 0);
+        } else if (item == 2 && e->g->view && !e->g->game_over) { /* Save */
+            menu_close(e);
+            e->from_menu = 1;
+            game_open_slots(e->g, 1);
+        } else if (item == 3 && game_running(e)) { /* Return: back to the game */
+            menu_leave(e);
+        } else if (item == 3) { /* Previous: the last game saved or loaded */
+            drop_game_media(e);
+            menu_close(e);
+            if (game_load_previous(e->g) != 0)
+                menu_enter(e);
+        } else if (item == 4 || item == 5) { /* Options, Help: HDB layouts */
+            menu_close(e);
+            e->from_menu = game_running(e);
+            game_open_layout(e->g, item == 4 ? 49738 : 50460);
+        } else if (item == 6) { /* Quit */
+            e->running = 0;
+        }
+    } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && menu_icon_at(e, ev.x, ev.y)) {
+        menu_enter(e); /* the menu icon, a clip included: it waits */
+    } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
+        e->mx = ev.x;
+        e->my = ev.y;
+        if (!e->playing) {
+            int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
+            int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
+            game_hover(e->g, e->mx, e->my);
+            game_hover_inventory(e->g, inv >= 0 ? e->inv_ids[inv] : 0, inv >= e->inv_items);
+        }
+    } else if (e->playing && ev.type == PLAT_EV_MOUSE_DOWN && icon_at(e, ev.x, ev.y) >= 0) {
+        /* An emotion icon answers at once: the clip ends first. */
+        u32 icon = e->icon_ids[icon_at(e, ev.x, ev.y)];
+        finish_media(e);
+        game_click_icon(e->g, icon);
+    } else if (e->playing && e->have_clip && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT &&
+               clip_shot(e, ev.x, ev.y)) {
+        stop_media(e); /* a shot: the clip ends without its end triggers */
+    } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
+        /* Pref_bSkipClips: "Right/Command + Click to Skip Video Clip".
+         * The opening titles skip with any click or key. The location
+         * card cannot be skipped. */
+        int skip = e->in_menu == -1 ||
+                   (game_pref(e->g, 995) && ev.type == PLAT_EV_MOUSE_DOWN &&
+                    (ev.button == PLAT_MOUSE_RIGHT || (ev.mods & (PLAT_MOD_CMD | PLAT_MOD_CTRL))));
+        if (skip && !e->card_active)
+            finish_media(e);
+    } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && icon_at(e, ev.x, ev.y) >= 0) {
+        game_click_icon(e->g, e->icon_ids[icon_at(e, ev.x, ev.y)]);
+    } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
+        /* Layout items first (a close-up covers everything), then
+         * the dialogue box, the inventory, then the view. */
+        int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
+        int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
+        if (game_iface_item_at(e->g, ev.x, ev.y))
+            game_click(e->g, ev.x, ev.y);
+        else if (e->g->talking && click_dialog(e, ev.x, ev.y))
+            ;
+        else if (inv >= e->inv_items) {
+            game_click_evidence(e->g, e->inv_ids[inv]);
+        } else if (inv >= 0) {
+            game_click_inventory(e->g, e->inv_ids[inv]);
+            if (e->inv_ids[inv] != GAME_AI_ICON)
+                e->held_inv = e->inv_ids[inv];
+        }
+        else if (shoot_at(e, ev.x, ev.y))
+            ;
+        else {
+            u32 was = e->g->talking;
+            if (!game_click(e->g, ev.x, ev.y))
+                game_end_talk(e->g); /* a click elsewhere closes the box */
+            if (e->g->talking != was) {
+                e->talk_scroll = 0;
+                e->talk_tab = 0;
+            }
+        }
+    } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
+               (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
+        /* Right click: put the item in hand away, stop talking, or go back. */
+        if (game_reg_value(e->g, "RegCurrInvVar", 0) != game_reg_value(e->g, "RegCurrInvVar", 1))
+            game_hold(e->g, NULL);
+        else if (e->g->talking)
+            game_end_talk(e->g);
+        else
+            game_back(e->g);
+    }
+}
+
 /* One frame: input, clips and sound, drawing. */
 static void run_frame(explorer *e)
 {
     plat_event ev;
     /* The game clock stops in the menu, on the Save and Load screens and
      * while a message box waits. */
-    int paused = e->in_menu == 1 || e->g->slot_mode || e->g->ask;
+    int paused;
+    /* The game holds while the menu is up, and while Options, Help or the
+     * Save and Load screens opened from it are. */
+    if (e->from_menu && e->in_menu == 0 && !e->g->iface_count && !e->g->slot_mode)
+        e->from_menu = 0;
+    pause_game_media(e, e->in_menu == 1 || e->from_menu);
+    paused = e->in_menu == 1 || e->g->slot_mode || e->g->ask || e->media_paused;
     if (paused && !e->pause_from)
         e->pause_from = plat_ticks_ms() | 1;
     else if (!paused && e->pause_from) {
@@ -1997,164 +2280,22 @@ static void run_frame(explorer *e)
     }
     if (!paused)
         game_tick(e->g, plat_ticks_ms() - e->paused_ms);
-    while (plat_poll(&ev)) {
-        if (ev.type == PLAT_EV_MOUSE_MOVE || ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_MOUSE_UP) {
-            /* Events come in the pixels of the frame shown last. */
-            e->out_mx = ev.x;
-            e->out_my = ev.y;
-            scr_to_screen(&e->layout, ev.x, ev.y, &ev.x, &ev.y);
-        }
-        if (ev.type == PLAT_EV_QUIT)
-            e->running = 0;
-        else if (e->g->ask && ev.type == PLAT_EV_KEY_DOWN && (ev.key == PLAT_KEY_ESCAPE || ev.key == '\r'))
-            game_answer(e->g, ev.key == '\r'); /* Return: Yes or OK; Escape: No */
-        else if (e->g->ask && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
-            int b = msg_button_at(e, ev.x, ev.y);
-            if (b >= 0)
-                game_answer(e->g, b == 0);
-        } else if (e->g->ask && ev.type == PLAT_EV_MOUSE_MOVE) {
-            e->mx = ev.x;
-            e->my = ev.y;
-        } else if (e->g->ask)
-            ; /* the message box takes every input */
-        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->talking)
-            game_end_talk(e->g); /* Escape closes the dialogue box first */
-        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->slot_mode)
-            game_close_slots(e->g);
-        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->in_menu == 1) {
-            if (e->g->view && !e->g->game_over)
-                menu_leave(e); /* back to the game */
-            else
-                e->running = 0;
-        } else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->in_menu == 0 && e->g->view &&
-                   !e->playing)
-            menu_enter(e); /* the main menu over the game */
-        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE)
-            ; /* a clip is playing: a click skips it */
-        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'd' &&
-                 (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
-            e->debug = !e->debug;
-            xf_info("debug overlay %s", e->debug ? "on" : "off");
-        } else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'w' &&
-                   (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
-            /* Ctrl+Shift+W: the wide layout on or off */
-            e->wide_pref = !e->wide_pref;
-            game_set_screen_wide(e->g, e->wide_pref);
-            xf_info("screen: %s", e->wide_pref ? "wide" : "original");
-        }
-        else if (ev.type == PLAT_EV_KEY_DOWN && !e->playing && e->g->iface_count && ev.key &&
-                 (ev.key < 0x100) && !(ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_CMD))) {
-            /* Typing into a layout's text field (login, ING search). */
-            int key = ev.key;
-            if ((ev.mods & PLAT_MOD_SHIFT) && key >= 'a' && key <= 'z')
-                key -= 'a' - 'A';
-            game_key(e->g, key);
-        }
-        else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE)
-            menu_set_hover(e, menu_item_at(ev.x, ev.y));
-        else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
-            int item = menu_item_at(ev.x, ev.y);
-            if (item >= 0)
-                xf_info("menu: %s", g_menu_items[item].name);
-            if (item == 0) { /* New */
-                menu_close(e);
-                if (e->g->view)
-                    game_reset(e->g); /* a game was running: start clean */
-                game_new(e->g);
-            } else if (item == 1) { /* Load */
-                menu_close(e);
-                game_open_slots(e->g, 0);
-            } else if (item == 2 && e->g->view && !e->g->game_over) { /* Save */
-                menu_close(e);
-                game_open_slots(e->g, 1);
-            } else if (item == 3) { /* Previous: the last game saved or loaded */
-                menu_close(e);
-                if (game_load_previous(e->g) != 0)
-                    menu_enter(e);
-            } else if (item == 4 || item == 5) { /* Options, Help: HDB layouts */
-                menu_close(e);
-                game_open_layout(e->g, item == 4 ? 49738 : 50460);
-            } else if (item == 6) { /* Quit */
-                e->running = 0;
-            }
-        } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
-            e->mx = ev.x;
-            e->my = ev.y;
-            if (!e->playing) {
-                int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
-                int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
-                game_hover(e->g, e->mx, e->my);
-                game_hover_inventory(e->g, inv >= 0 ? e->inv_ids[inv] : 0, inv >= e->inv_items);
-            }
-        } else if (e->playing && ev.type == PLAT_EV_MOUSE_DOWN && icon_at(e, ev.x, ev.y) >= 0) {
-            /* An emotion icon answers at once: the clip ends first. */
-            u32 icon = e->icon_ids[icon_at(e, ev.x, ev.y)];
+    while (plat_poll(&ev))
+        handle_event(e, ev);
+    if (!e->media_paused) {
+        if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
+            (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
             finish_media(e);
-            game_click_icon(e->g, icon);
-        } else if (e->playing && e->have_clip && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT &&
-                   clip_shot(e, ev.x, ev.y)) {
-            stop_media(e); /* a shot: the clip ends without its end triggers */
-        } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
-            /* Pref_bSkipClips: "Right/Command + Click to Skip Video Clip".
-             * The opening titles skip with any click or key. The location
-             * card cannot be skipped. */
-            int skip = e->in_menu == -1 ||
-                       (game_pref(e->g, 995) && ev.type == PLAT_EV_MOUSE_DOWN &&
-                        (ev.button == PLAT_MOUSE_RIGHT || (ev.mods & (PLAT_MOD_CMD | PLAT_MOD_CTRL))));
-            if (skip && !e->card_active)
-                finish_media(e);
-        } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && icon_at(e, ev.x, ev.y) >= 0) {
-            game_click_icon(e->g, e->icon_ids[icon_at(e, ev.x, ev.y)]);
-        } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
-            /* Layout items first (a close-up covers everything), then
-             * the dialogue box, the inventory, then the view. */
-            int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
-            int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
-            if (game_iface_item_at(e->g, ev.x, ev.y))
-                game_click(e->g, ev.x, ev.y);
-            else if (e->g->talking && click_dialog(e, ev.x, ev.y))
-                ;
-            else if (inv >= e->inv_items) {
-                game_click_evidence(e->g, e->inv_ids[inv]);
-            } else if (inv >= 0) {
-                game_click_inventory(e->g, e->inv_ids[inv]);
-                if (e->inv_ids[inv] != GAME_AI_ICON)
-                    e->held_inv = e->inv_ids[inv];
-            }
-            else if (shoot_at(e, ev.x, ev.y))
-                ;
-            else {
-                u32 was = e->g->talking;
-                if (!game_click(e->g, ev.x, ev.y))
-                    game_end_talk(e->g); /* a click elsewhere closes the box */
-                if (e->g->talking != was) {
-                    e->talk_scroll = 0;
-                    e->talk_tab = 0;
-                }
-            }
-        } else if ((ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_RIGHT) ||
-                   (ev.type == PLAT_EV_KEY_DOWN && ev.key == 8)) {
-            /* Right click: put the item in hand away, stop talking, or go back. */
-            if (game_reg_value(e->g, "RegCurrInvVar", 0) != game_reg_value(e->g, "RegCurrInvVar", 1))
-                game_hold(e->g, NULL);
-            else if (e->g->talking)
-                game_end_talk(e->g);
-            else
-                game_back(e->g);
+        if (e->clip_stop_serial != e->g->clip_stop_serial) {
+            /* a media action with selector 3 stopped the clip: no end triggers */
+            e->clip_stop_serial = e->g->clip_stop_serial;
+            if (e->playing)
+                stop_media(e);
         }
+        start_next_media(e);
+        update_sound(e);
+        update_overlay(e);
     }
-    if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
-        (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
-        finish_media(e);
-    if (e->clip_stop_serial != e->g->clip_stop_serial) {
-        /* a media action with selector 3 stopped the clip: no end triggers */
-        e->clip_stop_serial = e->g->clip_stop_serial;
-        if (e->playing)
-            stop_media(e);
-    }
-    start_next_media(e);
-    update_sound(e);
-    update_overlay(e);
     if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g))
         menu_enter(e);
     switch (e->g->ui_request) {
@@ -2164,6 +2305,7 @@ static void run_frame(explorer *e)
         break;
     case GAME_UI_LOAD:
         e->g->ui_request = GAME_UI_NONE;
+        drop_game_media(e);
         if (game_load_slot(e->g, e->g->load_slot) != 0)
             menu_enter(e);
         break;
@@ -2225,6 +2367,39 @@ static void script_point(void *user, int x, int y)
     scr_to_output(&e->layout, x, y, &e->out_mx, &e->out_my);
     if (!e->playing)
         game_hover(e->g, x, y);
+}
+
+static void script_input(void *user, int key, int x, int y)
+{
+    explorer *e = user;
+    plat_event ev;
+    memset(&ev, 0, sizeof(ev));
+    if (key) {
+        ev.type = PLAT_EV_KEY_DOWN;
+        ev.key = key;
+        handle_event(e, ev);
+    } else {
+        int types[3] = { PLAT_EV_MOUSE_MOVE, PLAT_EV_MOUSE_DOWN, PLAT_EV_MOUSE_UP }, i;
+        scr_to_output(&e->layout, x, y, &ev.x, &ev.y);
+        ev.button = PLAT_MOUSE_LEFT;
+        for (i = 0; i < 3; i++) {
+            ev.type = types[i];
+            handle_event(e, ev);
+        }
+    }
+    run_frame(e);
+}
+
+static int script_window(void *user, const char *what)
+{
+    explorer *e = user;
+    if (strcmp(what, "menu") == 0)
+        return e->in_menu == 1;
+    if (strcmp(what, "paused") == 0)
+        return e->media_paused;
+    if (strcmp(what, "playing") == 0)
+        return e->playing;
+    return -1;
 }
 
 static int script_shot(void *user, const char *path)
@@ -2327,6 +2502,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         sc.host.settle = script_settle;
         sc.host.shot = script_shot;
         sc.host.point = script_point;
+        sc.host.input = script_input;
+        sc.host.window = script_window;
         e->in_menu = 0;
         result = script_run(&sc, script_path, 0) ? 1 : 0;
         xf_info("script: %d steps, %s", sc.steps, result ? "stopped at a failure" : "all passed");
@@ -2348,6 +2525,7 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     free_cursors(e);
     plat_show_cursor(1);
     free(e->dlg_talk.pixels);
+    free(e->return_img.pixels);
     free(e->dlg_history.pixels);
     free(e->dlg_up.pixels);
     free(e->dlg_down.pixels);

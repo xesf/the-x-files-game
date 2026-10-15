@@ -19,6 +19,14 @@ typedef struct {
     void (*point)(void *user, int x, int y);
     /* Saves the screen as a BMP file. Returns 0 on success. */
     int (*shot)(void *user, const char *path);
+    /* Sends an input event as the platform would: `key` is a PLAT_KEY_*
+     * code or a character for key presses, 0 for a left click at (x, y)
+     * in 640x480 screen positions. */
+    void (*input)(void *user, int key, int x, int y);
+    /* The window's own state: "menu" (1 while the main menu is up),
+     * "paused" (1 while the game's clips and sounds hold), "playing" (1
+     * while a clip plays). Returns -1 for an unknown name. */
+    int (*window)(void *user, const char *what);
 } script_host;
 
 typedef struct {

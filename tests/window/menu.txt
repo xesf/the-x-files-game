@@ -1,0 +1,22 @@
+# The main menu during a game (window scripts: run with build/xfiles, see
+# docs/TESTING.md). Escape or the X icon in the top-right corner opens
+# the menu at any time, and the game holds behind it; Return goes back.
+clips on
+new
+play 8000                         # the FBI exterior, then SC03C
+expect window playing 1
+
+key escape                        # during the clip
+expect window menu 1
+expect window paused 1
+play 3000                         # the clip waits
+expect window paused 1
+press 550 240                     # Return, over the Previous row
+expect window menu 0
+expect window paused 0
+expect window playing 1
+
+press 565 29                      # the X icon in the top-right corner
+expect window menu 1
+press 550 240
+expect window menu 0
