@@ -374,6 +374,8 @@ static void run_list(vc_interp *in, u32 list, u32 trigger, const i32 *args, int 
 
 void vc_run_action_list(vc_interp *in, u32 list) { run_list(in, list, 0, NULL, 0); }
 
+void vc_run_trigger_list(vc_interp *in, u32 trigger, u32 list) { run_list(in, list, trigger, NULL, 0); }
+
 size_t vc_trigger_locals_size(void) { return sizeof(struct vc_trigger_locals); }
 
 void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)

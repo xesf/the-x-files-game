@@ -65,6 +65,9 @@ void vc_set_enabled(vc_interp *in, u32 hdb_object, int on);
 
 /* Runs every action of an action list. */
 void vc_run_action_list(vc_interp *in, u32 list);
+/* Runs an action list with the parameters of a trigger, as DoActionList
+ * does. */
+void vc_run_trigger_list(vc_interp *in, u32 trigger, u32 list);
 /* Size of one entry of `tlocals`, for saving and restoring them. */
 size_t vc_trigger_locals_size(void);
 /* Runs the triggers of `kind` in a trigger list. */

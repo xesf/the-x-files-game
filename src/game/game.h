@@ -84,6 +84,8 @@ typedef struct {
 #define GAME_MAX_LABELS 64
 #define GAME_MAX_PHOTOS 24
 #define GAME_MAX_EVIDENCE 32
+/* The Artificial Intuition icon (a VCEvidenceIcon) in the inventory row. */
+#define GAME_AI_ICON 56185
 #define GAME_MAX_EMAILS 64
 #define GAME_EMAIL_ROWS 8
 
@@ -157,6 +159,7 @@ typedef struct {
     u32 view_asset;       /* the view's clip, whose triggers ran on entry */
     u8 lbox_tint[3];      /* SetLBoxTint colour */
     int lbox_tinted;
+    u32 ai_trigger, ai_list; /* SetAIList: the Artificial Intuition hint */
     u32 smol_vars[3];     /* InitSmShootout: per area, set when clear */
     int smol_clear[3], smol_visits[3], smol_area;
     u32 shot_media, shot_view; /* the gun shot clip playing, and what follows */

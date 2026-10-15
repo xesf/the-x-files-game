@@ -1466,7 +1466,8 @@ static void run_frame(explorer *e)
                 game_click_evidence(e->g, e->inv_ids[inv]);
             } else if (inv >= 0) {
                 game_click_inventory(e->g, e->inv_ids[inv]);
-                e->held_inv = e->inv_ids[inv];
+                if (e->inv_ids[inv] != GAME_AI_ICON)
+                    e->held_inv = e->inv_ids[inv];
             }
             else if (shoot_at(e, ev.x, ev.y))
                 ;

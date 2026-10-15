@@ -160,7 +160,7 @@ static int in_list(const u32 *ids, int n, u32 id)
  * which put its copy in the kit. */
 /* The Artificial Intuition icon is an evidence icon too (RegAIIcon names
  * it; the call in this build passes 0). */
-#define AI_ICON 56185
+#define AI_ICON GAME_AI_ICON
 
 static int collected_evidence(game *g, u32 *ids, int max)
 {
@@ -771,6 +771,8 @@ int game_inventory(game *g, u32 *ids, int max)
     for (i = 0; i < g->db.count && k < max; i++)
         if (g->db.entries[i].class_id == VC_INVENTORY && vc_is_enabled(&g->interp, g->db.entries[i].id))
             ids[k++] = g->db.entries[i].id;
+    if (g->ai_list && k < max)
+        ids[k++] = AI_ICON; /* Artificial Intuition: a hint is ready */
     return k;
 }
 
@@ -823,6 +825,14 @@ static i32 inventory_value(game *g, u32 id)
 int game_click_inventory(game *g, u32 id)
 {
     u32 triggers = inventory_triggers(g, id);
+    if (id == AI_ICON && g->ai_list) {
+        /* The Artificial Intuition icon runs the list SetAIList named,
+         * with its trigger's parameters. */
+        xf_info("artificial intuition: list %u", g->ai_list);
+        vc_run_trigger_list(&g->interp, g->ai_trigger, g->ai_list);
+        after_triggers(g);
+        return 1;
+    }
     if (!triggers)
         return 0;
     xf_info("click inventory %u", id);
@@ -2002,6 +2012,22 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x48A2B0 fn_FadeBack(on): 0x40BC30 shows or hides a set of screen
      * layers; not drawn yet. */
     if (strcmp(name, "FadeBack") == 0)
+        return 1;
+    /* 0x460170 fn_SetAIList(trigger, action list): 0x4688D0 keeps the
+     * pair as the Artificial Intuition hint. The icon glows while an
+     * action of the list has a condition that holds (0x4FE820); a click
+     * runs the list. fn_ClearAIList (0x4355D0) drops it. */
+    if (strcmp(name, "SetAIList") == 0 && argc == 2) {
+        g->ai_trigger = (u32)arg_value(g, &args[0]);
+        g->ai_list = (u32)arg_value(g, &args[1]);
+        return 1;
+    }
+    if (strcmp(name, "ClearAIList") == 0) {
+        g->ai_trigger = g->ai_list = 0;
+        return 1;
+    }
+    /* fn_SetAIGlow(n): only changes how the icon is drawn. */
+    if (strcmp(name, "SetAIGlow") == 0)
         return 1;
     /* The Smolnikoff fight (see smol_next). */
     if (strcmp(name, "InitSmShootout") == 0 && argc == 3) {
