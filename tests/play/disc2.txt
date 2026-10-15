@@ -46,6 +46,20 @@ click 26691                     # pick the lock
 hold none
 click 84769                     # go in
 expect view 3756
+walk 2497
+click 30818                     # Skinner goes to check the back office
+expect var 4817 1
 
-# Next: Skinner's scene inside does not start yet, so the evidence
-# (bullet, blood, crates) stays disabled.
+# Evidence in the main area.
+walk 7308                       # the bullet in the pillar
+hold EvidenceKit
+click 27443
+expect var 3074 1               # bullet collected
+walk 3699                       # the blood at Willmore's feet
+click 27951
+expect var 3073 1               # blood collected
+walk 3730                       # a cigarette butt (Morley)
+click 28149
+hold none
+
+# Next: the crates (crowbar), black powder, the back office with Skinner.
