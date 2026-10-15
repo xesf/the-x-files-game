@@ -159,6 +159,7 @@ typedef struct {
     u32 view_asset;       /* the view's clip, whose triggers ran on entry */
     u8 lbox_tint[3];      /* SetLBoxTint colour */
     int lbox_tinted;
+    u32 binoc_from;       /* the view the binoculars look out of */
     u32 ai_trigger, ai_list; /* SetAIList: the Artificial Intuition hint */
     u32 smol_vars[3];     /* InitSmShootout: per area, set when clear */
     int smol_clear[3], smol_visits[3], smol_area;

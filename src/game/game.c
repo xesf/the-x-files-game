@@ -13,6 +13,7 @@
 #include "xf_log.h"
 
 static void after_triggers(game *g);
+static int hand_empty(game *g);
 static void update_evidence(game *g);
 static u32 first_enabled(game *g, u32 list);
 static const game_iface_item *find_item(game *g, u32 id);
@@ -349,8 +350,38 @@ int game_enter_view(game *g, u32 id)
 
 /* Triggers run outside a view change can enable objects or set a view:
  * follow the view, or rebuild the hotspots. */
+/* Binoculars: the close-up of the view, a view of the same viewpoint that
+ * no move leads to. Its name starts with the compass letter of the view
+ * it looks out of ("S number cu" beside the south view). 0 for none. */
+static u32 binocular_view(game *g)
+{
+    static const char letters[] = " N E S W";
+    const vc_place *p = vc_place_of(&g->places, g->view);
+    u32 views[64];
+    vc_view v;
+    int n, i;
+    if (!p || vc_read_view(&g->db, g->view, &v) != 0 || v.direction > 7 || !(v.direction & 1))
+        return 0;
+    n = vc_read_list(&g->db, p->viewpoint, views, 64);
+    for (i = 0; i < n; i++) {
+        vc_view c;
+        char name[64];
+        if (views[i] == g->view || vc_read_view(&g->db, views[i], &c) != 0 || c.direction <= 8 ||
+            vc_read_name(&g->db, c.direction, name, sizeof(name)) != 0)
+            continue;
+        if (name[0] == letters[v.direction] && name[1] == ' ' && strstr(name, " cu"))
+            return views[i];
+    }
+    return 0;
+}
+
 static void after_triggers(game *g)
 {
+    if (g->binoc_from && hand_empty(g) && !g->pending_view) {
+        /* The binoculars are put away: back from the close-up. */
+        g->pending_view = g->binoc_from;
+        g->binoc_from = 0;
+    }
     if (g->pending_view) {
         u32 next = g->pending_view, from = g->view;
         g->pending_view = 0;
@@ -711,6 +742,7 @@ int game_hold(game *g, const char *item)
     u32 id;
     if (!item) {
         set_reg_var(g, "RegCurrInvVar", 0, game_reg_value(g, "RegCurrInvVar", 1));
+        after_triggers(g);
         return 1;
     }
     snprintf(name, sizeof(name), "Inventory_i%s", item);
@@ -2163,6 +2195,21 @@ static int host_call_function(void *user, const vc_action *a)
          strcmp(name, "OnGunClick") == 0 || strcmp(name, "OnNVisionClick") == 0 ||
          strcmp(name, "OnBinocClick") == 0) && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        /* 0x518C80: the binoculars at once show the close-up of the view,
+         * if it has one; putting them away comes back. */
+        if (strcmp(name, "OnBinocClick") == 0 && !g->binoc_from) {
+            u32 cu = binocular_view(g);
+            vc_view c;
+            u32 media[8];
+            if (cu && vc_read_view(&g->db, cu, &c) == 0) {
+                /* The engine shows the close-up's picture whatever its
+                 * enable state (it swaps the picture, 0x5192B0). */
+                if (vc_read_list(&g->db, c.assets, media, 8) > 0)
+                    vc_set_enabled(&g->interp, media[0], 1);
+                g->binoc_from = g->view;
+                g->pending_view = cu;
+            }
+        }
         return 1;
     }
     /* 0x44B4C0 fn_SetFLightProps(mode, 'I'nside or 'O'utside, 'M'):
