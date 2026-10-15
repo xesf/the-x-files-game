@@ -449,7 +449,8 @@ void game_media_end(game *g)
     if (asset && asset == g->shot_media) {
         u32 view = g->shot_view;
         g->shot_media = g->shot_view = 0;
-        if (view)
+        /* unless the clip's own end triggers went somewhere */
+        if (view && g->view_epoch == g->shot_epoch)
             game_enter_view(g, view);
     }
 }
@@ -1334,6 +1335,7 @@ int game_shoot(game *g, u32 hot)
                     set_reg_var(g, "RegViewState", 0, g_shots[k].state);
                 g->shot_media = g_shots[k].media;
                 g->shot_view = g_shots[k].view == GAME_SHOT_RESTART ? g->view : g_shots[k].view;
+                g->shot_epoch = g->view_epoch;
                 game_queue_media(g, g_shots[k].media);
                 if (g_shots[k].shot == 4 || g_shots[k].shot == 5) {
                     /* The woods: two NSA agents (0x4F5A80 counts who is
