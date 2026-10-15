@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 xesf and contributors
 # Build with: make            (game + tools for the host)
 #             make DEBUG=1    (no optimization, sanitizers)
 
@@ -75,8 +77,35 @@ playtest: $(BUILD)/xftool
 play: $(BUILD)/xfiles
 	$(BUILD)/xfiles --play "$(MOVIE)" --data "$(GAME_DIR)"
 
+# Release packaging (macOS): a universal app bundle and a zip with the
+# tools and the licence. The game files are never included.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+APP     := $(BUILD)/X-Files.app
+DIST    := $(BUILD)/dist/xfiles-$(VERSION)-macos
+
+universal:
+	$(MAKE) BUILD=$(BUILD)/arm64 CC="$(CC) -arch arm64 -mmacosx-version-min=11.0" all
+	$(MAKE) BUILD=$(BUILD)/x86_64 CC="$(CC) -arch x86_64 -mmacosx-version-min=11.0" all
+	lipo -create -output $(BUILD)/xfiles-universal $(BUILD)/arm64/xfiles $(BUILD)/x86_64/xfiles
+	lipo -create -output $(BUILD)/xftool-universal $(BUILD)/arm64/xftool $(BUILD)/x86_64/xftool
+
+app: universal
+	rm -rf "$(APP)"
+	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
+	cp $(BUILD)/xfiles-universal "$(APP)/Contents/MacOS/xfiles"
+	sed 's/@VERSION@/$(VERSION)/g' src/platform/macos/Info.plist > "$(APP)/Contents/Info.plist"
+	cp LICENSE "$(APP)/Contents/Resources/LICENSE"
+
+dist: app
+	rm -rf "$(DIST)" "$(DIST).zip"
+	mkdir -p "$(DIST)"
+	cp -R "$(APP)" "$(DIST)/"
+	cp $(BUILD)/xftool-universal "$(DIST)/xftool"
+	cp LICENSE README.md "$(DIST)/"
+	cd "$(dir $(DIST))" && ditto -c -k --keepParent "$(notdir $(DIST))" "$(notdir $(DIST)).zip"
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: playtest all clean test run play
+.PHONY: playtest all clean test run play universal app dist
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
