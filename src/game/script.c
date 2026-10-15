@@ -915,8 +915,9 @@ int script_run(script *s, const char *path, int quiet)
             if (sscanf(line, "%*s %ld", &a) != 1)
                 a = 0;
             ok = game_shoot(g, (u32)a);
-        } else if (strcmp(cmd, "dial") == 0 && sscanf(line, "%*s %31s", what) == 1) {
-            ok = game_dial(g, what);
+        } else if ((strcmp(cmd, "dial") == 0 || strcmp(cmd, "nodial") == 0) && sscanf(line, "%*s %31s", what) == 1) {
+            /* nodial: the number must not get through */
+            ok = game_dial(g, what) == (cmd[0] == 'd');
         } else if (strcmp(cmd, "icon") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = game_click_icon(g, (u32)a);
         } else if (strcmp(cmd, "evidence") == 0 && sscanf(line, "%*s %ld", &a) == 1) {

@@ -17,3 +17,7 @@ click 39496                     # 3
 click 57163
 wait 3000
 expect played 67043             # the endless ring
+
+# Ten digits outside Seattle's 206 need the 1 of a long-distance call.
+nodial 2025550149
+expect played 83299             # the operator's long-distance message

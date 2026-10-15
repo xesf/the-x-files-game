@@ -1605,7 +1605,19 @@ static void phone_book_show(game *g, int step)
 
 static int phone_send(game *g, u32 trigger_var, u32 list_var)
 {
-    size_t i;
+    size_t i, n = strlen(g->phone);
+    /* 0x51FCD0 first: more than 11 digits rings on; ten digits outside
+     * Seattle's 206 need the 1 of a long-distance call (lists 83303 and
+     * 83305 say so). Both answer -1: the call is handled. */
+    if (n > 11) {
+        run_trigger_list_pair(g, 67415, 67422);
+        return -1;
+    }
+    if (n == 10 && strncmp(g->phone, "206", 3) != 0) {
+        xf_info("phone: %s needs the 1 of a long-distance call", g->phone);
+        run_trigger_list_pair(g, 83303, 83305);
+        return -1;
+    }
     for (i = 0; i < XF_COUNT(g_phone_book); i++) {
         char number[32];
         phone_number(g, g_phone_book[i][0], number, sizeof(number));
@@ -1637,7 +1649,7 @@ int game_dial(game *g, const char *number)
 {
     int ok;
     snprintf(g->phone, sizeof(g->phone), "%s", number);
-    ok = phone_send(g, 4467, 4468);
+    ok = phone_send(g, 4467, 4468) == 1;
     if (ok)
         run_trigger_list_pair(g, vc_get_var(&g->interp, 4467), vc_get_var(&g->interp, 4468));
     g->phone[0] = '\0';
@@ -4062,11 +4074,12 @@ static int host_call_function(void *user, const vc_action *a)
      * other number rings on and on (trigger 67415, list 67422). */
     if (strcmp(name, "PhoneSend") == 0 && argc == 3) {
         const game_iface_item *it = find_item(g, g->trigger_item);
-        if (phone_send(g, args[1].kind == VC_OPND_VARIABLE ? args[1].value : 0,
-                       args[2].kind == VC_OPND_VARIABLE ? args[2].value : 0)) {
+        int r = phone_send(g, args[1].kind == VC_OPND_VARIABLE ? args[1].value : 0,
+                           args[2].kind == VC_OPND_VARIABLE ? args[2].value : 0);
+        if (r == 1) {
             if (it)
                 g->pending_kind6 = it->item.triggers;
-        } else
+        } else if (r == 0)
             run_trigger_list_pair(g, 67415, 67422);
         return 1;
     }
