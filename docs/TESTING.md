@@ -99,6 +99,13 @@ A script has one command per line; `#` starts a comment.
 | `at <x> <y>` | Clicks a screen point |
 | `back` | Goes back to the previous view |
 | `wait <ms>` | Advances the clock, firing timers |
+| `include <script>` | Plays another script first, without printing its steps |
+| `ask <conversation>` | Asks one of the questions on offer |
+| `askall <character>` | Talks to a character and asks every new question, until none is left |
+| `hold <item>` / `hold none` | Takes an inventory item in hand by name (`CaseFiles`), or empties the hand |
+| `inv <id>` | Clicks a `VCInventory` item in the inventory bar |
+| `dial <number>` | Types a number on the cell phone and sends it |
+| `ing <P\|L\|N> <text>` | Runs an ING search at the office computer |
 | `set <var> <value>` | Sets a GAM variable |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
 | `expect view <id>` | Fails unless the current view is `<id>` |
@@ -106,6 +113,7 @@ A script has one command per line; `#` starts a comment.
 | `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |
 | `expect spot <id>` / `nospot <id>` | Checks that a hotspot is or is not in the view |
 | `expect iface <id>` / `noiface <id>` | Checks that a layout is or is not up |
+| `expect choice <id>` / `nochoice <id>` | Checks that a question is or is not on offer |
 
 The run stops at the first failing step and prints the state there. At
 the end it lists the engine functions the story called that are not

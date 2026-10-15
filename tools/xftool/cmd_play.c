@@ -286,6 +286,8 @@ static int run_script(game *g, const char *path, u32 *now, int *steps, int quiet
             ok = game_hold(g, strcmp(what, "none") == 0 ? NULL : what);
         } else if (strcmp(cmd, "askall") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = ask_all(g, (u32)a, now);
+        } else if (strcmp(cmd, "ing") == 0 && sscanf(line, "%*s %31s %31s", file, what) == 2) {
+            ok = game_ing_search(g, file[0], what);
         } else if (strcmp(cmd, "dial") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             ok = game_dial(g, what);
         } else if (strcmp(cmd, "inv") == 0 && sscanf(line, "%*s %ld", &a) == 1) {

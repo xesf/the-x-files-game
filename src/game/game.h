@@ -103,6 +103,7 @@ typedef struct {
     int asked_count;
 
     char phone[24];       /* digits typed on the cell phone */
+    char ing[64];         /* text typed in the ING search field */
 
     game_registration regs[32];
     int reg_count;
@@ -156,6 +157,9 @@ int game_hold(game *g, const char *item);
 /* Types a number on the cell phone and sends it (PhoneSend). Returns 1
  * when the number is in the phone directory. */
 int game_dial(game *g, const char *number);
+/* Searches the ING database at the office computer: type 'P' phone, 'L'
+ * licence plate, 'N' name. Returns 1 when the search found a record. */
+int game_ing_search(game *g, char type, const char *text);
 /* The value of the engine variable registered by Reg<name>, argument i. */
 i32 game_reg_value(game *g, const char *name, int i);
 

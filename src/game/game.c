@@ -807,6 +807,64 @@ int game_dial(game *g, const char *number)
     return ok;
 }
 
+/* --- ING database ---------------------------------------------------- */
+
+/* 0x65E0F0: phone numbers the ING knows, {number media, result}. A
+ * result of 0 or more shows that person's record; -1 is the warehouse
+ * the agents called, -2 McGaffey. */
+static const struct {
+    u32 number;
+    i32 result;
+} g_ing_phones[] = {
+    { 67269, 0 }, { 67271, 1 }, { 67273, 2 }, { 67275, 10 }, { 67279, 3 },  { 67281, 17 },
+    { 67283, 7 }, { 67287, 12 }, { 89560, 15 }, { 89562, 16 }, { 67441, -1 }, { 83868, -2 },
+};
+
+/* 0x5151A0: a phone search. Spaces, dashes and brackets are ignored and
+ * the number must have 10 digits. */
+static int ing_phone(game *g, const char *text)
+{
+    char digits[32];
+    size_t i, k = 0;
+    for (i = 0; text[i] && k + 1 < sizeof(digits); i++)
+        if (!strchr(" -()", text[i]))
+            digits[k++] = text[i];
+    digits[k] = '\0';
+    if (k != 10)
+        return 0;
+    for (i = 0; i < XF_COUNT(g_ing_phones); i++) {
+        char number[32];
+        phone_number(g, g_ing_phones[i].number, number, sizeof(number));
+        k = strlen(number);
+        if (k < 10 || strcmp(number + k - 10, digits) != 0)
+            continue;
+        xf_info("ING: %s found (record %d)", digits, g_ing_phones[i].result);
+        if (g_ing_phones[i].result == -1) {
+            /* The Dockside Warehouse: the engine sets variable 5051 and
+             * runs trigger 75766, list 75767 (it goes on the PDA). */
+            vc_set_var(&g->interp, 5051, 1);
+            vc_run_action_list(&g->interp, 75767);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/* 0x464F70: runs the search, then action list 90694 when it found a
+ * record and 90038 when it did not. Name and plate searches are not
+ * implemented yet. */
+int game_ing_search(game *g, char type, const char *text)
+{
+    int found = 0;
+    if (type == 'P')
+        found = ing_phone(g, text);
+    else
+        xf_info("ING: search type %c not implemented", type);
+    vc_run_action_list(&g->interp, found ? 90694 : 90038);
+    after_triggers(g);
+    return found;
+}
+
 /* --- Engine functions ------------------------------------------------ */
 
 /* Day of the week for a date in the Gregorian calendar (0 = Sunday). */
@@ -886,6 +944,26 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x499E40 fn_OnInvClick(item): take the item in hand */
     if (strcmp(name, "OnInvClick") == 0 && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* ING: typing, clearing and searching */
+    if (strcmp(name, "INGKeyPressed") == 0 && argc >= 1) {
+        i32 key = arg_value(g, &args[0]);
+        size_t n = strlen(g->ing);
+        if (key == 8 && n)
+            g->ing[n - 1] = '\0';
+        else if (key >= 32 && key < 127 && n + 1 < sizeof(g->ing)) {
+            g->ing[n] = (char)key;
+            g->ing[n + 1] = '\0';
+        }
+        return 1;
+    }
+    if (strcmp(name, "INGClear") == 0) {
+        g->ing[0] = '\0';
+        return 1;
+    }
+    if (strcmp(name, "INGSearch") == 0 && argc >= 1) {
+        game_ing_search(g, (char)arg_value(g, &args[0]), g->ing);
         return 1;
     }
     /* Cell phone: keys, clear, send */
