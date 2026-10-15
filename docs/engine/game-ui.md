@@ -119,6 +119,22 @@ camera; the camera holds 24 photos. The computer downloads them later.
 `SelectInv(item)` puts an item in hand without running its click list:
 the photo clip uses it to give the camera back.
 
+## Evidence
+
+Evidence the player collects is a `VCEvidenceIcon` (class 0x49), with
+the same fields as `VCInventory`. The engine rebuilds the evidence
+icons with each view (`view_build_display`, 0x477000) from two lists:
+the collected evidence, and the kit's copies ("Black Powder (warehouse)
+- KIT"). A new piece of evidence runs its kind 8 triggers, which call
+`EnableKitIcon(copy)` (0x4B5F20) to put its copy in the kit.
+
+In a lab the collected evidence shows as a second row above the
+inventory. Clicking a piece runs its kind 0 triggers: the technician's
+answer plays and the piece goes away. The explorer shows the row in the
+King County Crime Lab (location 10785) and the coroner's office
+(10611); the engine's own test for a lab is not found yet. Icon 56185,
+"AI Icon", is the Artificial Intuition icon, not evidence.
+
 ## Darkness and the flashlight
 
 Some places are dark: the warehouse mezzanine by day, and the

@@ -135,6 +135,7 @@ typedef struct {
     xf_image inv_img[MAX_INV][2];
     u32 inv_ids[MAX_INV];
     int inv_count;
+    int inv_items;        /* inv_ids: the inventory, then the lab's evidence */
     u32 fb[SCREEN_W * SCREEN_H];
     /* the view picture: still and moving media */
     u32 picture[PICTURE_W * PICTURE_H];
@@ -525,6 +526,7 @@ static void stop_sound(explorer *e)
 #define INV_H 40
 #define INV_GAP 8
 #define INV_REVEAL 420
+#define INV_ROW_GAP 6
 
 static int load_asset_image(explorer *e, u32 asset, xf_image *img)
 {
@@ -844,12 +846,15 @@ static void free_inventory(explorer *e)
     e->inv_count = 0;
 }
 
-/* VCInventory: name, icon, rollover icon, 0, cursor, triggers. */
+/* VCInventory and VCEvidenceIcon: name, icon, rollover icon, 0, cursor,
+ * triggers. In a lab the collected evidence makes a second row above the
+ * inventory; a click hands it to the technician. */
 static void refresh_inventory(explorer *e)
 {
     u32 ids[MAX_INV];
-    int n = game_inventory(e->g, ids, MAX_INV), i;
-    if (n == e->inv_count && memcmp(ids, e->inv_ids, (size_t)n * sizeof(u32)) == 0)
+    int items = game_inventory(e->g, ids, MAX_INV), i;
+    int n = items + game_evidence(e->g, ids + items, MAX_INV - items);
+    if (n == e->inv_count && items == e->inv_items && memcmp(ids, e->inv_ids, (size_t)n * sizeof(u32)) == 0)
         return;
     free_inventory(e);
     for (i = 0; i < n; i++) {
@@ -864,16 +869,23 @@ static void refresh_inventory(explorer *e)
         }
     }
     e->inv_count = n;
+    e->inv_items = items;
+}
+
+static void inv_pos(const explorer *e, int i, int *x, int *y)
+{
+    int row = i >= e->inv_items, col = row ? i - e->inv_items : i;
+    *x = 10 + col * (INV_W + INV_GAP);
+    *y = row ? INV_Y - INV_H - INV_ROW_GAP : INV_Y;
 }
 
 static int inv_at(explorer *e, int x, int y)
 {
     int i;
-    if (y < INV_Y || y >= INV_Y + INV_H)
-        return -1;
     for (i = 0; i < e->inv_count; i++) {
-        int x0 = 10 + i * (INV_W + INV_GAP);
-        if (x >= x0 && x < x0 + INV_W)
+        int x0, y0;
+        inv_pos(e, i, &x0, &y0);
+        if (x >= x0 && x < x0 + INV_W && y >= y0 && y < y0 + INV_H)
             return i;
     }
     return -1;
@@ -882,17 +894,19 @@ static int inv_at(explorer *e, int x, int y)
 static void draw_inventory(explorer *e, int mx, int my)
 {
     xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
-    int i, hover = inv_at(e, mx, my);
+    int i, x, y, hover = inv_at(e, mx, my);
     for (i = 0; i < e->inv_count; i++) {
         const xf_image *img = &e->inv_img[i][i == hover && e->inv_img[i][1].pixels ? 1 : 0];
-        blit_keyed(e, img, 10 + i * (INV_W + INV_GAP), INV_Y);
+        inv_pos(e, i, &x, &y);
+        blit_keyed(e, img, x, y);
     }
     if (hover >= 0 && e->have_font) {
         char name[96] = "";
         xf_neo_reader r;
         if (xf_neo_object(&e->g->db, e->inv_ids[hover], &r, NULL, NULL) == 0)
             vc_read_name(&e->g->db, xf_neo_u32(&r), name, sizeof(name));
-        xf_text_draw(&s, &e->font, 14, 10, INV_Y - 6, name, strlen(name), 0xFFFFFF);
+        inv_pos(e, e->inv_items < e->inv_count ? e->inv_items : 0, &x, &y);
+        xf_text_draw(&s, &e->font, 14, 10, y - 6, name, strlen(name), 0xFFFFFF);
     }
 }
 
@@ -1126,7 +1140,7 @@ static void draw(explorer *e, int mx, int my)
     if (g->talking)
         draw_dialog(e, mx, my);
     refresh_inventory(e);
-    if (my >= INV_REVEAL && !g->iface_count)
+    if (my >= (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL) && !g->iface_count)
         draw_inventory(e, mx, my);
     draw_ifaces(e);
     draw_cursor(e, mx, my);
@@ -1338,12 +1352,15 @@ static void run_frame(explorer *e)
         } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
             /* Layout items first (a close-up covers everything), then
              * the dialogue box, the inventory, then the view. */
-            int inv = ev.y >= INV_REVEAL && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
+            int reveal = e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL;
+            int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
             if (game_iface_item_at(e->g, ev.x, ev.y))
                 game_click(e->g, ev.x, ev.y);
             else if (e->g->talking && click_dialog(e, ev.x, ev.y))
                 ;
-            else if (inv >= 0) {
+            else if (inv >= e->inv_items) {
+                game_click_evidence(e->g, e->inv_ids[inv]);
+            } else if (inv >= 0) {
                 game_click_inventory(e->g, e->inv_ids[inv]);
                 e->held_inv = e->inv_ids[inv];
             }

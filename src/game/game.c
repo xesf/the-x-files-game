@@ -9,6 +9,7 @@
 #include "xf_log.h"
 
 static void after_triggers(game *g);
+static void update_evidence(game *g);
 static const game_iface_item *find_item(game *g, u32 id);
 
 static void note_missing(game *g, const char *name)
@@ -113,10 +114,92 @@ static void build_spots(game *g)
         if (!changed)
             break;
     }
+    update_evidence(g);
     depth--;
     for (i = 0; i < g->spot_count; i++)
         xf_debug("spot %u kind %d (%d,%d)-(%d,%d)", g->spots[i].id, g->spots[i].kind, g->spots[i].region.left,
                  g->spots[i].region.top, g->spots[i].region.right, g->spots[i].region.bottom);
+}
+
+/* --- Evidence -------------------------------------------------------- */
+
+static int in_list(const u32 *ids, int n, u32 id)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (ids[i] == id)
+            return 1;
+    return 0;
+}
+
+/* Collected evidence: the evidence icons that are enabled and are not the
+ * kit's own copies (EnableKitIcon). The engine rebuilds them with each
+ * view (0x477000 view_build_display); a new one runs its kind 8 triggers,
+ * which put its copy in the kit. */
+/* The Artificial Intuition icon is an evidence icon too (RegAIIcon names
+ * it; the call in this build passes 0). */
+#define AI_ICON 56185
+
+static int collected_evidence(game *g, u32 *ids, int max)
+{
+    u32 i;
+    int k = 0;
+    for (i = 0; i < g->db.count && k < max; i++) {
+        u32 id = g->db.entries[i].id;
+        if (g->db.entries[i].class_id == VC_EVIDENCE_ICON && id != AI_ICON && vc_is_enabled(&g->interp, id) &&
+            !in_list(g->kit_icons, g->kit_count, id))
+            ids[k++] = id;
+    }
+    return k;
+}
+
+static u32 evidence_triggers(game *g, u32 id)
+{
+    xf_neo_reader r;
+    int i;
+    if (xf_neo_object(&g->db, id, &r, NULL, NULL) != 0)
+        return 0;
+    for (i = 0; i < 5; i++) /* name, icon, rollover, 0, cursor */
+        xf_neo_u32(&r);
+    return xf_neo_u32(&r);
+}
+
+static void update_evidence(game *g)
+{
+    u32 now[GAME_MAX_EVIDENCE];
+    int n = collected_evidence(g, now, GAME_MAX_EVIDENCE), i;
+    for (i = 0; i < g->evidence_count; i++)
+        if (!in_list(now, n, g->evidence[i]))
+            vc_run_triggers(&g->interp, evidence_triggers(g, g->evidence[i]), 9);
+    for (i = 0; i < n; i++)
+        if (!in_list(g->evidence, g->evidence_count, now[i]))
+            vc_run_triggers(&g->interp, evidence_triggers(g, now[i]), 8);
+    g->evidence_count = collected_evidence(g, g->evidence, GAME_MAX_EVIDENCE);
+}
+
+/* Where the evidence bar shows: the King County Crime Lab and the
+ * coroner's office. The engine's own test is not found yet. */
+static int at_lab(game *g)
+{
+    const vc_place *p = g->view ? vc_place_of(&g->places, g->view) : NULL;
+    return p && (p->location == 10785 || p->location == 10611);
+}
+
+int game_evidence(game *g, u32 *ids, int max)
+{
+    return at_lab(g) ? collected_evidence(g, ids, max) : 0;
+}
+
+int game_click_evidence(game *g, u32 id)
+{
+    u32 ids[GAME_MAX_EVIDENCE];
+    int n = game_evidence(g, ids, GAME_MAX_EVIDENCE);
+    if (!in_list(ids, n, id))
+        return 0;
+    xf_info("hand over evidence %u", id);
+    vc_run_triggers(&g->interp, evidence_triggers(g, id), 0);
+    after_triggers(g);
+    return 1;
 }
 
 /* The objects of the view go away before the view is left. */
@@ -1176,6 +1259,15 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x499E40 fn_OnInvClick(item): take the item in hand */
     if (strcmp(name, "OnInvClick") == 0 && argc == 1) {
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* 0x4B5F20 fn_EnableKitIcon(evidence icon): 0x49FFE0 enables the
+     * icon and shows it in the evidence kit. */
+    if (strcmp(name, "EnableKitIcon") == 0 && argc == 1) {
+        u32 id = (u32)arg_value(g, &args[0]);
+        if (!in_list(g->kit_icons, g->kit_count, id) && g->kit_count < GAME_MAX_EVIDENCE)
+            g->kit_icons[g->kit_count++] = id;
+        vc_set_enabled(&g->interp, id, 1);
         return 1;
     }
     /* 0x4BCCC0 fn_TakePhoto(media): 0x4D8FE0 Camera_take_photo keeps

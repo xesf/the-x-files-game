@@ -81,6 +81,7 @@ typedef struct {
 
 #define GAME_MAX_LABELS 64
 #define GAME_MAX_PHOTOS 24
+#define GAME_MAX_EVIDENCE 32
 
 typedef struct {
     xf_neo_db db, gam;
@@ -125,6 +126,10 @@ typedef struct {
     int label_count;
     u32 trigger_item;     /* layout item whose triggers are running */
     u32 focus_item;       /* layout item that receives key presses */
+    u32 kit_icons[GAME_MAX_EVIDENCE]; /* EnableKitIcon: icons in the kit */
+    int kit_count;
+    u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */
+    int evidence_count;
     u32 photos[GAME_MAX_PHOTOS]; /* TakePhoto: media of each photo */
     int photo_count;
     u32 view_asset;       /* the view's clip, whose triggers ran on entry */
@@ -169,6 +174,12 @@ const char *game_text(game *g, u32 asset, char *buf, size_t size);
 const char *game_question_text(game *g, u32 conversation, char *buf, size_t size);
 /* The SetIItemText label of a layout item, or NULL. */
 const game_item_label *game_item_label_of(game *g, u32 item);
+
+/* Collected evidence (VCEvidenceIcon) that the player can hand to a lab
+ * technician: empty outside the labs. */
+int game_evidence(game *g, u32 *ids, int max);
+/* Hands one piece of evidence over: runs its click triggers. */
+int game_click_evidence(game *g, u32 id);
 
 /* Mouse moved: runs mouse over and off triggers of interface items. */
 void game_hover(game *g, int x, int y);
