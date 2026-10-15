@@ -92,6 +92,12 @@ static void print_state(game *g)
             printf(" %u:%s", ids[i], nm);
         }
         printf("\n");
+        if (g->photo_count) {
+            printf("  photos:");
+            for (i = 0; i < g->photo_count; i++)
+                printf(" %u", g->photos[i]);
+            printf("\n");
+        }
     }
     {
         u32 ids[16];
@@ -322,6 +328,13 @@ static void reach(game *g)
 /* Checks one "expect" line. Returns 1 when it holds. */
 static int expect(game *g, const char *what, long a, long b, int have_b)
 {
+    if (strcmp(what, "photo") == 0) {
+        int i;
+        for (i = 0; i < g->photo_count; i++)
+            if (g->photos[i] == (u32)a)
+                return 1;
+        return 0;
+    }
     if (strcmp(what, "view") == 0)
         return g->view == (u32)a;
     if (strcmp(what, "var") == 0 && have_b)
@@ -445,6 +458,11 @@ int script_run(script *s, const char *path, int quiet)
             reach(g);
         } else if (strcmp(cmd, "state") == 0) {
             print_state(g);
+        } else if (strcmp(cmd, "var") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            u32 i;
+            for (i = 0; i < g->interp.var_count; i++)
+                if (g->interp.vars[i].id == (u32)a)
+                    printf("  var %ld %s = %d\n", a, g->interp.vars[i].name, g->interp.vars[i].value);
         } else if (strcmp(cmd, "route") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             route(g, (u32)a);
         } else if (strcmp(cmd, "gate") == 0 && sscanf(line, "%*s %ld", &a) == 1) {

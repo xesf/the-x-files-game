@@ -5,6 +5,7 @@ usage: python3 -I tools/re/vc_who.py XFILES.HDB var <id>
        python3 -I tools/re/vc_who.py XFILES.HDB enable <gam id>
        python3 -I tools/re/vc_who.py XFILES.HDB function <name>
        python3 -I tools/re/vc_who.py XFILES.HDB layout <id>
+       python3 -I tools/re/vc_who.py XFILES.HDB media <list id>
 """
 import bisect
 import collections
@@ -75,6 +76,8 @@ for a, (c, o) in sorted(rec.items()):
         hit = struct.unpack(">I", b[pre:pre + 4])[0] == want
     elif mode == "function" and t & 0x7F == 6:
         hit = b[pre:pre + 15].split(b"\0")[0].decode("latin1") == sys.argv[3]
+    elif mode == "media" and t & 0x7F == 1 and len(b) >= pre + 4:
+        hit = struct.unpack(">I", b[pre:pre + 4])[0] == want
     elif mode == "layout" and t & 0x7F == 5 and len(b) >= pre + 5:
         hit = struct.unpack(">I", b[pre:pre + 4])[0] == want
     if not hit:

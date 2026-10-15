@@ -109,6 +109,9 @@ A script has one command per line; `#` starts a comment.
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <text>` | Runs an ING search at the office computer |
 | `set <var> <value>` | Sets a GAM variable |
+| `route <view>` | Prints the shortest way to a view over every move, and the enable state that closes each closed move |
+| `gate <id>` | Prints the GAM enable state of an object |
+| `var <id>` | Prints a GAM variable with its name |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
@@ -117,6 +120,7 @@ A script has one command per line; `#` starts a comment.
 | `expect spot <id>` / `nospot <id>` | Checks that a hotspot is or is not in the view |
 | `expect iface <id>` / `noiface <id>` | Checks that a layout is or is not up |
 | `expect choice <id>` / `nochoice <id>` | Checks that a question is or is not on offer |
+| `expect photo <id>` | Checks that the camera holds a photo of this media |
 
 The window can run the same scripts and take screenshots, with or
 without showing the window:
@@ -146,6 +150,9 @@ object does:
 ```sh
 python3 -I tools/re/vc_map.py XFILES.HDB 691 40
 ```
+
+`tools/re/vc_who.py` finds what sets a variable or enable state, what
+calls a function, and what plays a media list (`media <list id>`).
 
 `tools/re/vc_layout.py` prints an interface layout: its items, their
 regions and pictures, and what each trigger does:
