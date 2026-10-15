@@ -1,0 +1,32 @@
+# Rectangle 500 (shot 27): Willmore turns the gun on himself. A suicide
+# note screen opens, and a click on it ends the game.
+# Object IDs are from the English HDB (CD and DVD share them).
+
+new
+expect view 691                 # hallway, Cook greets Willmore
+icon 18172                      # answer him with a joke (Funny)
+expect spot 692                 # the moves open once the opening ends
+
+# Meeting room: the equipment case.
+walk 1228                       # meeting room, facing the case
+click 32714                     # open the case
+expect iface 84370
+click 84380                     # take the six pieces of equipment
+click 84382
+click 84384
+click 84386
+click 84388
+click 84390
+expect var 3707 6               # all six taken
+
+# Willmore's office: drawer and case files.
+walk 1237
+click 28576                     # look at the drawer
+click 32654                     # open it
+click 84330                     # badge, gun, handcuffs
+click 84332
+hold Gun
+shoot 500
+expect iface 62847              # the play scripts' random numbers are fixed
+click 62852
+expect over 1

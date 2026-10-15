@@ -298,6 +298,14 @@ is still standing:
 - In the woods, shots 4 and 5 are the two agents (counter 0x4F5A80).
   With both down, clip Sc114L (38448) plays.
 
+Many dialogue clips also have rectangles 500 and 600 over the people on
+screen. With the gun in hand, rectangle 600 (shot 28) ends the game in
+prison (clip 19656). Rectangle 500 (shot 27) is suicide: the engine puts
+`'S'` in RegViewState and opens one of two note screens (layouts 62847
+and 62849). `SuicideNote` (0x4BCA40) writes one of three notes on it,
+in a font called ZonkersHand that the game data does not include; we
+draw Courier. A click on the note ends the game.
+
 Play scripts use `shoot [id]`: a shot at that rectangle of the view's
 clip, or at the clip's first rectangle.
 
