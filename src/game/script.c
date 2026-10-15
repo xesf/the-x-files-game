@@ -385,7 +385,7 @@ int script_run(script *s, const char *path, int quiet)
         return 1;
     }
     while (fgets(line, sizeof(line), fp)) {
-        char cmd[32] = "", what[32] = "";
+        char cmd[32] = "", what[32] = "", path2[32] = "";
         long a = 0, b = 0;
         int n, ok = 1;
         char *hash = strchr(line, '#');
@@ -430,8 +430,12 @@ int script_run(script *s, const char *path, int quiet)
             ok = game_hold(g, strcmp(what, "none") == 0 ? NULL : what);
         } else if (strcmp(cmd, "askall") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = ask_all(s, (u32)a);
-        } else if (strcmp(cmd, "ing") == 0 && sscanf(line, "%*s %31s %31s", file, what) == 2) {
-            ok = game_ing_search(g, file[0], what);
+        } else if ((strcmp(cmd, "ing") == 0 || strcmp(cmd, "noing") == 0) && sscanf(line, "%*s %31s %31s %31[^\n#]", file, what, path2) == 3) {
+            /* ing <P|L|N> <database Z|F|G|L|C> <text, spaces allowed> */
+            size_t n = strlen(path2);
+            while (n && (path2[n - 1] == ' ' || path2[n - 1] == '\t' || path2[n - 1] == '\r'))
+                path2[--n] = '\0';
+            ok = game_ing_search(g, file[0], what[0], path2) == (strcmp(cmd, "ing") == 0);
         } else if (strcmp(cmd, "dial") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             ok = game_dial(g, what);
         } else if (strcmp(cmd, "icon") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
@@ -472,6 +476,9 @@ int script_run(script *s, const char *path, int quiet)
             reach(g);
         } else if (strcmp(cmd, "state") == 0) {
             print_state(g);
+        } else if (strcmp(cmd, "text") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            char t[512];
+            printf("  text %ld: %s\n", a, game_text(g, (u32)a, t, sizeof(t)));
         } else if (strcmp(cmd, "var") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             u32 i;
             for (i = 0; i < g->interp.var_count; i++)

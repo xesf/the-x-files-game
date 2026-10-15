@@ -108,11 +108,12 @@ A script has one command per line; `#` starts a comment.
 | `icon <id>` | Clicks an emotion or action icon |
 | `dial <number>` | Types a number on the cell phone and sends it |
 | `type <text>` | Types the text, key by key, into the interface item with focus |
-| `ing <P\|L\|N> <text>` | Runs an ING search at the office computer |
+| `ing <P\|L\|N> <database> <text>` / `noing ...` | Runs an ING search at the office computer and expects a record, or none |
 | `set <var> <value>` | Sets a GAM variable |
 | `route <view>` | Prints the shortest way to a view over every move, and the enable state that closes each closed move |
 | `gate <id>` / `gate enable <id>` | Prints the GAM enable state of an object, or the object an enable state controls |
 | `var <id>` | Prints a GAM variable with its name |
+| `text <id>` | Prints the text of a media reference |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
