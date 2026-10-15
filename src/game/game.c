@@ -4229,7 +4229,7 @@ void game_close(game *g)
 
 /* Runs the start-up triggers of the title object: they register the
  * engine variables and call SetStartView. */
-int game_new(game *g)
+u32 game_run_title(game *g)
 {
     u32 i, title = 0, start;
     xf_neo_reader r;
@@ -4237,7 +4237,7 @@ int game_new(game *g)
         if (g->db.entries[i].class_id == VC_TITLE)
             title = g->db.entries[i].id;
     if (!title || xf_neo_object(&g->db, title, &r, NULL, NULL) != 0)
-        return -1;
+        return 0;
     /* VCTitle: list, string, date, string, string, u32, trigger list, ... */
     xf_neo_read_list(&r);
     xf_neo_blob(&g->db, &r);
@@ -4250,6 +4250,12 @@ int game_new(game *g)
     start = g->pending_view;
     g->pending_view = 0;
     game_prefs_apply(g);
-    xf_info("new game: %d engine registrations, start view %u", g->reg_count, start);
+    xf_info("title: %d engine registrations, start view %u", g->reg_count, start);
+    return start;
+}
+
+int game_new(game *g)
+{
+    u32 start = game_run_title(g);
     return start ? game_enter_view(g, start) : -1;
 }
