@@ -117,7 +117,9 @@ A script has one command per line; `#` starts a comment.
 | `inv <id>` | Clicks a `VCInventory` item in the inventory bar |
 | `evidence <id>` | Hands a piece of evidence over from the lab's evidence bar |
 | `icon <id>` | Clicks an emotion or action icon |
-| `dial <number>` | Types a number on the cell phone and sends it |
+| `dial <number>` / `nodial <number>` | Types a number on the cell phone and sends it; `nodial` expects no answer |
+| `rollover <item>` / `rollover none` | Moves the pointer onto an inventory item, or off it (the evidence kit's popup) |
+| `open <layout>` | Opens an interface layout, as the menu's Options and Help do |
 | `shoot [id]` | Shoots at a HOT rectangle of the view's clip (by default its first); most shots need the gun in hand |
 | `until-clip <ms>` | Lets time pass until a clip is queued, and leaves it unplayed so the next step can shoot into it |
 | `type <text>` | Types the text, key by key, into the interface item with focus |
@@ -133,6 +135,7 @@ A script has one command per line; `#` starts a comment.
 | `gate <id>` / `gate enable <id>` | Prints the GAM enable state of an object, or the object an enable state controls |
 | `var <id>` | Prints a GAM variable with its name |
 | `text <id>` | Prints the text of a media reference |
+| `assets <item>` | Prints a layout item's media, with their text and enable state |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
 | `solve <depth> var <id> <value>` / `solve <depth> view <id>` | Searches for moves (clicks with or without an item, questions, icons, shots, waits) that reach the goal, and prints the first sequence found |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
@@ -145,6 +148,7 @@ A script has one command per line; `#` starts a comment.
 | `expect played <id>` | Checks that a clip was among the last 32 started |
 | `expect checkpoint 0\|1` | Checks whether `SaveGameState` has taken a checkpoint |
 | `expect message <string>` | Checks that the message box shows this engine string |
+| `expect mail <id>` | Checks that this mail is in the mailbox |
 | `expect choice <id>` / `nochoice <id>` | Checks that a question is or is not on offer |
 | `expect photo <id>` | Checks that the camera holds a photo of this media |
 
@@ -168,6 +172,17 @@ location card of a new game.
 The run stops at the first failing step and prints the state there. At
 the end it lists the engine functions the story called that are not
 implemented yet.
+
+Besides the disc scripts, scripts follow the strategy guide's side
+routes and warnings: filing the APB yourself (`apb.txt`), the night
+stakeout (`stakeout-death.txt`), the Media Index and forwarding an
+article (`media.txt`, `forward.txt`), the bomb's wire cutters and Try
+again (`bomb-death.txt`), the kiss (`kiss.txt`), lying to Scully
+(`scully-lie.txt`), the NSA car and the porch gunfight (`nsa-car.txt`,
+`rauch-gunfight.txt`), a death in the woods (`woods-death.txt`), Cook in
+the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
+(`suicide.txt`), the phone (`phone.txt`), the Options screen
+(`options.txt`) and saving (`save.txt`).
 
 With `XF_PLAY_RELOAD=1`, a script saves and loads the game after every
 step that ends at rest: no layout open and no conversation running. All
