@@ -3636,6 +3636,30 @@ static int host_call_function(void *user, const vc_action *a)
         return 1;
     if (book_function(g, name, argc, args))
         return 1;
+    /* 0x4BBEE0 fn_SBaseInit, 0x4BBF00 fn_SBaseKeyPress(key): the secret
+     * base terminal's password box (layout 53263) shows a mark per letter
+     * typed, 31 at most; OK always leads to layout 53268. */
+    if (strcmp(name, "SBaseInit") == 0 || (strcmp(name, "SBaseKeyPress") == 0 && argc == 1)) {
+        static const u32 marks[31] = {
+            55838, 55840, 55842, 55844, 55846, 55848, 55850, 55852, 55854, 55856, 55858,
+            55860, 55862, 55864, 55866, 55868, 55870, 55874, 55876, 55878, 55880, 55882,
+            55884, 55886, 55888, 55890, 55892, 55894, 55896, 55898, 55900,
+        };
+        int k;
+        if (name[5] == 'I')
+            g->sbase_typed = 0;
+        else {
+            i32 key = arg_value(g, &args[0]);
+            if (key == 8 && g->sbase_typed)
+                g->sbase_typed--;
+            else if (key >= 32 && key < 127 && g->sbase_typed < 31)
+                g->sbase_typed++;
+        }
+        for (k = 0; k < 31; k++)
+            vc_set_enabled(&g->interp, marks[k], k < g->sbase_typed);
+        g->iface_serial++;
+        return 1;
+    }
     /* The computer's Media Index (layout 15208): 0x42CBF0 fn_MediaInit,
      * 0x475CD0 fn_MSKeyPressed, 0x41EB60 fn_MediaSearch -> 0x4654A0,
      * 0x42E180 fn_MediaDestroy. */
