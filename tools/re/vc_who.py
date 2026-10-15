@@ -8,6 +8,7 @@ usage: python3 -I tools/re/vc_who.py XFILES.HDB var <id>
        python3 -I tools/re/vc_who.py XFILES.HDB function <name>
        python3 -I tools/re/vc_who.py XFILES.HDB layout <id>
        python3 -I tools/re/vc_who.py XFILES.HDB media <list id>
+       python3 -I tools/re/vc_who.py XFILES.HDB functions
 """
 import bisect
 import collections
@@ -61,6 +62,17 @@ def operands(b, at):
 
 
 mode = sys.argv[2]
+if mode == "functions":
+    # Every engine function the actions call, with how many actions call it.
+    count = collections.Counter()
+    for a, (c, o) in rec.items():
+        if c == 0x41 and o and d[o + 14] & 0x7F == 6:
+            m, n, t = u32(o + 6), u32(o + 10), d[o + 14]
+            pre = 12 if t & 0x80 else 0
+            count[d[m + pre:m + pre + 15].split(b"\0")[0].decode("latin1")] += 1
+    for name, k in sorted(count.items()):
+        print("%5d %s" % (k, name))
+    sys.exit(0)
 want = int(sys.argv[3]) if sys.argv[3].isdigit() else 0
 for a, (c, o) in sorted(rec.items()):
     if c != 0x41 or not o:
