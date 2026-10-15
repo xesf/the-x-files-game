@@ -13,6 +13,13 @@ typedef struct {
     char name[32];
 } vc_var;
 
+/* VCString: the text of a string variable (its value is the string's
+ * GAM id). */
+typedef struct {
+    u32 id;
+    char text[64];
+} vc_string;
+
 typedef struct {
     u32 id;      /* GAM id of the VCEnabled object */
     u32 target;  /* HDB object it controls */
@@ -39,6 +46,8 @@ typedef struct {
     vc_enable *enables;       /* sorted by id */
     u32 enable_count;
     u32 *enable_by_target;    /* indexes into enables, sorted by target */
+    vc_string *strings;
+    u32 string_count;
     vc_host host;
     i32 context;              /* value of the event that runs the triggers (operand kind 4) */
     /* Parameters (locals) belong to the trigger that runs a list and keep
@@ -64,6 +73,9 @@ int vc_is_enabled(const vc_interp *in, u32 hdb_object);
 void vc_set_enabled(vc_interp *in, u32 hdb_object, int on);
 
 /* Runs every action of an action list. */
+/* The text of the VCString with this GAM id, or "" */
+const char *vc_string_get(const vc_interp *in, u32 id);
+void vc_string_set(vc_interp *in, u32 id, const char *text);
 void vc_run_action_list(vc_interp *in, u32 list);
 /* Runs an action list with the parameters of a trigger, as DoActionList
  * does. */

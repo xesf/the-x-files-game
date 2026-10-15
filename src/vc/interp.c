@@ -41,7 +41,10 @@ int vc_interp_init(vc_interp *in, const xf_neo_db *hdb, const xf_neo_db *gam, co
     for (i = 0; i < gam->count; i++) {
         nv += gam->entries[i].class_id == 0x53;
         ne += gam->entries[i].class_id == 0x46;
+        in->string_count += gam->entries[i].class_id == 0x50;
     }
+    in->strings = calloc(in->string_count ? in->string_count : 1, sizeof(*in->strings));
+    in->string_count = 0;
     in->vars = calloc(nv ? nv : 1, sizeof(*in->vars));
     in->enables = calloc(ne ? ne : 1, sizeof(*in->enables));
     in->enable_by_target = calloc(ne ? ne : 1, sizeof(u32));
@@ -67,6 +70,15 @@ int vc_interp_init(vc_interp *in, const xf_neo_db *hdb, const xf_neo_db *gam, co
             xf_neo_u32(&r);
             xf_neo_u8(&r);
             v->type = xf_neo_u8(&r);
+        } else if (e->class_id == 0x50 && in->strings) {
+            /* VCString: its text */
+            vc_string *t = &in->strings[in->string_count++];
+            xf_neo_reader b = xf_neo_blob(gam, &r);
+            size_t n = b.p ? XF_MIN((size_t)(b.end - b.p), sizeof(t->text) - 1) : 0;
+            t->id = e->id;
+            if (n)
+                memcpy(t->text, b.p, n);
+            t->text[n] = '\0';
         } else if (e->class_id == 0x46) {
             /* VCEnabled: target, state, target class */
             vc_enable *n = &in->enables[in->enable_count++];
@@ -90,6 +102,7 @@ void vc_interp_free(vc_interp *in)
     free(in->vars);
     free(in->enables);
     free(in->enable_by_target);
+    free(in->strings);
     free(in->tlocals);
     memset(in, 0, sizeof(*in));
 }
@@ -211,10 +224,38 @@ static i32 operand(const vc_interp *in, locals *l, const vc_operand *o)
     }
 }
 
-/* 0x43DB70 VCAction_test_condition */
+const char *vc_string_get(const vc_interp *in, u32 id)
+{
+    u32 i;
+    for (i = 0; i < in->string_count; i++)
+        if (in->strings[i].id == id)
+            return in->strings[i].text;
+    return "";
+}
+
+void vc_string_set(vc_interp *in, u32 id, const char *text)
+{
+    u32 i;
+    for (i = 0; i < in->string_count; i++)
+        if (in->strings[i].id == id)
+            snprintf(in->strings[i].text, sizeof(in->strings[i].text), "%s", text);
+}
+
+static int is_string_var(const vc_interp *in, const vc_operand *o)
+{
+    const vc_var *v = o->kind == VC_OPND_VARIABLE ? find_var(in, o->value) : NULL;
+    return v && (v->type & 3) == 3;
+}
+
+/* 0x43DB70 VCAction_test_condition: two string variables compare their
+ * text (0x5E4EE0 asks the variable objects), not their string IDs. */
 static int test_condition(const vc_interp *in, locals *loc, const vc_expression *e)
 {
     i32 l = operand(in, loc, &e->left), r = operand(in, loc, &e->right);
+    if ((e->op == 0 || e->op == 1) && is_string_var(in, &e->left) && is_string_var(in, &e->right)) {
+        int same = strcmp(vc_string_get(in, (u32)l), vc_string_get(in, (u32)r)) == 0;
+        return e->op == 0 ? same : !same;
+    }
     switch (e->op) {
     case 0: return l == r;
     case 1: return l != r;

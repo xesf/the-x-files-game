@@ -2120,6 +2120,20 @@ static int host_call_function(void *user, const vc_action *a)
     /* fn_SetAIGlow(n): only changes how the icon is drawn. */
     if (strcmp(name, "SetAIGlow") == 0)
         return 1;
+    /* 0x48AEF0 fn_SetLanguage(text, string var): 0x48AE30 writes the
+     * text of the reference ("english", "german", ...) into the string the
+     * variable names. Layouts compare it with scGameLanguageEnglish and
+     * move items for the longer translations (RelocateIFace). */
+    if (strcmp(name, "SetLanguage") == 0 && argc == 2) {
+        char text[64];
+        game_text(g, (u32)arg_value(g, &args[0]), text, sizeof(text));
+        vc_string_set(&g->interp, (u32)arg_value(g, &args[1]), text);
+        return 1;
+    }
+    /* 0x48A360 fn_FixJumpCut: does nothing in this build (0x48A470 ends
+     * in an empty function). */
+    if (strcmp(name, "FixJumpCut") == 0)
+        return 1;
     /* 0x48A580 fn_PDAEscape(on): 0x47C750 runs one of two fixed lists.
      * 1 locks the PDA's travel (list 75533, trigger 75532: no leaving
      * during a scene), anything else unlocks it again (list 75530). */
