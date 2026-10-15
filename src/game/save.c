@@ -44,7 +44,11 @@ static void w_bytes(wbuf *w, const void *p, size_t n)
 
 static void w_u32(wbuf *w, u32 v)
 {
-    u8 b[4] = { (u8)v, (u8)(v >> 8), (u8)(v >> 16), (u8)(v >> 24) };
+    u8 b[4];
+    b[0] = (u8)v;
+    b[1] = (u8)(v >> 8);
+    b[2] = (u8)(v >> 16);
+    b[3] = (u8)(v >> 24);
     w_bytes(w, b, 4);
 }
 
@@ -210,18 +214,40 @@ int game_save_mem(game *g, const char *name, u8 **out, size_t *size)
     w_u32s(&w, "KITI", g->kit_icons, g->kit_count);
     w_u32s(&w, "EVID", g->evidence, g->evidence_count);
     {
-        u32 misc[] = {
-            g->rand_seed, (u32)g->ing_cook_shown, g->ing_notes,
-            g->ai_trigger, g->ai_list, (u32)g->ai_glow,
-            g->smol_vars[0], g->smol_vars[1], g->smol_vars[2],
-            (u32)g->smol_clear[0], (u32)g->smol_clear[1], (u32)g->smol_clear[2],
-            (u32)g->smol_visits[0], (u32)g->smol_visits[1], (u32)g->smol_visits[2], (u32)g->smol_area,
-            (u32)g->woods_down, (u32)g->text_off, (u32)g->credits_rolling,
-            (u32)g->flight_mode, (u32)(u8)g->flight_place,
-            (u32)g->lbox_tinted, g->lbox_tint[0], g->lbox_tint[1], g->lbox_tint[2],
-            g->binoc_from, g->sound, (u32)g->show_evidence, (u32)g->rauch_down,
-        };
-        w_u32s(&w, "MISC", misc, (int)XF_COUNT(misc));
+        /* Filled one by one: C89 compilers (Watcom) want constant
+         * initializers. */
+        u32 misc[29];
+        int n = 0;
+        misc[n++] = g->rand_seed;
+        misc[n++] = (u32)g->ing_cook_shown;
+        misc[n++] = g->ing_notes;
+        misc[n++] = g->ai_trigger;
+        misc[n++] = g->ai_list;
+        misc[n++] = (u32)g->ai_glow;
+        misc[n++] = g->smol_vars[0];
+        misc[n++] = g->smol_vars[1];
+        misc[n++] = g->smol_vars[2];
+        misc[n++] = (u32)g->smol_clear[0];
+        misc[n++] = (u32)g->smol_clear[1];
+        misc[n++] = (u32)g->smol_clear[2];
+        misc[n++] = (u32)g->smol_visits[0];
+        misc[n++] = (u32)g->smol_visits[1];
+        misc[n++] = (u32)g->smol_visits[2];
+        misc[n++] = (u32)g->smol_area;
+        misc[n++] = (u32)g->woods_down;
+        misc[n++] = (u32)g->text_off;
+        misc[n++] = (u32)g->credits_rolling;
+        misc[n++] = (u32)g->flight_mode;
+        misc[n++] = (u32)(u8)g->flight_place;
+        misc[n++] = (u32)g->lbox_tinted;
+        misc[n++] = g->lbox_tint[0];
+        misc[n++] = g->lbox_tint[1];
+        misc[n++] = g->lbox_tint[2];
+        misc[n++] = g->binoc_from;
+        misc[n++] = g->sound;
+        misc[n++] = (u32)g->show_evidence;
+        misc[n++] = (u32)g->rauch_down;
+        w_u32s(&w, "MISC", misc, n);
     }
     if (w.error) {
         free(w.data);
@@ -235,11 +261,12 @@ int game_save_mem(game *g, const char *name, u8 **out, size_t *size)
 /* Copies the saved name out of a save; returns 0 when it is one. */
 int game_save_name(const u8 *data, size_t size, char *name, size_t name_size)
 {
-    rbuf r = { data, data + size };
+    rbuf r;
     name[0] = '\0';
     if (size < 8 || memcmp(data, SAVE_MAGIC, 4) != 0)
         return -1;
-    r.p += 8;
+    r.p = data + 8;
+    r.end = data + size;
     while (r.end - r.p >= 8) {
         char tag[4];
         u32 n;
@@ -261,11 +288,15 @@ int game_save_name(const u8 *data, size_t size, char *name, size_t name_size)
 int game_reset(game *g)
 {
     char dir[sizeof(g->data_dir)];
-    u32 serials[4] = { g->iface_serial, g->sound_serial, g->fade_serial, g->overlay_serial };
+    u32 serials[4];
     u8 *cp = g->checkpoint;
     size_t cp_size = g->checkpoint_size;
     char save_dir[sizeof(g->save_dir)];
     u32 now = g->now;
+    serials[0] = g->iface_serial;
+    serials[1] = g->sound_serial;
+    serials[2] = g->fade_serial;
+    serials[3] = g->overlay_serial;
     memcpy(dir, g->data_dir, sizeof(dir));
     memcpy(save_dir, g->save_dir, sizeof(save_dir));
     g->checkpoint = NULL;
@@ -287,7 +318,7 @@ int game_reset(game *g)
 
 int game_load_mem(game *g, const u8 *data, size_t size)
 {
-    rbuf r = { data, data + size };
+    rbuf r;
     u32 view = 0, history[GAME_HISTORY];
     int history_len = 0;
     u32 timers[GAME_MAX_TIMERS * 3];
@@ -297,7 +328,8 @@ int game_load_mem(game *g, const u8 *data, size_t size)
         xf_warn("save: not a saved game");
         return -1;
     }
-    r.p += 4;
+    r.p = data + 4;
+    r.end = data + size;
     if (r_u32(&r) != SAVE_VERSION) {
         xf_warn("save: unknown save version");
         return -1;
