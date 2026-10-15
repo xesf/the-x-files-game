@@ -96,6 +96,45 @@ playtest: $(BUILD)/xftool
 play: $(BUILD)/xfiles
 	$(BUILD)/xfiles --play "$(MOVIE)" --data "$(GAME_DIR)"
 
+# DOS and Windows 9x with Open Watcom (export WATCOM=<install>; the
+# tools in $WATCOM/bino64 or binl64 on PATH). -j makes char signed, as
+# with gcc and clang. The DOS backend builds unoptimised: at -otexan the
+# Sound Blaster mixer, run from the interrupt, played silence (seen in
+# the Ecstatica engine's identical code).
+WATCOM  ?= $(HOME)/watcom
+WCC     := wcc386
+WCFLAGS := -6s -otexan -zq -za99 -j -i=src -i=src/core -i=tools/xftool -i=$(WATCOM)/h
+WAT_SRC := $(CORE_SRC) $(GAME_SRC)
+DOS_OBJ := $(WAT_SRC:%.c=$(BUILD)/dos/%.obj) $(BUILD)/dos/src/platform/dos/plat_dos.obj
+W9X_OBJ := $(WAT_SRC:%.c=$(BUILD)/win9x/%.obj) $(BUILD)/win9x/src/platform/windows/plat_windows.obj
+
+$(BUILD)/dos/src/platform/dos/plat_dos.obj: src/platform/dos/plat_dos.c
+	@mkdir -p $(dir $@)
+	$(WCC) -bt=dos $(subst -otexan,-od,$(WCFLAGS)) -fo=$@ $<
+
+$(BUILD)/dos/%.obj: %.c
+	@mkdir -p $(dir $@)
+	$(WCC) -bt=dos $(WCFLAGS) -fo=$@ $<
+
+$(BUILD)/win9x/%.obj: %.c
+	@mkdir -p $(dir $@)
+	$(WCC) -bt=nt $(WCFLAGS) -i=$(WATCOM)/h/nt -fo=$@ $<
+
+$(BUILD)/dos/XFILES.EXE: $(DOS_OBJ)
+	wlink system dos4g name $@ option quiet option stack=1048576 $(foreach o,$^,file $(o))
+
+$(BUILD)/win9x/XFILES.EXE: $(W9X_OBJ)
+	wlink system nt_win name $@ option quiet option stack=1048576 library winmm.lib $(foreach o,$^,file $(o))
+
+DOS_TOOL_OBJ := $(TOOL_SRC:%.c=$(BUILD)/dos/%.obj) $(CORE_SRC:%.c=$(BUILD)/dos/%.obj) \
+                $(BUILD)/dos/src/game/game.obj $(BUILD)/dos/src/game/script.obj
+
+$(BUILD)/dos/XFTOOL.EXE: $(DOS_TOOL_OBJ)
+	wlink system dos4g name $@ option quiet option stack=1048576 $(foreach o,$^,file $(o))
+
+dos: $(BUILD)/dos/XFILES.EXE $(BUILD)/dos/XFTOOL.EXE
+win9x: $(BUILD)/win9x/XFILES.EXE
+
 # Release packaging (macOS): a universal app bundle and a zip with the
 # tools and the licence. The game files are never included.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -126,5 +165,5 @@ dist: app
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: playtest all clean test run play universal app dist
+.PHONY: playtest all clean test run play universal app dist dos win9x
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
