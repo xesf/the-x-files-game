@@ -416,6 +416,17 @@ void game_media_end(game *g)
     }
 }
 
+void game_overlay_end(game *g)
+{
+    vc_asset_ref a;
+    u32 asset = g->overlay;
+    if (!asset)
+        return;
+    g->overlay = 0;
+    if (vc_read_asset_ref(&g->db, asset, &a) == 0)
+        vc_run_triggers(&g->interp, a.triggers, 9);
+}
+
 /* A sound that is not a loop ends: its kind 9 triggers run (the alarm
  * clock's end shows the morning). */
 void game_sound_end(game *g)
@@ -1344,6 +1355,207 @@ static void set_node_done(game *g, int node)
     set_reg_var(g, reg, last, done);
 }
 
+
+/* --- E-mail ------------------------------------------------------------
+ * SendEmail(media) puts a text file (Text/Emails/...) in the mailbox
+ * (0x484690 -> 0x483F00 makes a VCEmail). The mail screens show 8 rows:
+ * a first line with the sender, a second with the subject, and an icon
+ * for an unread mail (0x48BE50). */
+
+/* Rows of the computer's inbox (layout 15171): sender line, subject line
+ * and unread icon. */
+static const u32 g_email_from[GAME_EMAIL_ROWS] = { 38282, 38283, 38284, 38285, 38286, 38287, 38288, 38289 };
+static const u32 g_email_subject[GAME_EMAIL_ROWS] = { 42733, 42734, 42735, 42736, 42737, 42738, 42739, 42740 };
+static const u32 g_email_icon[GAME_EMAIL_ROWS] = { 15293, 38253, 38255, 38257, 38259, 38261, 38263, 38265 };
+
+/* The text of a mail file, in Windows-1252 as the game wrote it. */
+static size_t email_text(game *g, u32 asset, char *out, size_t size)
+{
+    vc_asset_ref a;
+    char path[1024];
+    FILE *f;
+    size_t n = 0;
+    int i;
+    out[0] = '\0';
+    if (vc_read_asset_ref(&g->db, asset, &a) != 0)
+        return 0;
+    for (i = 0; i < a.entry_count; i++)
+        if (xf_path_resolve(g->data_dir, a.entries[i].path, path, sizeof(path)) == 0 && (f = fopen(path, "rb"))) {
+            n = fread(out, 1, size - 1, f);
+            fclose(f);
+            break;
+        }
+    out[n] = '\0';
+    for (i = 0; i < (int)n; i++)
+        if (out[i] == '\r')
+            out[i] = '\n';
+    return n;
+}
+
+/* A header field ("From", "Subject") of a mail. */
+static void email_field(game *g, u32 asset, const char *name, char *out, size_t size)
+{
+    char text[1024];
+    const char *p;
+    size_t k = strlen(name);
+    out[0] = '\0';
+    email_text(g, asset, text, sizeof(text));
+    for (p = text; *p; p = strchr(p, '\n') ? strchr(p, '\n') + 1 : p + strlen(p)) {
+        if (strncmp(p, name, k) == 0 && p[k] == ':') {
+            size_t n = strcspn(p + k + 1, "\n");
+            const char *v = p + k + 1;
+            while (*v == ' ' && n) {
+                v++;
+                n--;
+            }
+            snprintf(out, size, "%.*s", (int)n, v);
+            return;
+        }
+        if (*p == '\n')
+            break; /* end of the header */
+    }
+}
+
+static int email_find(game *g, u32 asset)
+{
+    int i;
+    for (i = 0; i < g->email_count; i++)
+        if (g->emails[i].asset == asset)
+            return i;
+    return -1;
+}
+
+/* 0x48BE50: the 8 rows from the scroll position. */
+static void email_show_rows(game *g)
+{
+    int r;
+    if (g->email_mode != 'C')
+        return;
+    for (r = 0; r < GAME_EMAIL_ROWS; r++) {
+        int i = g->email_scroll + r;
+        char from[128] = "", subject[160] = "";
+        if (i < g->email_count) {
+            email_field(g, g->emails[i].asset, "From", from, sizeof(from));
+            email_field(g, g->emails[i].asset, "Subject", subject, sizeof(subject));
+        }
+        set_item_text(g, g_email_from[r], from);
+        set_item_text(g, g_email_subject[r], subject);
+        vc_set_enabled(&g->interp, g_email_icon[r], i < g->email_count && !g->emails[i].read);
+    }
+}
+
+/* 0x48B7A0: scrolls so that the mail is in view; 0 shows the newest. */
+static void email_display(game *g, u32 asset)
+{
+    int i = asset ? email_find(g, asset) : -1;
+    if (i < 0)
+        g->email_scroll = g->email_count > GAME_EMAIL_ROWS ? g->email_count - GAME_EMAIL_ROWS : 0;
+    else if (i < g->email_scroll || i >= g->email_scroll + GAME_EMAIL_ROWS)
+        g->email_scroll = i > GAME_EMAIL_ROWS - 1 ? i - (GAME_EMAIL_ROWS - 1) : 0;
+    email_show_rows(g);
+}
+
+/* 0x43D9F0: shows a mail. Three mails carry an attachment, and the
+ * engine shows the items that open it. */
+static void email_read(game *g, u32 item, u32 asset)
+{
+    static const u32 shown_c[][3] = {
+        { 61775, 72715, 72722 },  /* Amis: the Tarakan fingerprint file */
+        { 64527, 91038, 91007 },  /* the coroner: the crew's fingerprints */
+        { 61765, 72723, 91939 },
+    };
+    size_t i;
+    int attachment = -1;
+    for (i = 0; i < XF_COUNT(shown_c); i++)
+        if (shown_c[i][0] == asset)
+            attachment = (int)i;
+    g->email_body_item = item;
+    email_text(g, asset, g->email_body, sizeof(g->email_body));
+    if (attachment < 0 || item != 54950)
+        return;
+    vc_set_enabled(&g->interp, 72713, 1);
+    vc_set_enabled(&g->interp, 72710, 1);
+    vc_set_enabled(&g->interp, shown_c[attachment][1], 1);
+    vc_set_enabled(&g->interp, shown_c[attachment][2], 1);
+    if (asset != 64527)
+        vc_set_enabled(&g->interp, 69527, 0); /* no Delete */
+    g->email_body_item = 72758; /* the text area above the attachment */
+}
+
+static int email_function(game *g, const char *name, int argc, const vc_operand *args)
+{
+    int i;
+    if (strcmp(name, "SendEmail") == 0 && argc == 1) {
+        u32 asset = (u32)arg_value(g, &args[0]);
+        if (email_find(g, asset) < 0 && g->email_count < GAME_MAX_EMAILS) {
+            g->emails[g->email_count].asset = asset;
+            g->emails[g->email_count++].read = 0;
+            xf_info("e-mail %u arrives", asset);
+        }
+        return 1;
+    }
+    if (strcmp(name, "EmailInit") == 0 && argc == 1) {
+        g->email_mode = (char)arg_value(g, &args[0]);
+        return 1;
+    }
+    if (strcmp(name, "DisplayInBox") == 0 && argc == 1) {
+        email_display(g, (u32)arg_value(g, &args[0]));
+        return 1;
+    }
+    if (strcmp(name, "ScrollHeaders") == 0 && argc == 1) {
+        i32 d = arg_value(g, &args[0]);
+        int max = g->email_count > GAME_EMAIL_ROWS ? g->email_count - GAME_EMAIL_ROWS : 0;
+        g->email_scroll += d == 0 || d == 10 ? -1 : 1;
+        g->email_scroll = XF_CLAMP(g->email_scroll, 0, max);
+        email_show_rows(g);
+        return 1;
+    }
+    if (strcmp(name, "GetCurrEmail") == 0 && argc == 2) {
+        i = g->email_scroll + arg_value(g, &args[0]);
+        if (args[1].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[1].value,
+                       i >= 0 && i < g->email_count ? (i32)g->emails[i].asset : 0);
+        return 1;
+    }
+    if (strcmp(name, "MarkEmailRead") == 0 && argc == 1) {
+        i = g->email_scroll + arg_value(g, &args[0]);
+        if (i >= 0 && i < g->email_count)
+            g->emails[i].read = 1;
+        return 1;
+    }
+    if (strcmp(name, "InitEmailRead") == 0 && argc == 2) {
+        email_read(g, (u32)arg_value(g, &args[0]), (u32)arg_value(g, &args[1]));
+        return 1;
+    }
+    if (strcmp(name, "EmailDelete") == 0 && argc == 1) {
+        i = email_find(g, (u32)arg_value(g, &args[0]));
+        if (i >= 0) {
+            memmove(&g->emails[i], &g->emails[i + 1], sizeof(g->emails[0]) * (size_t)(g->email_count - i - 1));
+            g->email_count--;
+        }
+        return 1;
+    }
+    /* Scrolling a mail's text, flushing pending mails and preloading the
+     * icons only change what is drawn. */
+    if (strcmp(name, "MainScroll") == 0 || strcmp(name, "ScrollTextKill") == 0 ||
+        strcmp(name, "EmailFlushMess") == 0 || strcmp(name, "PreloadEmIcon") == 0)
+        return 1;
+    /* IsIItemHeld(item, var): whether the mouse is held on an item (the
+     * scroll arrows repeat while it is). */
+    if (strcmp(name, "IsIItemHeld") == 0 && argc == 2) {
+        if (args[1].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[1].value, 0);
+        return 1;
+    }
+    return 0;
+}
+
+const char *game_email_body(game *g, u32 *item)
+{
+    *item = g->email_body_item;
+    return g->email_body;
+}
+
 /* What the ING shows when nothing is found (0x4653B9): "No Data Found"
  * (media 58348). */
 #define ING_NOT_FOUND 58348
@@ -1426,6 +1638,23 @@ static int ing_plate(game *g, char db, const char *typed)
         return 1;
     }
     return 0;
+}
+
+/* 0x4B6620 fn_INGDisplayCook -> 0x514BB0: the fingerprint search found
+ * Cook. The ING shows his record (number 3), and the first time it runs
+ * list 90360; once variable 5095 is set it shows "Restricted Data". */
+static void ing_display_cook(game *g)
+{
+    char t[160];
+    if (vc_get_var(&g->interp, 5095)) {
+        set_item_text(g, 58344, game_text(g, 58350, t, sizeof(t)));
+        return;
+    }
+    ing_show_record(g, 3);
+    if (!g->ing_cook_shown) {
+        g->ing_cook_shown = 1;
+        vc_run_action_list(&g->interp, 90360);
+    }
 }
 
 /* 0x464F70 ING_search(category, database): runs the search, then action
@@ -1573,6 +1802,43 @@ static int host_call_function(void *user, const vc_action *a)
         g->rand_seed = g->rand_seed * 1103515245u + 12345u;
         if (args[0].kind == VC_OPND_VARIABLE)
             vc_set_var(&g->interp, args[0].value, lo + (i32)(g->rand_seed % span));
+        return 1;
+    }
+    if (email_function(g, name, argc, args))
+        return 1;
+    if (strcmp(name, "INGDisplayCook") == 0) {
+        ing_display_cook(g);
+        return 1;
+    }
+    /* 0x407BF0 fn_INGInit -> 0x407990: clears the search field (item
+     * 50742) and hides item 36320. */
+    if (strcmp(name, "INGInit") == 0) {
+        g->ing[0] = '\0';
+        set_item_text(g, 50742, "");
+        vc_set_enabled(&g->interp, 36320, 0);
+        return 1;
+    }
+    if (strcmp(name, "ScrollTextInit") == 0 || strcmp(name, "ScrollTextList") == 0)
+        return 1;
+    /* 0x491190 fn_PlayAssetAt(media, x, y): plays a small clip over the
+     * screen, such as the ING's search progress bar; its start triggers
+     * run now and its end triggers when it ends. StopPlayAssets(..)
+     * ends it. */
+    if (strcmp(name, "PlayAssetAt") == 0 && argc == 3) {
+        vc_asset_ref a;
+        u32 asset = (u32)arg_value(g, &args[0]);
+        game_overlay_end(g);
+        if (asset && vc_read_asset_ref(&g->db, asset, &a) == 0) {
+            g->overlay = asset;
+            g->overlay_x = arg_value(g, &args[1]);
+            g->overlay_y = arg_value(g, &args[2]);
+            g->overlay_serial++;
+            vc_run_triggers(&g->interp, a.triggers, 8);
+        }
+        return 1;
+    }
+    if (strcmp(name, "StopPlayAssets") == 0) {
+        game_overlay_end(g);
         return 1;
     }
     /* 0x4B5B40 fn_DispEvIcons(on): shows or hides the evidence bar */
@@ -1861,6 +2127,7 @@ int game_open(game *g, const char *data_dir)
     char path[1024];
     vc_host host = { NULL, host_go_to_view, host_play_media, host_timer, host_interface, host_call_function };
     memset(g, 0, sizeof(*g));
+    snprintf(g->data_dir, sizeof(g->data_dir), "%s", data_dir);
     g->disc = 1;
     host.user = g;
     if (xf_path_resolve(data_dir, "XFILES.HDB", path, sizeof(path)) != 0 || xf_neo_open(&g->db, path) != 0) {

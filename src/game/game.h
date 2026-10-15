@@ -84,6 +84,8 @@ typedef struct {
 #define GAME_MAX_LABELS 64
 #define GAME_MAX_PHOTOS 24
 #define GAME_MAX_EVIDENCE 32
+#define GAME_MAX_EMAILS 64
+#define GAME_EMAIL_ROWS 8
 
 typedef struct {
     xf_neo_db db, gam;
@@ -132,6 +134,20 @@ typedef struct {
     int kit_count;
     u32 rand_seed;                    /* RandGen */
     u32 fade_serial;                  /* changes on FadeToBlack */
+    char data_dir[512];
+    int ing_cook_shown;
+    u32 overlay;                      /* PlayAssetAt: clip over the screen */
+    int overlay_x, overlay_y;
+    u32 overlay_serial;
+    /* The mailbox: e-mails (text media) in the order they arrived. */
+    struct {
+        u32 asset;
+        u8 read;
+    } emails[GAME_MAX_EMAILS];
+    int email_count, email_scroll;
+    char email_mode;                  /* EmailInit: 'C' computer, 'P' PDA */
+    u32 email_body_item;              /* InitEmailRead: the item showing a mail */
+    char email_body[4096];
     u32 ing_notes;                    /* media of the ING record's field notes */
     int show_evidence;                /* DispEvIcons */
     u32 evidence[GAME_MAX_EVIDENCE];  /* evidence icons shown, for kinds 8/9 */
@@ -187,6 +203,9 @@ int game_evidence(game *g, u32 *ids, int max);
 /* Hands one piece of evidence over: runs its click triggers. */
 int game_click_evidence(game *g, u32 id);
 
+/* The mail being read and the item it is shown in. */
+const char *game_email_body(game *g, u32 *item);
+
 /* Mouse moved: runs mouse over and off triggers of interface items. */
 void game_hover(game *g, int x, int y);
 
@@ -198,6 +217,8 @@ void game_tick(game *g, u32 now_ms);
  * its end triggers. game_media_start returns 0 when the queue is empty. */
 int game_media_start(game *g, game_media *m);
 void game_media_end(game *g);
+/* The PlayAssetAt clip ended: its end triggers run. */
+void game_overlay_end(game *g);
 /* The sound started by the last sound action ended (loops never end). */
 void game_sound_end(game *g);
 int game_media_pending(const game *g);

@@ -209,6 +209,27 @@ him on the docks. When nothing is found, the ING shows "No Data Found".
 After a search the engine runs action list 90694 (found) or 90038 (not
 found).
 
+## E-mail
+
+`SendEmail(media)` (0x484690) puts a mail, a text file under
+`Text/Emails/`, in the mailbox. The computer's mail screen (layout 15171)
+shows 8 rows, oldest at the top, scrolled so the newest is in view
+(`DisplayInBox`, 0x48B7A0): the sender on one line, the subject on the
+next and an icon while the mail is unread (0x48BE50).
+`GetCurrEmail(row, var)` puts the mail of a row in the variable (0 for
+an empty row), `MarkEmailRead(row)` marks it read, `EmailDelete(var)`
+deletes it and `ScrollHeaders` scrolls the rows.
+
+`InitEmailRead(item, var)` (0x43D9F0) shows a mail. Three mails have an
+attachment, and for them the engine shows the items that open it: Amis's
+Tarakan prints (61775, item 72722, which opens the fingerprint search),
+the coroner's crew prints (64527, item 91007) and mail 61765.
+
+`PlayAssetAt(media, x, y)` (0x491190) plays a small clip over the screen,
+such as the ING's progress bar; its start triggers start the search's
+timer. `INGDisplayCook` (0x4B6620) shows Cook's ING record (number 3),
+or "Restricted Data" once variable 5095 is set.
+
 ## Story progress
 
 Each part of the story (a node) ends when the engine says so.

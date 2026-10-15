@@ -1,0 +1,61 @@
+# Disc 4 (node 4, link 2, node 5), from the apartment on Wednesday
+# evening. Object IDs are from the English HDB (CD and DVD share them).
+include disc3.txt
+
+# Amis has mailed the Tarakan prints. At the apartment computer: log in,
+# open the mail, load the attachment in the ING and search the FBI.
+walk 3872
+click 38627                     # the computer
+click 50747
+type Craig Willmore
+click 50748
+type shiloh
+click 39474                     # connect
+click 36306                     # E-MAIL
+click 55011                     # Amis's mail (fourth row)
+expect var 2711 61775
+click 72722                     # the attachment: TARAKAN.DAT
+click 73068                     # the FBI database
+click 73306                     # search
+wait 3000
+expect var 1711 1               # the prints are Cook's
+click 15142                     # quit
+wait 9000                       # a knock at the door
+
+# Cook, angry and followed.
+walk 3842
+click 75410                     # open the door
+icon 27739                      # stay calm
+click 24272
+ask 39924                       # "You may be right"
+click 24272
+ask 39940                       # lie to him
+click 24272
+askall 24272                    # his prints on the Tarakan
+expect var 1219 12              # node 4 done: link 2
+
+# Link 2: the Gordon's Hauling van at the warehouse at night.
+inv 17451
+click 58726
+click 59712
+walk 43016
+click 43062                     # into the cab, driver's side
+click 43157                     # the visors
+click 27407                     # the glove box
+click 57626
+click 57632                     # the paper: RR# 1121 & 82434
+click 43133                     # put it away; the driver is coming
+walk 3008
+click 43102                     # out by the passenger door
+wait 10000
+expect var 2575 1
+
+# Home to bed.
+inv 17451
+click 58726
+click 59694
+walk 3974
+click 87437
+wait 10000
+expect var 2055 1
+expect var 1219 5               # node 5: Astadourian wakes Willmore

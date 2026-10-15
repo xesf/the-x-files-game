@@ -426,6 +426,15 @@ static void probe_one(script *s, const snapshot *sn, u32 view, u32 id, const cha
                      *desc ? " " : "", last ? last + 1 : desc);
         }
     }
+    if (g->sound && g->sound_serial != sn->copy->sound_serial) {
+        vc_asset_ref a;
+        if (vc_read_asset_ref(&g->db, g->sound, &a) == 0) {
+            char desc[160] = "", *last;
+            vc_read_name(&g->db, a.name & 0xFFFFFF, desc, sizeof(desc));
+            last = strrchr(desc, ':');
+            snprintf(clips + strlen(clips), sizeof(clips) - strlen(clips), " [sound %s]", last ? last + 1 : desc);
+        }
+    }
     drain_media(g);
     for (i = 0; i < (int)g->interp.var_count; i++)
         vars += g->interp.vars[i].value != sn->vars[i].value;
