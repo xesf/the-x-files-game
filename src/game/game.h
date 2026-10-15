@@ -87,6 +87,11 @@ typedef struct {
 /* The Artificial Intuition icon (a VCEvidenceIcon) in the inventory row. */
 #define GAME_AI_ICON 56185
 #define GAME_PLAYED 32
+
+/* Requests from the game to the window. */
+enum { GAME_UI_NONE, GAME_UI_MENU, GAME_UI_GAME, GAME_UI_LOAD };
+/* What a yes to game_ask does. */
+enum { GAME_ASK_OK, GAME_ASK_SAVE, GAME_ASK_RESTORE };
 #define GAME_MAX_NOTES 128
 #define GAME_MAX_EMAILS 64
 #define GAME_EMAIL_ROWS 8
@@ -187,6 +192,14 @@ typedef struct {
     u8 *checkpoint;          /* SaveGameState: the state to go back to after a death */
     size_t checkpoint_size;
     char save_dir[512];      /* where the slots are saved; empty: no files */
+    int slot_mode;           /* 'S' the Save screen is up, 'L' the Load screen */
+    int slot, load_slot;
+    char slot_names[3][24];
+    int slot_used[3];
+    int ui_request;          /* GAME_UI_*: what the window should do next */
+    u32 ask;                 /* engine string of a question for the player, or 0 */
+    int ask_action;          /* GAME_ASK_*: what a yes does */
+    xf_strings engine_strings; /* xfilese.dll: the engine's messages */
     int flight_mode;      /* SetFLightProps: 1 day, 2 dark */
     char flight_place;    /* 'I' inside, 'O' outside */
 
@@ -323,6 +336,22 @@ int game_load_file(game *g, const char *path);
 /* The name a save was given; 0 when the data is a save. */
 int game_save_name(const u8 *data, size_t size, char *name, size_t name_size);
 int game_save_file_name(const char *path, char *name, size_t name_size);
+/* The Save and Load screens (layouts 82537 and 82634): three slot files
+ * in save_dir. GAME_UI_LOAD asks the window to call game_load_slot with
+ * load_slot; "Previous" loads the slot used last. */
+void game_open_slots(game *g, int save);
+void game_close_slots(game *g);
+/* Back to a fresh start, as before game_new. */
+int game_reset(game *g);
+void game_slot_path(const game *g, int slot, char *out, size_t size);
+int game_load_slot(game *g, int slot);
+void game_set_previous(game *g, int slot);
+int game_load_previous(game *g);
+/* A question in a message box: the window shows game_message_text and calls
+ * game_answer with the player's choice. */
+void game_message(game *g, u32 text, int action);
+const char *game_message_text(game *g);
+void game_answer(game *g, int yes);
 /* SaveGameState keeps a checkpoint; EndGame after a death goes back to it. */
 void game_checkpoint(game *g);
 int game_restore_checkpoint(game *g);

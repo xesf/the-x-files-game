@@ -776,6 +776,8 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
     }
     if (strcmp(what, "over") == 0)
         return (g->game_over != 0) == (a != 0);
+    if (strcmp(what, "message") == 0)
+        return g->ask == (u32)a;
     if (strcmp(what, "checkpoint") == 0)
         return (g->checkpoint != NULL) == (a != 0);
     if (strcmp(what, "var") == 0 && have_b)
@@ -853,6 +855,18 @@ int script_run(script *s, const char *path, int quiet)
                 ok = game_load_mem(g, data, size) == 0;
                 free(data);
             }
+        } else if (strcmp(cmd, "slots") == 0 && sscanf(line, "%*s %31s", what) == 1) {
+            /* The menu's Save or Load item. */
+            ok = (strcmp(what, "save") == 0 || strcmp(what, "load") == 0) && g->save_dir[0];
+            if (ok)
+                game_open_slots(g, what[0] == 's');
+            ok = ok && g->slot_mode;
+        } else if (strcmp(cmd, "answer") == 0 && sscanf(line, "%*s %31s", what) == 1) {
+            ok = g->ask != 0;
+            if (ok)
+                game_answer(g, strcmp(what, "yes") == 0 || strcmp(what, "ok") == 0);
+        } else if (strcmp(cmd, "previous") == 0) {
+            ok = game_load_previous(g) == 0;
         } else if (strcmp(cmd, "restore") == 0) {
             ok = game_restore_checkpoint(g) == 0;
         } else if (strcmp(cmd, "view") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
@@ -971,6 +985,12 @@ int script_run(script *s, const char *path, int quiet)
             fprintf(stderr, "%s:%d: cannot read this line\n", path, lineno);
             ok = 0;
         }
+        /* The Load screen asks for the load once its trigger has run. */
+        if (g->ui_request == GAME_UI_LOAD) {
+            g->ui_request = GAME_UI_NONE;
+            ok = ok && game_load_slot(g, g->load_slot) == 0;
+        } else if (g->ui_request != GAME_UI_NONE)
+            g->ui_request = GAME_UI_NONE;
         /* Clips end with the step, unless `clips on` lets the window play
          * them (until `skip` or until they end). */
         if (!s->keep_clips && !hold_clip)

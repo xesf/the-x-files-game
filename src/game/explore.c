@@ -125,6 +125,8 @@ typedef struct {
     xf_font hcd_font;     /* Hcd.ttr: computer screens */
     int have_hcd_font;
     int debug;            /* Ctrl+Shift+D: hotspot outlines and names */
+    u32 paused_ms;        /* time spent in the menu and message boxes */
+    u32 pause_from;       /* when the pause started, 0 when running */
     /* dialogue box */
     xf_image dlg_talk, dlg_history, dlg_up, dlg_down;
     int talk_scroll;
@@ -159,6 +161,7 @@ typedef struct {
     u32 iface_serial;
     xf_pff pff;           /* x.pff, for interface pictures */
     int pff_open;
+    char pff_path[1024];  /* the PFF bundle open in pff */
     /* one open navigation file */
     char nav_path[1024];
     xf_mov nav;
@@ -351,6 +354,18 @@ static void refresh_picture(explorer *e)
 
 /* Loads the picture of an interface item: the first media of its list,
  * an image of a .pff bundle or a frame of a movie. */
+/* Pictures come from several PFF bundles (X.PFF, X7.PFF, the Save
+ * screen's cursor.pff): keeps the one last used open. */
+static void use_pff(explorer *e, const char *path)
+{
+    if (e->pff_open && strcmp(e->pff_path, path) == 0)
+        return;
+    if (e->pff_open)
+        xf_pff_close(&e->pff);
+    e->pff_open = xf_pff_open(&e->pff, path) == 0;
+    snprintf(e->pff_path, sizeof(e->pff_path), "%s", path);
+}
+
 static void load_item_picture(explorer *e, const game_iface_item *it, xf_image *img)
 {
     u32 ids[8];
@@ -369,8 +384,7 @@ static void load_item_picture(explorer *e, const game_iface_item *it, xf_image *
             if (ext && strcmp(ext, ".pff") == 0) {
                 u32 size;
                 u8 *data;
-                if (!e->pff_open)
-                    e->pff_open = xf_pff_open(&e->pff, path) == 0;
+                use_pff(e, path);
                 data = e->pff_open ? xf_pff_read(&e->pff, m->start, &size) : NULL;
                 if (data && xf_pict_decode(data, size, img) != 0)
                     memset(img, 0, sizeof(*img));
@@ -415,6 +429,8 @@ static void refresh_iface_pictures(explorer *e)
 }
 
 static void blit_keyed(explorer *e, const xf_image *img, int x0, int y0);
+static void draw_message(explorer *e, int mx, int my);
+static void place_slot_cursor(explorer *e);
 
 static int wrap_lines_font(const xf_font *f, const char *text, float px, int w, int *starts, int *lens, int max);
 
@@ -643,8 +659,7 @@ static int load_asset_image(explorer *e, u32 asset, xf_image *img)
         u8 *data;
         if (!strstr(a.entries[j].path, ".pff") || resolve_media(e, a.entries[j].path, path, sizeof(path)) != 0)
             continue;
-        if (!e->pff_open)
-            e->pff_open = xf_pff_open(&e->pff, path) == 0;
+        use_pff(e, path);
         data = e->pff_open ? xf_pff_read(&e->pff, a.entries[j].start, &size) : NULL;
         if (data && xf_pict_decode(data, size, img) != 0)
             memset(img, 0, sizeof(*img));
@@ -922,6 +937,8 @@ static int icon_x(explorer *e, int i)
 static int icon_at(explorer *e, int x, int y)
 {
     int i;
+    if (game_iface_item_at(e->g, x, y))
+        return -1; /* a layout covers the icons there */
     for (i = 0; i < e->icon_count; i++)
         if (x >= icon_x(e, i) && x < icon_x(e, i) + ICON_W && y >= ICON_Y && y < ICON_Y + ICON_H)
             return i;
@@ -1049,8 +1066,7 @@ static int load_pff_image(explorer *e, const char *path, u32 index, xf_image *im
     int own = 0;
     memset(img, 0, sizeof(*img));
     if (strstr(path, "x.pff") || strstr(path, "X.PFF")) {
-        if (!e->pff_open)
-            e->pff_open = xf_pff_open(&e->pff, path) == 0;
+        use_pff(e, path);
         if (!e->pff_open)
             return -1;
         p = &e->pff;
@@ -1338,7 +1354,100 @@ static void draw(explorer *e, int mx, int my)
         draw_inventory(e, mx, my);
     draw_ifaces(e);
     draw_overlay(e);
+    draw_message(e, mx, my);
     draw_cursor(e, mx, my);
+}
+
+/* A message box for game_message: the text, then OK, or Yes and No.
+ * The original uses the system's message box; ours is drawn like the
+ * computer screens: white, with a black frame. */
+#define MSG_W 360
+#define MSG_H 150
+#define MSG_X ((SCREEN_W - MSG_W) / 2)
+#define MSG_Y ((SCREEN_H - MSG_H) / 2)
+#define MSG_BTN_W 90
+#define MSG_BTN_H 26
+
+static vc_region msg_button(const explorer *e, int which)
+{
+    vc_region r;
+    memset(&r, 0, sizeof(r));
+    int two = e->g->ask_action != GAME_ASK_OK;
+    int x = two ? MSG_X + MSG_W / 2 + (which ? 10 : -10 - MSG_BTN_W) : MSG_X + (MSG_W - MSG_BTN_W) / 2;
+    r.left = (i16)x;
+    r.top = (i16)(MSG_Y + MSG_H - MSG_BTN_H - 16);
+    r.right = (i16)(x + MSG_BTN_W);
+    r.bottom = (i16)(r.top + MSG_BTN_H);
+    return r;
+}
+
+/* 0: the first button (Yes or OK), 1: No, -1: none. */
+static int msg_button_at(const explorer *e, int x, int y)
+{
+    int i;
+    for (i = 0; i < (e->g->ask_action != GAME_ASK_OK ? 2 : 1); i++) {
+        vc_region r = msg_button(e, i);
+        if (x >= r.left && x < r.right && y >= r.top && y < r.bottom)
+            return i;
+    }
+    return -1;
+}
+
+static void fill_box(explorer *e, int x0, int y0, int x1, int y1, u32 c)
+{
+    int x, y;
+    for (y = XF_MAX(y0, 0); y < XF_MIN(y1, SCREEN_H); y++)
+        for (x = XF_MAX(x0, 0); x < XF_MIN(x1, SCREEN_W); x++)
+            e->fb[y * SCREEN_W + x] = c;
+}
+
+static void draw_message(explorer *e, int mx, int my)
+{
+    static const char *labels[2][2] = { { "OK", "" }, { "Yes", "No" } };
+    xf_surface s = screen_surface(e);
+    vc_region frame;
+    const xf_font *f = e->have_card_font ? &e->card_font : &e->font;
+    char text[300];
+    int two = e->g->ask_action != GAME_ASK_OK, i;
+    if (!e->g->ask || !e->have_font)
+        return;
+    memset(&frame, 0, sizeof(frame));
+    frame.left = MSG_X;
+    frame.top = MSG_Y;
+    frame.right = MSG_X + MSG_W;
+    frame.bottom = MSG_Y + MSG_H;
+    /* the engine strings end without their question mark */
+    snprintf(text, sizeof(text), "%s%s", game_message_text(e->g), two ? "?" : "");
+    fill_box(e, MSG_X, MSG_Y, MSG_X + MSG_W, MSG_Y + MSG_H, 0xFFFFFF);
+    frame_rect(e, &frame, 0x000000);
+    xf_text_draw_wrapped(&s, f, 16, SCREEN_W / 2, MSG_Y + 36, MSG_W - 40, text, 0x000000, 0xFFFFFF);
+    for (i = 0; i < (two ? 2 : 1); i++) {
+        vc_region r = msg_button(e, i);
+        int hot = msg_button_at(e, mx, my) == i;
+        const char *l = labels[two][i];
+        fill_box(e, r.left, r.top, r.right, r.bottom, hot ? 0x000000 : 0xFFFFFF);
+        frame_rect(e, &r, 0x000000);
+        xf_text_draw(&s, f, 16, (r.left + r.right - xf_text_width(f, 16, l, strlen(l))) / 2, r.bottom - 8, l,
+                     strlen(l), hot ? 0xFFFFFF : 0x000000);
+    }
+}
+
+/* The Save screen's text cursor (item 82561) follows the typed name. */
+static void place_slot_cursor(explorer *e)
+{
+    game_iface_item *c = (game_iface_item *)game_find_item(e->g, 82561);
+    const game_item_label *l;
+    static const u32 names[3] = { 82556, 82557, 82558 };
+    int w = 0;
+    if (!c || e->g->slot_mode != 'S')
+        return;
+    l = game_item_label_of(e->g, names[e->g->slot]);
+    if (l && e->have_card_font)
+        w = xf_text_width(&e->card_font, (float)l->size * 96.0f / 72.0f, l->text, strlen(l->text));
+    c->item.region.left = (i16)(200 + w + 2);
+    c->item.region.right = (i16)(c->item.region.left + 3);
+    c->item.region.top = (i16)(164 + 58 * e->g->slot);
+    c->item.region.bottom = (i16)(c->item.region.top + 25);
 }
 
 /* PlayAssetAt: the overlay clip starts when the game names a new one and
@@ -1456,6 +1565,14 @@ static void menu_enter(explorer *e)
     e->menu_hover = -1;
 }
 
+/* Escape in the menu during a game: back to it, with its sound. */
+static void menu_leave(explorer *e)
+{
+    menu_close(e);
+    e->g->sound_serial++;
+    e->g->iface_serial++;
+}
+
 /* Steps RIGHT.mov one frame at a time towards right_target, at the
  * movie's own frame durations. */
 static void menu_step_right(explorer *e)
@@ -1543,12 +1660,45 @@ static int menu_item_at(int x, int y)
 static void run_frame(explorer *e)
 {
     plat_event ev;
-    game_tick(e->g, plat_ticks_ms());
+    /* The game clock stops in the menu, on the Save and Load screens and
+     * while a message box waits. */
+    int paused = e->in_menu == 1 || e->g->slot_mode || e->g->ask;
+    if (paused && !e->pause_from)
+        e->pause_from = plat_ticks_ms() | 1;
+    else if (!paused && e->pause_from) {
+        e->paused_ms += plat_ticks_ms() - e->pause_from;
+        e->pause_from = 0;
+    }
+    if (!paused)
+        game_tick(e->g, plat_ticks_ms() - e->paused_ms);
     while (plat_poll(&ev)) {
-        if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->talking)
-            game_end_talk(e->g); /* Escape closes the dialogue box first */
-        else if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE))
+        if (ev.type == PLAT_EV_QUIT)
             e->running = 0;
+        else if (e->g->ask && ev.type == PLAT_EV_KEY_DOWN && (ev.key == PLAT_KEY_ESCAPE || ev.key == '\r'))
+            game_answer(e->g, ev.key == '\r'); /* Return: Yes or OK; Escape: No */
+        else if (e->g->ask && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
+            int b = msg_button_at(e, ev.x, ev.y);
+            if (b >= 0)
+                game_answer(e->g, b == 0);
+        } else if (e->g->ask && ev.type == PLAT_EV_MOUSE_MOVE) {
+            e->mx = ev.x;
+            e->my = ev.y;
+        } else if (e->g->ask)
+            ; /* the message box takes every input */
+        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->talking)
+            game_end_talk(e->g); /* Escape closes the dialogue box first */
+        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->g->slot_mode)
+            game_close_slots(e->g);
+        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->in_menu == 1) {
+            if (e->g->view && !e->g->game_over)
+                menu_leave(e); /* back to the game */
+            else
+                e->running = 0;
+        } else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE && e->in_menu == 0 && e->g->view &&
+                   !e->playing)
+            menu_enter(e); /* the main menu over the game */
+        else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE)
+            ; /* a clip is playing: a click skips it */
         else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'd' &&
                  (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
             e->debug = !e->debug;
@@ -1570,7 +1720,19 @@ static void run_frame(explorer *e)
                 xf_info("menu: %s", g_menu_items[item].name);
             if (item == 0) { /* New */
                 menu_close(e);
+                if (e->g->view)
+                    game_reset(e->g); /* a game was running: start clean */
                 game_new(e->g);
+            } else if (item == 1) { /* Load */
+                menu_close(e);
+                game_open_slots(e->g, 0);
+            } else if (item == 2 && e->g->view && !e->g->game_over) { /* Save */
+                menu_close(e);
+                game_open_slots(e->g, 1);
+            } else if (item == 3) { /* Previous: the last game saved or loaded */
+                menu_close(e);
+                if (game_load_previous(e->g) != 0)
+                    menu_enter(e);
             } else if (item == 6) { /* Quit */
                 e->running = 0;
             }
@@ -1638,6 +1800,26 @@ static void run_frame(explorer *e)
     update_overlay(e);
     if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g))
         menu_enter(e);
+    switch (e->g->ui_request) {
+    case GAME_UI_MENU:
+        e->g->ui_request = GAME_UI_NONE;
+        menu_enter(e);
+        break;
+    case GAME_UI_LOAD:
+        e->g->ui_request = GAME_UI_NONE;
+        if (game_load_slot(e->g, e->g->load_slot) != 0)
+            menu_enter(e);
+        break;
+    case GAME_UI_GAME:
+        e->g->ui_request = GAME_UI_NONE;
+        break;
+    }
+    /* The game has ended (the credits, or a death with no way back):
+     * once the last clip has played, the main menu. */
+    if (e->g->game_over && !e->g->ask && e->in_menu == 0 && !e->playing && !game_media_pending(e->g) &&
+        !e->g->slot_mode)
+        menu_enter(e);
+    place_slot_cursor(e);
     if (e->in_menu == 1) {
         menu_update(e);
         menu_draw(e);
@@ -1736,6 +1918,10 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     }
     e->data_dir = data_dir;
     e->media_dirs = media_dirs;
+    if (getenv("XF_SAVE_DIR"))
+        snprintf(e->g->save_dir, sizeof(e->g->save_dir), "%s", getenv("XF_SAVE_DIR"));
+    else if (plat_save_dir(e->g->save_dir, sizeof(e->g->save_dir)) != 0)
+        e->g->save_dir[0] = '\0';
     e->disc = disc;
     if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
         xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)

@@ -258,7 +258,7 @@ int game_save_name(const u8 *data, size_t size, char *name, size_t name_size)
 
 /* Back to the state of a fresh start: the GAM as shipped, nothing on
  * screen. The serials go on counting so that the window notices. */
-static int game_reset(game *g)
+int game_reset(game *g)
 {
     char dir[sizeof(g->data_dir)];
     u32 serials[4] = { g->iface_serial, g->sound_serial, g->fade_serial, g->overlay_serial };

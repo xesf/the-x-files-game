@@ -31,3 +31,27 @@ set 2383 0
 load build/test-save.xfs
 expect view 26186
 expect var 2383 1
+
+# The Save screen: slot 2, named by typing; then the Load screen.
+# Needs XF_SAVE_DIR (make playtest sets it).
+slots save
+click 82554                     # slot 2
+type Raid
+click 82546                     # OK
+expect noiface 82537
+set 2383 0
+slots load
+click 82647                     # slot 2
+click 82650                     # OK
+expect view 26186
+expect var 2383 1
+
+# Saving again over slot 2 asks first.
+slots save
+click 82554
+click 82546
+expect message 31               # "Overwrite existing saved game?"
+answer yes
+expect noiface 82537
+previous                        # the slot used last
+expect view 26186

@@ -1830,6 +1830,251 @@ static void email_read(game *g, u32 item, u32 asset)
     }
 }
 
+/* --- Save and Load screens -------------------------------------------- */
+
+/* Layout 82537 is the Save screen, 82634 the Load screen; three slots
+ * each. Per slot: the item clicked, the item that shows the name. */
+static const u32 g_save_slot_item[3] = { 82553, 82554, 82555 };
+static const u32 g_save_slot_name[3] = { 82556, 82557, 82558 };
+static const u32 g_load_slot_item[3] = { 82646, 82647, 82648 };
+static const u32 g_load_slot_name[3] = { 82826, 82827, 82828 };
+#define SAVE_LAYOUT 82537
+#define LOAD_LAYOUT 82634
+#define SAVE_SLOT_TOP 166  /* 0x4CBDB0: row n is at 166 + 58 n */
+#define SAVE_SLOT_STEP 58
+#define SAVE_NAME_MAX 21
+
+void game_slot_path(const game *g, int slot, char *out, size_t size)
+{
+    snprintf(out, size, "%s/slot%d.xfs", g->save_dir, slot + 1);
+}
+
+/* Draws the slot names; the Save screen shows a text cursor after the
+ * selected one (item 82561). */
+static void slot_show(game *g)
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        u32 item = g->slot_mode == 'S' ? g_save_slot_name[i] : g_load_slot_name[i];
+        game_item_label *l;
+        set_item_text(g, item, g->slot_names[i]);
+        if ((l = (game_item_label *)game_item_label_of(g, item))) {
+            l->color = 'b'; /* white, on the dark slots */
+            l->size = 14;
+            l->bold = 'y';
+        }
+    }
+    {
+        game_iface_item *hl = (game_iface_item *)find_item(g, g->slot_mode == 'S' ? 83314 : 83320);
+        int top = SAVE_SLOT_TOP - 1 + SAVE_SLOT_STEP * g->slot;
+        if (hl) {
+            int h = hl->item.region.bottom - hl->item.region.top;
+            hl->item.region.top = (i16)top;
+            hl->item.region.bottom = (i16)(top + h);
+        }
+    }
+    g->iface_serial++;
+}
+
+static void slot_read_names(game *g)
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        char path[1024];
+        game_slot_path(g, i, path, sizeof(path));
+        g->slot_used[i] = g->save_dir[0] && game_save_file_name(path, g->slot_names[i], sizeof(g->slot_names[i])) == 0;
+        if (!g->slot_used[i])
+            g->slot_names[i][0] = '\0';
+    }
+}
+
+static void slot_close(game *g, int to_menu)
+{
+    host_interface(g, g->slot_mode == 'S' ? SAVE_LAYOUT : LOAD_LAYOUT, 1);
+    g->slot_mode = 0;
+    if (to_menu)
+        g->ui_request = GAME_UI_MENU;
+}
+
+static void slot_save(game *g)
+{
+    char path[1024];
+    game_slot_path(g, g->slot, path, sizeof(path));
+    if (game_save_file(g, path, g->slot_names[g->slot]) == 0)
+        game_set_previous(g, g->slot);
+    slot_close(g, 1);
+}
+
+/* 0x4CCAC0: OK on the Save screen checks the name first. */
+static void slot_commit_save(game *g)
+{
+    int i;
+    if (!g->slot_names[g->slot][0]) {
+        game_message(g, 32, GAME_ASK_OK); /* "Please enter a name ..." */
+        return;
+    }
+    for (i = 0; i < 3; i++)
+        if (i != g->slot && g->slot_used[i] && strcmp(g->slot_names[i], g->slot_names[g->slot]) == 0) {
+            game_message(g, 38, GAME_ASK_SAVE); /* another slot has this name */
+            return;
+        }
+    if (g->slot_used[g->slot]) {
+        game_message(g, 31, GAME_ASK_SAVE); /* "Overwrite existing saved game" */
+        return;
+    }
+    slot_save(g);
+}
+
+static int slot_function(game *g, const char *name, int argc, const vc_operand *args)
+{
+    /* 0x4BC110 fn_SaveLoadInit: the item that runs it says which screen. */
+    if (strcmp(name, "SaveLoadInit") == 0) {
+        g->slot_mode = g->trigger_item == 82787 ? 'S' : 'L';
+        g->slot = 0;
+        slot_read_names(g);
+        slot_show(g);
+        return 1;
+    }
+    /* 0x4BC130 fn_SaveSlotSelect(slot) */
+    if (strcmp(name, "SaveSlotSelect") == 0 && argc == 1) {
+        i32 n = arg_value(g, &args[0]);
+        if (n >= 0 && n < 3 && g->slot_mode) {
+            g->slot = n;
+            g->focus_item = g->slot_mode == 'S' ? g_save_slot_item[n] : g_load_slot_item[n];
+            slot_show(g);
+        }
+        return 1;
+    }
+    /* 0x4BBFC0 fn_SaveKeyPress(slot, key): typing a name on the Save screen */
+    if (strcmp(name, "SaveKeyPress") == 0 && argc == 2) {
+        i32 n = arg_value(g, &args[0]), key = arg_value(g, &args[1]);
+        size_t len;
+        if (g->slot_mode != 'S' || n < 0 || n > 2)
+            return 1;
+        if (key == '\r' || key == '\n') {
+            slot_commit_save(g);
+            return 1;
+        }
+        g->slot = n;
+        len = strlen(g->slot_names[n]);
+        if (key == 8 && len)
+            g->slot_names[n][len - 1] = '\0';
+        else if (key >= 32 && key < 127 && len < SAVE_NAME_MAX) {
+            g->slot_names[n][len] = (char)key;
+            g->slot_names[n][len + 1] = '\0';
+        }
+        slot_show(g);
+        return 1;
+    }
+    /* 0x4BC090 fn_SaveLoadComit(ok) */
+    if (strcmp(name, "SaveLoadComit") == 0 && argc == 1) {
+        if (!arg_value(g, &args[0]))
+            slot_close(g, 1);
+        else if (g->slot_mode == 'S')
+            slot_commit_save(g);
+        else if (g->slot_mode == 'L' && g->slot_used[g->slot]) {
+            /* The load replaces the interpreter that runs this trigger:
+             * the window does it afterwards (game_load_slot). */
+            g->load_slot = g->slot;
+            slot_close(g, 0);
+            g->ui_request = GAME_UI_LOAD;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+void game_close_slots(game *g)
+{
+    if (g->slot_mode)
+        slot_close(g, 1);
+}
+
+/* The menu's Save and Load items open these screens. */
+void game_open_slots(game *g, int save)
+{
+    if (save && !g->view)
+        return; /* nothing to save before a game starts */
+    host_interface(g, save ? SAVE_LAYOUT : LOAD_LAYOUT, 0);
+}
+
+/* "Previous": the slot saved or loaded last, kept in a file beside them. */
+void game_set_previous(game *g, int slot)
+{
+    char path[1024];
+    FILE *f;
+    if (!g->save_dir[0])
+        return;
+    snprintf(path, sizeof(path), "%s/previous", g->save_dir);
+    if ((f = fopen(path, "w"))) {
+        fprintf(f, "%d\n", slot + 1);
+        fclose(f);
+    }
+}
+
+int game_load_slot(game *g, int slot)
+{
+    char path[1024];
+    game_slot_path(g, slot, path, sizeof(path));
+    if (game_load_file(g, path) != 0)
+        return -1;
+    game_set_previous(g, slot);
+    return 0;
+}
+
+int game_load_previous(game *g)
+{
+    char path[1024];
+    FILE *f;
+    int slot = 0;
+    snprintf(path, sizeof(path), "%s/previous", g->save_dir);
+    if (!g->save_dir[0] || !(f = fopen(path, "r")))
+        return -1;
+    if (fscanf(f, "%d", &slot) != 1 || slot < 1 || slot > 3)
+        slot = 0;
+    fclose(f);
+    if (!slot)
+        return -1;
+    return game_load_slot(g, slot - 1);
+}
+
+/* A question for the player in a message box (engine strings of
+ * xfilese.dll). The window shows it and calls game_answer. */
+void game_message(game *g, u32 text, int action)
+{
+    g->ask = text;
+    g->ask_action = action;
+}
+
+const char *game_message_text(game *g)
+{
+    const char *s = g->ask ? xf_strings_get(&g->engine_strings, g->ask) : NULL;
+    if (s)
+        return s;
+    switch (g->ask) { /* the English DVD release lacks some strings */
+    case 31: return "Overwrite existing saved game";
+    case 32: return "Please enter a name for your save game.";
+    case 38: return "Another saved game slot with this name already exists.  Overwrite existing game";
+    case 39: return "Try again";
+    default: return "";
+    }
+}
+
+void game_answer(game *g, int yes)
+{
+    int action = g->ask_action;
+    g->ask = 0;
+    g->ask_action = GAME_ASK_OK;
+    if (action == GAME_ASK_SAVE && yes)
+        slot_save(g);
+    else if (action == GAME_ASK_RESTORE) {
+        if (!yes || game_restore_checkpoint(g) != 0)
+            g->ui_request = GAME_UI_MENU;
+        else
+            g->ui_request = GAME_UI_GAME;
+    }
+}
+
 static int email_function(game *g, const char *name, int argc, const vc_operand *args)
 {
     int i;
@@ -2244,6 +2489,8 @@ static int host_call_function(void *user, const vc_action *a)
                 vc_set_var(&g->interp, args[3 + i].value, out[i]);
         return 1;
     }
+    if (slot_function(g, name, argc, args))
+        return 1;
     /* 0x4BBFA0 fn_SaveGameState: a checkpoint (save.c). */
     if (strcmp(name, "SaveGameState") == 0) {
         game_checkpoint(g);
@@ -2254,6 +2501,8 @@ static int host_call_function(void *user, const vc_action *a)
      * (string 0x27), else goes back to the main menu. */
     if (strcmp(name, "EndGame") == 0 && argc == 1) {
         g->game_over = 1 + (arg_value(g, &args[0]) != 0);
+        if (g->game_over == 2 && g->checkpoint)
+            game_message(g, 39, GAME_ASK_RESTORE); /* "Try again?" */
         xf_info("game over");
         return 1;
     }
@@ -2710,6 +2959,8 @@ int game_open(game *g, const char *data_dir)
     g->interp.trace = getenv("XF_TRACE") != NULL;
     if (xf_path_resolve(data_dir, "XFILEST.DLL", path, sizeof(path)) != 0 || xf_strings_load(&g->strings, path) != 0)
         xf_warn("game: no xfilest.dll, interface texts are missing");
+    if (xf_path_resolve(data_dir, "XFILESE.DLL", path, sizeof(path)) != 0 || xf_strings_load(&g->engine_strings, path) != 0)
+        memset(&g->engine_strings, 0, sizeof(g->engine_strings)); /* English fallbacks */
     vc_place_map_build(&g->db, &g->places);
     xf_info("%u views placed in the hierarchy", g->places.count);
     return 0;
@@ -2720,6 +2971,7 @@ void game_close(game *g)
     free(g->checkpoint);
     g->checkpoint = NULL;
     xf_strings_free(&g->strings);
+    xf_strings_free(&g->engine_strings);
     vc_place_map_free(&g->places);
     vc_interp_free(&g->interp);
     xf_neo_close(&g->gam);

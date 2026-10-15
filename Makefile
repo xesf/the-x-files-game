@@ -91,7 +91,8 @@ run: $(BUILD)/xfiles
 
 # Run the story scripts in tests/play against GAME_DIR, without a window.
 playtest: $(BUILD)/xftool
-	@for f in tests/play/*.txt; do $(BUILD)/xftool play "$(GAME_DIR)" $$f 2>/dev/null | tail -2 || exit 1; done
+	@rm -rf $(BUILD)/saves; mkdir -p $(BUILD)/saves
+	@for f in tests/play/*.txt; do XF_SAVE_DIR=$(BUILD)/saves $(BUILD)/xftool play "$(GAME_DIR)" $$f 2>/dev/null | tail -2 || exit 1; done
 
 play: $(BUILD)/xfiles
 	$(BUILD)/xfiles --play "$(MOVIE)" --data "$(GAME_DIR)"
