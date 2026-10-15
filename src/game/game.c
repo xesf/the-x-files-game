@@ -2117,6 +2117,30 @@ static int host_call_function(void *user, const vc_action *a)
     /* fn_SetAIGlow(n): only changes how the icon is drawn. */
     if (strcmp(name, "SetAIGlow") == 0)
         return 1;
+    /* 0x4B6850 fn_IsoChamberStat(door A, door B, power, out x8): the
+     * state of the isolation chamber for the scripts (0x50C5B0). Without
+     * power (third argument not 1) outputs 1 and 4 are set; otherwise
+     * output 3 or 2 says whether door B is open, and one of outputs 5 to
+     * 8 names the combination of the two doors. */
+    if (strcmp(name, "IsoChamberStat") == 0 && argc == 11) {
+        i32 a = arg_value(g, &args[0]), b = arg_value(g, &args[1]), out[8] = { 0 };
+        int i;
+        if (arg_value(g, &args[2]) != 1) {
+            out[0] = out[3] = 1;
+        } else if (a && b) {
+            out[2] = out[4] = 1;
+        } else if (a) {
+            out[1] = out[6] = 1;
+        } else if (b) {
+            out[2] = out[5] = 1;
+        } else {
+            out[1] = out[7] = 1;
+        }
+        for (i = 0; i < 8; i++)
+            if (args[3 + i].kind == VC_OPND_VARIABLE)
+                vc_set_var(&g->interp, args[3 + i].value, out[i]);
+        return 1;
+    }
     /* 0x4B6020 fn_EndGame(var): Willmore is dead or the case is lost.
      * 0x4EF5E0 offers to restore the last save when the variable is set
      * (string 0x27), else goes back to the main menu. */
