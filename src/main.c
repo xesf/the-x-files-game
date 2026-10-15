@@ -109,8 +109,12 @@ static int is_game_dir(const char *dir)
 static const char *find_game_dir(const char *argv0, char *buf, size_t size)
 {
     static const char *const rel[] = { "game", "../../../game" };
-    const char *env = getenv("XF_GAME_DIR"), *slash = strrchr(argv0, '/');
+    const char *env = getenv("XF_GAME_DIR"), *slash = argv0 ? strrchr(argv0, '/') : NULL;
     size_t i;
+#ifdef __vita__
+    if (is_game_dir("ux0:data/xfiles"))
+        return "ux0:data/xfiles";
+#endif
     if (env && is_game_dir(env))
         return env;
     for (i = 0; slash && i < XF_COUNT(rel); i++) {
@@ -182,7 +186,7 @@ int main(int argc, char **argv)
         r = play_movie(argv[2], argc > 4 && strcmp(argv[3], "--data") == 0 ? argv[4] : NULL);
     else {
         char buf[1024];
-        const char *dir = argc == 1 ? find_game_dir(argv[0], buf, sizeof(buf)) : NULL;
+        const char *dir = argc <= 1 ? find_game_dir(argc ? argv[0] : NULL, buf, sizeof(buf)) : NULL;
         if (dir) {
             /* XF_MEDIA_DIR adds a folder of clips, for installs that
              * keep them apart (the DVD build streams them from the disc). */
@@ -192,7 +196,7 @@ int main(int argc, char **argv)
             media[2] = NULL;
             r = xf_explore(dir, media, 0, 1, NULL);
         } else {
-            if (argc == 1)
+            if (argc <= 1)
                 xf_warn("no game folder: set XF_GAME_DIR or put the game files in a folder named "
                         "\"game\" beside the program");
             test_pattern(argc > 1 ? (u32)atoi(argv[1]) : 0);

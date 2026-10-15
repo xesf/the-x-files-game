@@ -293,9 +293,10 @@ static int add_glyph(const xf_font *f, int g, const float m[6], seglist *s, int 
                 start = pts[first];
             else if (flags[end] & 1)
                 start = pts[end];
-            else
+            else {
                 start.x = (pts[first].x + pts[end].x) / 2;
                 start.y = (pts[first].y + pts[end].y) / 2;
+            }
             prev = start;
             {
                 pt ctrl = { 0, 0 };

@@ -135,6 +135,13 @@ $(BUILD)/dos/XFTOOL.EXE: $(DOS_TOOL_OBJ)
 dos: $(BUILD)/dos/XFILES.EXE $(BUILD)/dos/XFTOOL.EXE
 win9x: $(BUILD)/win9x/XFILES.EXE
 
+# PlayStation Vita: needs VitaSDK ($VITASDK), for example inside the
+# vitasdk/vitasdk Docker image:
+#   docker run --rm -v "$PWD:/src" -w /src vitasdk/vitasdk make vita
+vita:
+	cmake -S platforms/vita -B $(BUILD)/vita -DCMAKE_BUILD_TYPE=Release -DGAME_VERSION=$(VERSION)
+	cmake --build $(BUILD)/vita --parallel
+
 # Release packaging (macOS): a universal app bundle and a zip with the
 # tools and the licence. The game files are never included.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -165,5 +172,5 @@ dist: app
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: playtest all clean test run play universal app dist dos win9x
+.PHONY: playtest all clean test run play universal app dist dos win9x vita
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
