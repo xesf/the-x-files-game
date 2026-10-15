@@ -76,6 +76,10 @@ void scr_add_piece(scr_layout *l, scr_rect src, int anchor, const u32 *px)
         p->dst.x = ui(l, src.x);
         p->dst.y = ui(l, src.y);
         break;
+    case SCR_ANCHOR_TOP_RIGHT:
+        p->dst.x = l->out_w - ui(l, SCR_W - src.x);
+        p->dst.y = ui(l, src.y);
+        break;
     default:
         p->dst.x = l->out_w / 2 + ui(l, src.x - SCR_W / 2);
         p->dst.y = l->out_h / 2 + ui(l, src.y - SCR_H / 2);
@@ -125,8 +129,10 @@ void scr_to_screen(const scr_layout *l, int x, int y, int *sx, int *sy)
         *sy = clampi(SCR_H - ui_inv(l, l->out_h - y), SCR_STRIP_Y + SCR_STRIP_H, SCR_H - 1);
     else if (y < l->strip.y)
         *sy = clampi(ui_inv(l, y), 0, SCR_STRIP_Y - 1);
-    if (y < l->strip.y || y >= l->strip.y + l->strip.h)
+    if (y >= l->strip.y + l->strip.h || (y < l->strip.y && x < l->out_w / 2))
         *sx = ui_inv(l, x);
+    else if (y < l->strip.y) /* the top-right corner, where the menu icon shows */
+        *sx = SCR_W - ui_inv(l, l->out_w - x);
     *sx = clampi(*sx, 0, SCR_W - 1);
     *sy = clampi(*sy, 0, SCR_H - 1);
 }
@@ -153,7 +159,7 @@ void scr_to_output(const scr_layout *l, int sx, int sy, int *x, int *y)
         *y = l->strip.y + (int)((long long)(sy - SCR_STRIP_Y) * l->strip.h / SCR_STRIP_H);
         return;
     }
-    *x = ui(l, sx);
+    *x = sy < SCR_STRIP_Y && sx >= SCR_W / 2 ? l->out_w - ui(l, SCR_W - sx) : ui(l, sx);
     *y = sy < SCR_STRIP_Y ? ui(l, sy) : l->out_h - ui(l, SCR_H - sy);
 }
 

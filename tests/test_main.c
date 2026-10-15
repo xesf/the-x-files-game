@@ -96,6 +96,9 @@ static void test_screen(void)
     CHECK(x == 3 && y == 292);
     scr_to_screen(&l, 1500, 1079, &x, &y); /* the bottom edge: the inventory */
     CHECK(y == 479);
+    scr_to_output(&l, 565, 29, &x, &y); /* the menu icon's corner, both ways */
+    scr_to_screen(&l, x, y, &x, &y);
+    CHECK(x >= 564 && x <= 566 && y >= 28 && y <= 30); /* within a pixel */
     scr_to_output(&l, 320, 210, &x, &y);
     CHECK(x == 960 && y == 501);
     {

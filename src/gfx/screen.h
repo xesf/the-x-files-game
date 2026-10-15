@@ -34,6 +34,7 @@ enum {
     SCR_ANCHOR_BELOW,      /* under the strip, centred: icons, captions */
     SCR_ANCHOR_BOTTOM_LEFT,/* by the screen's bottom-left corner: the inventory */
     SCR_ANCHOR_TOP_LEFT,   /* by the screen's top-left corner */
+    SCR_ANCHOR_TOP_RIGHT,  /* by the screen's top-right corner: the menu icon */
     SCR_ANCHOR_CENTER      /* the middle of the screen: message boxes */
 };
 
