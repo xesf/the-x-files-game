@@ -32,12 +32,13 @@ click 24272
 ask 39940                       # lie to him
 click 24272
 askall 24272                    # his prints on the Tarakan
-expect var 1219 12              # node 4 done: link 2
+expect var 2049 1               # node 4's last conversation is done
 
 # Link 2: the Gordon's Hauling van at the warehouse at night.
 inv 17451
 click 58726
 click 59712
+expect var 1219 12              # node 4 is complete: link 2
 walk 43016
 click 43062                     # into the cab, driver's side
 click 43157                     # the visors
