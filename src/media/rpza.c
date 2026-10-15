@@ -92,7 +92,10 @@ int xf_rpza_decode(const u8 *data, size_t size, u32 *frame, int width, int heigh
             b = xf_be16(p);
             p += 2;
             {
-                u16 m[4] = { b, 0, 0, a };
+                u16 m[4];
+                m[0] = b;
+                m[1] = m[2] = 0;
+                m[3] = a;
                 for (k = 0; k < 3; k++) {
                     int shift = 10 - k * 5;
                     ta = a >> shift & 31;

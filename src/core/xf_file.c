@@ -2,11 +2,15 @@
  * Copyright (C) 2026 xesf and contributors */
 #include "xf_file.h"
 
+#ifdef __WATCOMC__
+#include <direct.h> /* opendir and readdir */
+#else
 #include <dirent.h>
+#include <strings.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <sys/stat.h>
 
 struct xf_file {

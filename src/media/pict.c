@@ -248,7 +248,12 @@ static int op_quicktime(pict_dec *d)
     if (desc_size < 86 || (desc - op) + (u64)desc_size > size || w <= 0 || h <= 0)
         return -1;
     if (codec != XF_FOURCC('j', 'p', 'e', 'g')) {
-        char cc[5] = { (char)(codec >> 24), (char)(codec >> 16), (char)(codec >> 8), (char)codec, 0 };
+        char cc[5];
+        cc[0] = (char)(codec >> 24);
+        cc[1] = (char)(codec >> 16);
+        cc[2] = (char)(codec >> 8);
+        cc[3] = (char)codec;
+        cc[4] = 0;
         xf_warn("pict: unsupported QuickTime codec %s", cc);
         return -1;
     }

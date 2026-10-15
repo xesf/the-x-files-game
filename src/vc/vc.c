@@ -255,7 +255,10 @@ int vc_read_list(const xf_neo_db *db, u32 id, u32 *ids, int max)
 {
     xf_neo_reader r;
     xf_neo_list l;
-    collect c = { ids, max, 0 };
+    collect c;
+    c.ids = ids;
+    c.max = max;
+    c.n = 0;
     if (!id || xf_neo_object(db, id, &r, NULL, NULL) != 0)
         return -1;
     l = xf_neo_read_list(&r);

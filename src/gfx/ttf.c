@@ -194,7 +194,9 @@ static int add_quad(seglist *s, pt a, pt c, pt b)
         n = 16;
     for (i = 1; i <= n; i++) {
         float t = (float)i / n, u = 1 - t;
-        pt p = { u * u * a.x + 2 * u * t * c.x + t * t * b.x, u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+        pt p;
+        p.x = u * u * a.x + 2 * u * t * c.x + t * t * b.x;
+        p.y = u * u * a.y + 2 * u * t * c.y + t * t * b.y;
         if (add_line(s, prev, p) != 0)
             return -1;
         prev = p;
@@ -292,7 +294,8 @@ static int add_glyph(const xf_font *f, int g, const float m[6], seglist *s, int 
             else if (flags[end] & 1)
                 start = pts[end];
             else
-                start = (pt){ (pts[first].x + pts[end].x) / 2, (pts[first].y + pts[end].y) / 2 };
+                start.x = (pts[first].x + pts[end].x) / 2;
+                start.y = (pts[first].y + pts[end].y) / 2;
             prev = start;
             {
                 pt ctrl = { 0, 0 };
@@ -312,7 +315,9 @@ static int add_glyph(const xf_font *f, int g, const float m[6], seglist *s, int 
                         have_ctrl = 0;
                     } else {
                         if (have_ctrl) {
-                            pt mid = { (ctrl.x + cur.x) / 2, (ctrl.y + cur.y) / 2 };
+                            pt mid;
+                            mid.x = (ctrl.x + cur.x) / 2;
+                            mid.y = (ctrl.y + cur.y) / 2;
                             if (add_quad(s, prev, ctrl, mid))
                                 return -1;
                             prev = mid;
@@ -438,7 +443,10 @@ static void draw_line(float *acc, int w, int h, pt p0, pt p1)
 
 int xf_font_render(const xf_font *f, int glyph, float px, xf_glyph *out)
 {
-    float scale = px / f->units_per_em, m[6] = { scale, 0, 0, -scale, 0, 0 };
+    float scale = px / f->units_per_em, m[6];
+    m[0] = scale;
+    m[1] = m[2] = m[4] = m[5] = 0;
+    m[3] = -scale;
     float minx = 1e9f, miny = 1e9f, maxx = -1e9f, maxy = -1e9f, *acc;
     seglist s = { 0 };
     int i, w, h, x, y;
@@ -475,8 +483,11 @@ int xf_font_render(const xf_font *f, int glyph, float px, xf_glyph *out)
         return -1;
     }
     for (i = 0; i < s.count; i += 2) {
-        pt a = { s.lines[i].x - out->x0, s.lines[i].y - out->y0 };
-        pt b = { s.lines[i + 1].x - out->x0, s.lines[i + 1].y - out->y0 };
+        pt a, b;
+        a.x = s.lines[i].x - out->x0;
+        a.y = s.lines[i].y - out->y0;
+        b.x = s.lines[i + 1].x - out->x0;
+        b.y = s.lines[i + 1].y - out->y0;
         draw_line(acc, w, h, a, b);
     }
     for (y = 0; y < h; y++) {

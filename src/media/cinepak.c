@@ -122,7 +122,11 @@ static int next_flag(flag_reader *f, int *bit)
 static int decode_vectors(xf_cinepak *c, strip_books *b, int id, const u8 *p, const u8 *end,
                           int y1, int y2, u32 *frame)
 {
-    flag_reader f = { p, end, 0, 0 };
+    flag_reader f;
+    f.p = p;
+    f.end = end;
+    f.flags = 0;
+    f.mask = 0;
     int x, y;
     for (y = y1; y < y2; y += 4)
         for (x = 0; x < c->width; x += 4) {

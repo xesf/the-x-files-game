@@ -161,6 +161,17 @@ typedef struct {
     int nav_open;
 } explorer;
 
+/* The screen as a drawing surface. */
+static xf_surface screen_surface(explorer *e)
+{
+    xf_surface s;
+    s.pixels = e->fb;
+    s.width = SCREEN_W;
+    s.height = SCREEN_H;
+    s.pitch = SCREEN_W;
+    return s;
+}
+
 static void stop_media(explorer *e);
 static void stop_sound(explorer *e);
 
@@ -386,7 +397,7 @@ static void draw_ifaces(explorer *e)
             const vc_region *r = &it->item.region;
             float px;
             int w, x;
-            xf_surface sf = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+            xf_surface sf = screen_surface(e);
             if (!l || !l->text[0] || !vc_is_enabled(&e->g->interp, it->id))
                 continue;
             f = l->font == 'H' && e->have_hcd_font ? &e->hcd_font
@@ -408,7 +419,7 @@ static void draw_ifaces(explorer *e)
             if (it->id == e->g->focus_item && (plat_ticks_ms() / 500) % 2)
                 strcat(buf, "|");
             {
-                xf_surface sf = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+                xf_surface sf = screen_surface(e);
                 xf_text_draw(&sf, &e->font, 15, r->left + 8, (r->top + r->bottom) / 2 + 5, text, strlen(text),
                              0x000000);
             }
@@ -594,7 +605,7 @@ static int text_px(explorer *e, const char *text, float px)
 static void draw_outlined(explorer *e, const xf_font *f, float px, int x, int y, const char *text, size_t len,
                           u32 color)
 {
-    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    xf_surface s = screen_surface(e);
     int dx, dy;
     for (dy = -1; dy <= 1; dy++)
         for (dx = -1; dx <= 1; dx++)
@@ -683,7 +694,7 @@ static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
 
 static void draw_dialog(explorer *e, int mx, int my)
 {
-    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    xf_surface s = screen_surface(e);
     dlg_entry ent[GAME_MAX_CHOICES];
     int x0 = dialog_x(e), n, more, i, l;
     if (!e->dlg_talk.pixels) {
@@ -900,7 +911,7 @@ static int inv_at(explorer *e, int x, int y)
 
 static void draw_inventory(explorer *e, int mx, int my)
 {
-    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    xf_surface s = screen_surface(e);
     int i, x, y, hover = inv_at(e, mx, my);
     for (i = 0; i < e->inv_count; i++) {
         const xf_image *img = &e->inv_img[i][i == hover && e->inv_img[i][1].pixels ? 1 : 0];
@@ -1139,7 +1150,7 @@ static void draw_fade(explorer *e)
 static void draw(explorer *e, int mx, int my)
 {
     static const u32 colors[] = { 0x40FF40, 0xFFE040, 0x40E0FF };
-    xf_surface s = { e->fb, SCREEN_W, SCREEN_H, SCREEN_W };
+    xf_surface s = screen_surface(e);
     const game *g = e->g;
     int i, y;
 
@@ -1533,7 +1544,10 @@ static int script_shot(void *user, const char *path)
     for (y = SCREEN_H - 1; y >= 0; y--)
         for (x = 0; x < SCREEN_W; x++) {
             u32 c = e->fb[y * SCREEN_W + x];
-            u8 px[3] = { (u8)c, (u8)(c >> 8), (u8)(c >> 16) };
+            u8 px[3];
+            px[0] = (u8)c;
+            px[1] = (u8)(c >> 8);
+            px[2] = (u8)(c >> 16);
             fwrite(px, 1, 3, fp);
         }
     fclose(fp);

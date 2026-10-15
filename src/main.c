@@ -186,7 +186,10 @@ int main(int argc, char **argv)
         if (dir) {
             /* XF_MEDIA_DIR adds a folder of clips, for installs that
              * keep them apart (the DVD build streams them from the disc). */
-            const char *media[3] = { dir, getenv("XF_MEDIA_DIR"), NULL };
+            const char *media[3];
+            media[0] = dir;
+            media[1] = getenv("XF_MEDIA_DIR");
+            media[2] = NULL;
             r = xf_explore(dir, media, 0, 1, NULL);
         } else {
             if (argc == 1)

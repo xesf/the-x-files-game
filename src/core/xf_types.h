@@ -22,4 +22,19 @@ typedef int64_t i64;
 #define XF_FOURCC(a, b, c, d) ((u32)(a) << 24 | (u32)(b) << 16 | (u32)(c) << 8 | (u32)(d))
 #define XF_CLAMP(v, lo, hi) ((v) < (lo) ? (lo) : (v) > (hi) ? (hi) : (v))
 
+/* Open Watcom (DOS and Windows 9x builds) lacks a few POSIX and C99
+ * library names; map them to the ones it has. Files are under 2 GB. */
+#ifdef __WATCOMC__
+#include <math.h>
+#include <string.h>
+#define strcasecmp stricmp
+#define strncasecmp strnicmp
+#define fseeko fseek
+#define ftello ftell
+#define sqrtf(x) ((float)sqrt(x))
+#define floorf(x) ((float)floor(x))
+#define ceilf(x) ((float)ceil(x))
+#define fabsf(x) ((float)fabs(x))
+#endif
+
 #endif
