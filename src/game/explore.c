@@ -588,6 +588,8 @@ static void draw_ifaces(explorer *e)
                     const char *nl = strchr(line, '\n');
                     size_t len = nl ? (size_t)(nl - line) : strlen(line);
                     w = xf_text_width(f, px, line, len);
+                    while (len && w > r->right - r->left) /* cut at the item's edge */
+                        w = xf_text_width(f, px, line, --len);
                     x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
                     xf_text_draw(&sf, f, px, x, y, line, len, l->color == 'b' ? 0xFFFFFF : 0x000000);
                     y += lh;

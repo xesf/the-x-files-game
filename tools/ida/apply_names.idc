@@ -431,5 +431,12 @@ static main()
     set_name(0x4B2370, "photo_init", SN_NOWARN);
     set_name(0x4654A0, "media_search", SN_NOWARN);
     set_name(0x4A3E90, "media_keyword_match", SN_NOWARN);
+    set_name(0x474E20, "email_send", SN_NOWARN);
+    set_name(0x465780, "email_replies_media", SN_NOWARN);
+    set_name(0x5149B0, "email_replies_ing", SN_NOWARN);
+    set_name(0x4D0660, "email_replies_notes", SN_NOWARN);
+    set_name(0x484040, "email_queue_reply", SN_NOWARN);
+    set_name(0x44A4E0, "display_addrs", SN_NOWARN);
+    set_name(0x44AA20, "display_addrs_rows", SN_NOWARN);
     msg("names applied\n");
 }

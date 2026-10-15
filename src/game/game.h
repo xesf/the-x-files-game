@@ -149,6 +149,15 @@ typedef struct {
     char ing[64];         /* text typed in the ING search field */
     char media_query[64]; /* text typed in the Media Index field */
     u32 media_article;    /* the article the Media Index shows, or 0 */
+    int ing_record;       /* the ING record shown */
+    /* Writing mail: a bit per person (see game.c) on each line */
+    u32 mail_to, mail_cc, mail_pick;
+    int mail_scroll, mail_scroll_to, mail_scroll_cc;
+    char mail_picking;    /* 'T' or 'C': the picker open */
+    char forward_type;    /* ForwardObject: 'M' article, 'I' ING record, 'N' notes page */
+    u32 forward_id;
+    u32 pending_mail[64]; /* replies on the way (EmailFlushMess delivers) */
+    int pending_mail_count;
     char login[2][32];    /* computer login: name and password */
     xf_strings strings;   /* xfilest.dll: the game's text */
     game_item_label labels[GAME_MAX_LABELS];
@@ -205,6 +214,7 @@ typedef struct {
     u32 pda_notes[GAME_MAX_NOTES]; /* EnablePDANote: notes in the PDA */
     int pda_note_count;
     int note_page;        /* the PDA's notes page shown (0x6B6550) */
+    int note_page_order;  /* that page's place in the page table */
     int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;

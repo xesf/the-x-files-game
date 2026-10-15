@@ -430,3 +430,10 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4B2370 photo_init  PhotoInit: counts downloaded and new photos (class 0x59), sets the Download and Delete buttons, draws the thumbnails
 0x4654A0 media_search  MediaSearch: the typed words against the keywords of 16 items (0x65D148); the article into the text box
 0x4A3E90 media_keyword_match  whether a keyword item has a keyword equal to the typed words
+0x474E20 email_send  EmailSend: To and Cc people (table 0x6584D0) get the forward; replies by enclosure: 'I' 0x5149B0, 'M' 0x465780, 'N' 0x4D0660
+0x465780 email_replies_media  replies to a forwarded article (table 0x65D188)
+0x5149B0 email_replies_ing  replies to a forwarded ING record (table 0x65E650)
+0x4D0660 email_replies_notes  replies to a forwarded notes page (table 0x658F88); Cook's special case with variable 1980
+0x484040 email_queue_reply  a reply waits until EmailFlushMess
+0x44A4E0 display_addrs  DisplayAddrs: the To/Cc lines, the pickers, the PDA list, the enclosure line
+0x44AA20 display_addrs_rows  draws a list of people into its rows, with check marks

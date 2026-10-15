@@ -1,0 +1,33 @@
+# Forwarding a Media Index article (guide Part 2): each of the nine people
+# Willmore can mail has a reply, which arrives when he leaves the place.
+include disc2.txt
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+walk 1237
+click 29855                     # the computer
+click 31624
+click 50747
+type Craig Willmore
+click 50748
+type shiloh
+click 39474                     # connect
+click 36304                     # MEDIA
+click 50746
+type Tarakan
+click 55038                     # Search
+wait 4000
+expect enabled 55036 1          # Forward: an article was found
+click 50746
+click 55036                     # Forward: the compose screen with the article
+click 40474                     # the To line: the picker
+click 40424                     # Mark Cook
+click 40464                     # done: Cook is on the To line
+click 40502                     # Send
+wait 3000
+click 31560                     # close the in-box Send went to
+inv 17451
+click 58726
+click 59133                     # off to the Crime Lab: the replies arrive
+wait 3000
+expect mail 61259               # Cook on the Tarakan article

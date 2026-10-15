@@ -19,6 +19,8 @@ static void set_item_text(game *g, u32 item, const char *text);
 static int photo_function(game *g, const char *name, int argc, const vc_operand *args);
 static void note_text(game *g, u32 asset, char *out, size_t size);
 static void media_search(game *g);
+static const u32 g_note_pages[23];
+static int item_media(game *g, u32 item, u32 *out, int max);
 static void run_trigger_list_pair(game *g, i32 trigger, i32 list);
 static void update_evidence(game *g);
 static u32 first_enabled(game *g, u32 list);
@@ -2259,6 +2261,7 @@ static void notes_show(game *g, int step)
     if (!open)
         open = 1;
     g->note_page = XF_CLAMP(g->note_page + step, 0, open - 1);
+    g->note_page_order = order[g->note_page];
     memset(&g->scroll, 0, sizeof(g->scroll));
     g->scroll.item = 51444;
     g->scroll.color = 'k';
@@ -2538,6 +2541,258 @@ void game_answer(game *g, int yes)
     }
 }
 
+/* --- Writing mail -------------------------------------------------------- */
+
+/* 0x6584D0: the nine people Willmore can mail, in the order of the reply
+ * lists: Amis, Cook, Shanks, Skinner, Jim Seitz, Mike Robinson, Barbara
+ * Willmore, Pam Hill, Perry Allen. */
+#define MAIL_PEOPLE 9
+static const u32 g_mail_people[MAIL_PEOPLE] = { 45284, 45290, 45298, 45300, 64037, 45296, 45304, 45294, 45282 };
+/* 0x6B6490 and on: the rows of each list (DisplayAddrs). */
+static const u32 g_rows_to[3] = { 40430, 40431, 40432 }, g_rows_cc[3] = { 40433, 40434, 40435 };
+static const u32 g_rows_pick_to[5] = { 40423, 40424, 40425, 40426, 40427 };
+static const u32 g_checks_to[5] = { 40416, 40417, 40418, 40419, 40420 };
+static const u32 g_rows_pick_cc[5] = { 40453, 40454, 40455, 40456, 40457 };
+static const u32 g_checks_cc[5] = { 40448, 40449, 40450, 40451, 40452 };
+static const u32 g_rows_pda[9] = { 65031, 65030, 65029, 37215, 37216, 37217, 37218, 37219, 37220 };
+/* 0x65D188: forwarded article -> the item whose media are the replies */
+static const u32 g_media_replies[10][2] = {
+    { 55585, 63706 }, { 55592, 63708 }, { 55587, 63710 }, { 55586, 63712 }, { 55590, 63714 },
+    { 55588, 63716 }, { 55589, 63718 }, { 55591, 63720 }, { 55584, 63722 }, { 55583, 63724 },
+};
+/* 0x65E650: ING record (our record number) -> replies */
+static const u32 g_ing_replies[18] = {
+    63666, 63668, 63674, 63678, 63684, 63686, 63688, 63690, 63692,
+    63694, 63696, 63698, 63700, 63702, 63704, 64583, 64582, 64584,
+};
+/* 0x658F88: notes page (in g_note_pages order) -> replies; page 22 none */
+static const u32 g_note_replies[22] = {
+    63620, 63664, 63628, 63636, 63658, 63638, 63634, 63656, 63622, 63632, 63614,
+    63660, 63618, 63626, 63646, 63642, 63654, 63598, 63620, 63648, 63650, 63644,
+};
+
+/* The people the address book lists: the enabled ones. */
+static int mail_people(game *g, int *idx)
+{
+    int i, n = 0;
+    for (i = 0; i < MAIL_PEOPLE; i++)
+        if (vc_is_enabled(&g->interp, g_mail_people[i]))
+            idx[n++] = i;
+    return n;
+}
+
+static void compose_clear(game *g)
+{
+    g->mail_to = g->mail_cc = g->mail_pick = 0;
+    g->mail_scroll = 0;
+    g->forward_type = 0;
+    g->forward_id = 0;
+}
+
+/* Rows show the people of a set (a bit per person), from the first shown. */
+static void show_people(game *g, const u32 *rows, int nrows, u32 set, int first)
+{
+    int i, k = 0, r = 0;
+    char t[128];
+    for (i = 0; i < MAIL_PEOPLE && r < nrows; i++)
+        if (set & (1u << i)) {
+            if (k++ < first)
+                continue;
+            set_item_text(g, rows[r++], game_text(g, g_mail_people[i], t, sizeof(t)));
+        }
+    while (r < nrows)
+        set_item_text(g, rows[r++], "");
+}
+
+/* A picker: five people from the scroll position, checked when picked. */
+static void show_picker(game *g, int cc)
+{
+    int idx[MAIL_PEOPLE], n = mail_people(g, idx), r;
+    char t[128];
+    for (r = 0; r < 5; r++) {
+        int k = g->mail_scroll + r;
+        set_item_text(g, (cc ? g_rows_pick_cc : g_rows_pick_to)[r],
+                      k < n ? game_text(g, g_mail_people[idx[k]], t, sizeof(t)) : "");
+        vc_set_enabled(&g->interp, (cc ? g_checks_cc : g_checks_to)[r], k < n && (g->mail_pick & (1u << idx[k])));
+    }
+    g->iface_serial++;
+}
+
+/* What a forward encloses: the enclosure line (40436), the subject
+ * (40437) and the text in the message box (40438). */
+static void compose_show_enclosure(game *g)
+{
+    char title[160] = "", *nl;
+    memset(&g->scroll, 0, sizeof(g->scroll));
+    g->scroll.item = 40438;
+    g->scroll.color = 'k';
+    g->scroll.font = 'c';
+    g->scroll.size = 10;
+    if (g->forward_type == 'M' && g->forward_id) {
+        note_text(g, g->forward_id, g->scroll.text, sizeof(g->scroll.text));
+    } else if (g->forward_type == 'I' && g->forward_id < 18) {
+        u32 media[16];
+        char line[160];
+        int n = item_media(g, g_ing_names[g->forward_id].record, media, 16), k;
+        size_t used = 0;
+        for (k = 0; k < n; k++)
+            used += (size_t)snprintf(g->scroll.text + used, sizeof(g->scroll.text) - used, "%s\n",
+                                     game_text(g, media[k], line, sizeof(line)));
+    }
+    snprintf(title, sizeof(title), "%s", g->scroll.text);
+    if ((nl = strchr(title, '\n')))
+        *nl = '\0';
+    set_item_text(g, 40436, title);
+    set_item_text(g, 40437, title);
+}
+
+/* The replies a forward brings: the item whose media hold one reply per
+ * person (0 for none). */
+static u32 forward_replies(game *g)
+{
+    size_t i;
+    if (g->forward_type == 'M') { /* 0x465780 */
+        for (i = 0; i < XF_COUNT(g_media_replies); i++)
+            if (g_media_replies[i][0] == g->forward_id)
+                return g_media_replies[i][1];
+    } else if (g->forward_type == 'I') { /* 0x5149B0 */
+        return g->forward_id < 18 ? g_ing_replies[g->forward_id] : 0;
+    } else if (g->forward_type == 'N') { /* 0x4D0660 */
+        for (i = 0; i < XF_COUNT(g_note_replies); i++)
+            if (g_note_pages[i] == g->forward_id)
+                return g_note_replies[i];
+    }
+    return 0;
+}
+
+/* 0x466A80 fn_EmailSend -> 0x474E20: everyone on the To and Cc lines (once
+ * each) whose reply list has an entry gets the forward; their replies wait
+ * (0x484040) until EmailFlushMess delivers them. Forwarding the second
+ * notes page to Cook (replies 63664) is special: with variable 1980 set he
+ * does not answer, otherwise lists 44085/44089 run. */
+static void email_send(game *g)
+{
+    u32 replies = forward_replies(g), to = g->mail_to | g->mail_cc, ids[16];
+    int n = 0, i;
+    if (replies) {
+        vc_iface_item it;
+        if (vc_read_iface_item(&g->db, replies, &it) == 0)
+            n = vc_read_list(&g->db, it.assets, ids, 16);
+    }
+    for (i = 0; i < MAIL_PEOPLE && i < n; i++) {
+        if (!(to & (1u << i)) || !ids[i])
+            continue;
+        if (replies == 63664 && i == 1) {
+            if (vc_get_var(&g->interp, 1980) == 1)
+                continue;
+            run_trigger_list_pair(g, 44085, 44089);
+        }
+        if (g->pending_mail_count < (int)XF_COUNT(g->pending_mail))
+            g->pending_mail[g->pending_mail_count++] = ids[i];
+    }
+    xf_info("mail sent (%c), %d replies on the way", g->forward_type ? g->forward_type : '-', g->pending_mail_count);
+    compose_clear(g);
+}
+
+static void email_deliver(game *g, u32 asset)
+{
+    if (email_find(g, asset) >= 0 || g->email_count >= GAME_MAX_EMAILS)
+        return;
+    g->emails[g->email_count].asset = asset;
+    g->emails[g->email_count++].read = 0;
+    xf_info("e-mail %u arrives", asset);
+}
+
+static int compose_function(game *g, const char *name, int argc, const vc_operand *args)
+{
+    char mode = argc >= 1 ? (char)arg_value(g, &args[0]) : 0;
+    /* 0x42A580 fn_ForwardObject(type) -> 0x42A2C0: what the mail encloses */
+    if (strcmp(name, "ForwardObject") == 0 && argc == 1) {
+        g->forward_type = mode;
+        if (mode == 'M')
+            g->forward_id = g->media_article;
+        else if (mode == 'I')
+            g->forward_id = (u32)g->ing_record;
+        else if (mode == 'N')
+            g->forward_id = g_note_pages[g->note_page_order];
+        compose_show_enclosure(g);
+        return 1;
+    }
+    if (strcmp(name, "EmailSend") == 0) {
+        email_send(g);
+        return 1;
+    }
+    /* 0x443B90 fn_EmailFlushMess -> 0x484110: the replies arrive */
+    if (strcmp(name, "EmailFlushMess") == 0) {
+        int i;
+        for (i = 0; i < g->pending_mail_count; i++)
+            email_deliver(g, g->pending_mail[i]);
+        g->pending_mail_count = 0;
+        return 1;
+    }
+    /* 0x42A320 fn_DisplayAddrs(list) -> 0x44A4E0 */
+    if (strcmp(name, "DisplayAddrs") == 0 && argc == 1) {
+        if (mode == 'A')
+            show_people(g, g_rows_to, 3, g->mail_to, g->mail_scroll_to);
+        else if (mode == 'B')
+            show_people(g, g_rows_cc, 3, g->mail_cc, g->mail_scroll_cc);
+        else if (mode == 'T' || mode == 'C') {
+            g->mail_pick = mode == 'T' ? g->mail_to : g->mail_cc;
+            g->mail_picking = mode;
+            g->mail_scroll = 0;
+            show_picker(g, mode == 'C');
+        } else if (mode == 'P') { /* the PDA's list of all nine */
+            int idx[MAIL_PEOPLE], k = mail_people(g, idx), r;
+            char t[128];
+            for (r = 0; r < 9; r++)
+                set_item_text(g, g_rows_pda[r], r < k ? game_text(g, g_mail_people[idx[r]], t, sizeof(t)) : "");
+        }
+        return 1;
+    }
+    /* 0x42F830 fn_AddrSelected(row): picks or unpicks */
+    if (strcmp(name, "AddrSelected") == 0 && argc == 1) {
+        int idx[MAIL_PEOPLE], n = mail_people(g, idx), k = g->mail_scroll + arg_value(g, &args[0]);
+        if (k >= 0 && k < n)
+            g->mail_pick ^= 1u << idx[k];
+        show_picker(g, g->mail_picking == 'C');
+        return 1;
+    }
+    /* 0x4B5700 fn_AddrSelPDA(row): the PDA mails the notes to one person */
+    if (strcmp(name, "AddrSelPDA") == 0 && argc == 1) {
+        int idx[MAIL_PEOPLE], n = mail_people(g, idx), k = arg_value(g, &args[0]);
+        char t[128];
+        g->mail_to = k >= 0 && k < n ? 1u << idx[k] : 0;
+        g->mail_cc = 0;
+        set_item_text(g, 40516, k >= 0 && k < n ? game_text(g, g_mail_people[idx[k]], t, sizeof(t)) : "");
+        return 1;
+    }
+    /* 0x4701C0 fn_CreateAddrList(list): the picker's choice becomes the
+     * To ('A') or Cc ('B') line */
+    if (strcmp(name, "CreateAddrList") == 0 && argc == 1) {
+        if (mode == 'A')
+            g->mail_to = g->mail_pick, g->mail_scroll_to = 0;
+        else if (mode == 'B')
+            g->mail_cc = g->mail_pick, g->mail_scroll_cc = 0;
+        return 1;
+    }
+    /* 0x4600C0 fn_ScrollAddrs(list, down) */
+    if (strcmp(name, "ScrollAddrs") == 0 && argc == 2) {
+        int d = arg_value(g, &args[1]) ? 1 : -1, idx[MAIL_PEOPLE], n = mail_people(g, idx);
+        if (mode == 'T' || mode == 'C') {
+            g->mail_scroll = XF_CLAMP(g->mail_scroll + d, 0, n > 5 ? n - 5 : 0);
+            show_picker(g, mode == 'C');
+        } else if (mode == 'A') {
+            g->mail_scroll_to = XF_MAX(g->mail_scroll_to + d, 0);
+            show_people(g, g_rows_to, 3, g->mail_to, g->mail_scroll_to);
+        } else if (mode == 'B') {
+            g->mail_scroll_cc = XF_MAX(g->mail_scroll_cc + d, 0);
+            show_people(g, g_rows_cc, 3, g->mail_cc, g->mail_scroll_cc);
+        }
+        return 1;
+    }
+    return 0;
+}
+
 static int email_function(game *g, const char *name, int argc, const vc_operand *args)
 {
     int i;
@@ -2552,6 +2807,8 @@ static int email_function(game *g, const char *name, int argc, const vc_operand 
     }
     if (strcmp(name, "EmailInit") == 0 && argc == 1) {
         g->email_mode = (char)arg_value(g, &args[0]);
+        if (g->trigger_item == 49328) /* the compose screen opens empty */
+            compose_clear(g);
         return 1;
     }
     if (strcmp(name, "DisplayInBox") == 0 && argc == 1) {
@@ -2593,7 +2850,7 @@ static int email_function(game *g, const char *name, int argc, const vc_operand 
     }
     /* Flushing pending mails and preloading the icons only change what
      * is drawn. */
-    if (strcmp(name, "EmailFlushMess") == 0 || strcmp(name, "PreloadEmIcon") == 0)
+    if (strcmp(name, "PreloadEmIcon") == 0)
         return 1;
     /* IsIItemHeld(item, var): whether the mouse is held on an item (the
      * scroll arrows repeat while it is). */
@@ -2627,6 +2884,7 @@ static void ing_show_record(game *g, int i)
         vc_set_enabled(&g->interp, g_ing_names[k].prints, k == i);
     }
     g->ing_notes = g_ing_names[i].notes ? g_ing_names[i].notes : 38133;
+    g->ing_record = i; /* what Forward encloses */
     n = item_media(g, g_ing_names[i].record, media, 16);
     for (k = 0; k < 8; k++) {
         set_item_text(g, g_ing_fields[k], k < n ? game_text(g, media[k], text, sizeof(text)) : "");
@@ -3198,6 +3456,8 @@ static int host_call_function(void *user, const vc_action *a)
             vc_set_var(&g->interp, args[0].value, lo + (i32)(g->rand_seed % span));
         return 1;
     }
+    if (compose_function(g, name, argc, args))
+        return 1;
     if (email_function(g, name, argc, args))
         return 1;
     if (strcmp(name, "INGDisplayCook") == 0) {

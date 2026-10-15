@@ -213,6 +213,7 @@ int game_save_mem(game *g, const char *name, u8 **out, size_t *size)
     w_u32s(&w, "NOTE", g->pda_notes, g->pda_note_count);
     w_u32s(&w, "KITI", g->kit_icons, g->kit_count);
     w_u32s(&w, "EVID", g->evidence, g->evidence_count);
+    w_u32s(&w, "PEND", g->pending_mail, g->pending_mail_count);
     {
         /* Filled one by one: C89 compilers (Watcom) want constant
          * initializers. */
@@ -430,6 +431,8 @@ int game_load_mem(game *g, const u8 *data, size_t size)
             g->pda_note_count = r_u32s(&c, g->pda_notes, GAME_MAX_NOTES);
         } else if (memcmp(tag, "KITI", 4) == 0) {
             g->kit_count = r_u32s(&c, g->kit_icons, GAME_MAX_EVIDENCE);
+        } else if (memcmp(tag, "PEND", 4) == 0) {
+            g->pending_mail_count = r_u32s(&c, g->pending_mail, (int)XF_COUNT(g->pending_mail));
         } else if (memcmp(tag, "EVID", 4) == 0) {
             g->evidence_count = r_u32s(&c, g->evidence, GAME_MAX_EVIDENCE);
         } else if (memcmp(tag, "MISC", 4) == 0) {
