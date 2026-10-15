@@ -285,6 +285,19 @@ clips each:
 4. The clip of a goon who is shot calls `SmolGoonShot1` when it starts,
    which clears the area, and `DoSmolShootout` when it ends.
 
+Two fights in Alaska each have two NSA agents, and the engine counts who
+is still standing:
+
+- On Rauch's porch, the "gunfight" action icon (24616) starts the fight.
+  Rectangles 101 and 103 are one agent (shot 1), 102 and 104 the other
+  (shot 2). The counter is 0x4F5720. Each hit starts the view again until
+  both agents are down. Then the engine puts `'a'` in RegViewState and
+  goes to the porch (view 8138, through 0x4F3C60). The view's leave
+  triggers read the `'a'`, and the NSA car takes Willmore to the secret
+  base.
+- In the woods, shots 4 and 5 are the two agents (counter 0x4F5A80).
+  With both down, clip Sc114L (38448) plays.
+
 Play scripts use `shoot [id]`: a shot at that rectangle of the view's
 clip, or at the clip's first rectangle.
 
