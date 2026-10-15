@@ -208,7 +208,9 @@ int vc_parse_media(const u8 *data, size_t size, vc_asset_ref *a)
             break;
         a->entry_count++;
     }
-    return a->entry_count > 0 ? 0 : -1;
+    /* Some references name a clip that no disc has (sc122C.mov): their
+     * triggers still run. */
+    return 0;
 }
 
 int vc_read_asset_ref(const xf_neo_db *db, u32 id, vc_asset_ref *a)
