@@ -102,6 +102,23 @@ the cursor is the item's cursor picture. Everywhere else, the dialogue
 box included, the cursor is 25541, the spinning blue X
 (`Graphics/cursors/Blue X Icon Picts/BlueX.pff`, 12 frames).
 
+## Character lines
+
+A `VCCharView` has its own media list: what the character says when
+clicked, before the questions, such as a clerk's "Can I help you?" or
+Wong's "You're back.". The first enabled entry plays. Its start
+triggers can change the scene: Skinner's "That sedan has been
+following us..." at the warehouse shows the car.
+
+## Camera
+
+Clicking the camera in the inventory runs `OnCameraClick` and, where
+the scene allows it, `TakePhoto(media)` (0x4BCCC0). `Camera_take_photo`
+(0x4D8FE0) makes a 300×240 `VCPhoto` of the media and keeps it in the
+camera; the camera holds 24 photos. The computer downloads them later.
+`SelectInv(item)` puts an item in hand without running its click list:
+the photo clip uses it to give the camera back.
+
 ## Darkness and the flashlight
 
 Some places are dark: the warehouse mezzanine by day, and the
@@ -113,7 +130,7 @@ warehouse at night.
 | `SetFLightProps(mode, place, 'M')` | 0x44B4C0 | Mode 1 by day, 2 in the dark; place `'I'` inside, `'O'` outside |
 | `SetLBoxTint(r, g, b)` | 0x4BC410 | Tints the letterbox around the picture, for example (20, 20, 50) at night |
 | `ClearLBoxTint()` | 0x4B5AA0 | Black letterbox again |
-| `SelectInv(item)` | 0x4BC230 | Puts an inventory item in hand, as a click on it does |
+
 
 ## Computer
 

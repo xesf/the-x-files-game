@@ -653,6 +653,38 @@ static u32 inventory_triggers(game *g, u32 id)
     return xf_neo_u32(&r);
 }
 
+/* The value that stands for an inventory item: the argument of the
+ * On...Click call (OnInvClick, OnCameraClick, ...) in its click list. */
+static i32 arg_value(game *g, const vc_operand *o);
+
+static i32 inventory_value(game *g, u32 id)
+{
+    u32 trigs[16], acts[64];
+    int n = vc_read_list(&g->db, inventory_triggers(g, id), trigs, 16), i, j, m;
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        u32 list;
+        if (xf_neo_object(&g->db, trigs[i], &r, NULL, NULL) != 0)
+            continue;
+        list = xf_neo_u32(&r);
+        if (xf_neo_u8(&r) != 0)
+            continue;
+        m = vc_read_list(&g->db, list, acts, 64);
+        for (j = 0; j < m; j++) {
+            vc_action a;
+            const char *f;
+            size_t len;
+            if (vc_read_action(&g->db, acts[j], &a) != 0 || a.type != VC_ACT_FUNCTION || a.u.function.argc != 1)
+                continue;
+            f = a.u.function.name;
+            len = strlen(f);
+            if (strncmp(f, "On", 2) == 0 && len > 7 && strcmp(f + len - 5, "Click") == 0)
+                return arg_value(g, &a.u.function.args[0]);
+        }
+    }
+    return 0;
+}
+
 int game_click_inventory(game *g, u32 id)
 {
     u32 triggers = inventory_triggers(g, id);
@@ -829,7 +861,16 @@ static void click_spot(game *g, const game_spot *s)
     else if (s->kind == SPOT_CHARACTER && hand_empty(g) && !game_media_pending(g)) {
         /* Empty hand: talk. Items in hand run the character's triggers. */
         u32 ids[GAME_MAX_CHOICES];
+        vc_char_view cv;
         g->talking = s->id;
+        /* The character's own media list holds what they say first, such
+         * as a clerk's "Can I help you?"; the first enabled entry plays
+         * before the questions. */
+        if (vc_read_char_view(&g->db, s->id, &cv) == 0 && cv.assets) {
+            u32 greet = first_enabled(g, cv.assets);
+            if (greet)
+                game_queue_media(g, greet);
+        }
         xf_info("talk to %u: %d questions", s->id, game_choices(g, ids, GAME_MAX_CHOICES));
     }
     if (target) {
@@ -1137,12 +1178,25 @@ static int host_call_function(void *user, const vc_action *a)
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
         return 1;
     }
-    /* 0x4BC230 fn_SelectInv(inventory object): puts the item in hand,
-     * as a click on it in the inventory bar does. */
+    /* 0x4BCCC0 fn_TakePhoto(media): 0x4D8FE0 Camera_take_photo keeps
+     * the picture in the camera, up to 24, for the computer to download. */
+    if (strcmp(name, "TakePhoto") == 0 && argc == 1) {
+        if (g->photo_count < GAME_MAX_PHOTOS)
+            g->photos[g->photo_count++] = (u32)arg_value(g, &args[0]);
+        return 1;
+    }
+    /* 0x4B7460 fn_OnCameraClick(item): takes the camera in hand */
+    if (strcmp(name, "OnCameraClick") == 0 && argc == 1) {
+        set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
+        return 1;
+    }
+    /* 0x4BC230 fn_SelectInv(inventory object): puts the item in hand.
+     * The item's value is the argument of the On...Click call in its
+     * click list (OnInvClick, OnCameraClick, OnFLightClick). */
     if (strcmp(name, "SelectInv") == 0 && argc == 1) {
-        u32 triggers = inventory_triggers(g, (u32)arg_value(g, &args[0]));
-        if (triggers)
-            vc_run_triggers(&g->interp, triggers, 0);
+        i32 v = inventory_value(g, (u32)arg_value(g, &args[0]));
+        if (v)
+            set_reg_var(g, "RegCurrInvVar", 0, v);
         return 1;
     }
     /* 0x4B7530 fn_OnFLightClick(item): takes the flashlight in hand,

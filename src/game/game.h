@@ -80,6 +80,7 @@ typedef struct {
 } game_item_label;
 
 #define GAME_MAX_LABELS 64
+#define GAME_MAX_PHOTOS 24
 
 typedef struct {
     xf_neo_db db, gam;
@@ -124,6 +125,8 @@ typedef struct {
     int label_count;
     u32 trigger_item;     /* layout item whose triggers are running */
     u32 focus_item;       /* layout item that receives key presses */
+    u32 photos[GAME_MAX_PHOTOS]; /* TakePhoto: media of each photo */
+    int photo_count;
     u32 view_asset;       /* the view's clip, whose triggers ran on entry */
     u8 lbox_tint[3];      /* SetLBoxTint colour */
     int lbox_tinted;

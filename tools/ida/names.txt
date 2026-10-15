@@ -365,6 +365,8 @@
 0x483A30 VideoText_start       location card text: Courier New 12 pt, lower left of the clip, 50 ms per character
 0x4D9890 Conversation_play     plays the question and the answer (or the repeat answer)
 0x4ED930 Conversation_ask      records a question in the conversation history and starts it
+0x4D8FE0 Camera_take_photo     makes a 300x240 VCPhoto from a media reference and stores it in the camera
+0x4D2C20 Camera_photo_count    photos in the camera; TakePhoto does nothing at 24
 0x5151A0 ING_search_phone      ING phone search in g_ing_phones
 0x51FCD0 Phone_lookup          looks the dialled number up in g_phone_book
 0x53C520 Font_select           font by number: 2 Times New Roman, 3 Arial, 4 Courier New

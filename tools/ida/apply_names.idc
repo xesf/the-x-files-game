@@ -365,6 +365,8 @@ static main()
     set_name(0x483A30, "VideoText_start", SN_NOWARN);
     set_name(0x4D9890, "Conversation_play", SN_NOWARN);
     set_name(0x4ED930, "Conversation_ask", SN_NOWARN);
+    set_name(0x4D8FE0, "Camera_take_photo", SN_NOWARN);
+    set_name(0x4D2C20, "Camera_photo_count", SN_NOWARN);
     set_name(0x5151A0, "ING_search_phone", SN_NOWARN);
     set_name(0x51FCD0, "Phone_lookup", SN_NOWARN);
     set_name(0x53C520, "Font_select", SN_NOWARN);
