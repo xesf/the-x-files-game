@@ -26,6 +26,10 @@ and Steam Machine), Windows, Windows 9x, DOS and the PlayStation Vita.
 3. Start the program. The macOS app is not signed: the first time, open
    it with Control-click > Open.
 
+On wide screens, Ctrl+Shift+W lets the scene fill the screen, with the
+interface around it (the default on the Vita). See
+[docs/engine/screen.md](docs/engine/screen.md).
+
 The DOS, Windows 9x and Vita builds are new and have only been tried in
 DOSBox-X, Wine and the VitaSDK build.
 

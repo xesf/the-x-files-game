@@ -169,7 +169,9 @@ XF_HEADLESS=1 build/xfiles --explore <game> 0 1 --media <cd> --script shots.txt
 | `shot <file.bmp>` | Saves the screen |
 
 For example, `new`, `clips on`, `play 2500`, `shot card.bmp` captures the
-location card of a new game.
+location card of a new game. With `XF_SCREEN=wide` and
+`XF_OUTPUT=<w>x<h>`, the shots show the wide layout at that size (see
+[engine/screen.md](engine/screen.md)).
 
 The run stops at the first failing step and prints the state there. At
 the end it lists the engine functions the story called that are not

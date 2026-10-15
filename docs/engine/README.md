@@ -12,3 +12,4 @@ shipped game and its data. File layouts are in [../formats](../formats).
 | [game-state.md](game-state.md) | Variables and enabled states in `XFILES.GAM` |
 | [runtime.md](runtime.md) | Start-up, main loop and the event system |
 | [game-ui.md](game-ui.md) | The location card, the dialogue box, emotion and action icons, the inventory |
+| [screen.md](screen.md) | The original and wide screen layouts, and how the pointer maps back |
