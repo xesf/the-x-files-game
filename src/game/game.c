@@ -2089,6 +2089,17 @@ static int host_call_function(void *user, const vc_action *a)
         set_reg_var(g, "RegCurrInvVar", 0, arg_value(g, &args[0]));
         return 1;
     }
+    /* 0x467710 OnIntInvClick(tool): a tool such as the PDA or the phone
+     * opens with an empty hand (sub_4CB190(0) drops the item). */
+    if (strcmp(name, "OnIntInvClick") == 0 && argc == 1) {
+        set_reg_var(g, "RegCurrInvVar", 0, game_reg_value(g, "RegCurrInvVar", 1));
+        return 1;
+    }
+    /* 0x469030 INGDestroy: frees the ING search state. */
+    if (strcmp(name, "INGDestroy") == 0 && argc == 0) {
+        g->ing[0] = '\0';
+        return 1;
+    }
     /* SetIsNode2Done .. SetIsNode6Done (0x4BC370 ..): the engine decides
      * whether a part of the story is finished, from the variables that
      * RegNodeNVars registered, and sets the last one. */
