@@ -776,6 +776,13 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
     }
     if (strcmp(what, "over") == 0)
         return (g->game_over != 0) == (a != 0);
+    if (strcmp(what, "mail") == 0) {
+        int i;
+        for (i = 0; i < g->email_count; i++)
+            if (g->emails[i].asset == (u32)a)
+                return 1;
+        return 0;
+    }
     if (strcmp(what, "message") == 0)
         return g->ask == (u32)a;
     if (strcmp(what, "checkpoint") == 0)

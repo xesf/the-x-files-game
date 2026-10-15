@@ -89,8 +89,8 @@ int vc_read_hotspot(const xf_neo_db *db, u32 id, vc_hotspot *h);
 int vc_read_asset_ref(const xf_neo_db *db, u32 id, vc_asset_ref *a);
 /* Copies the first string of a VCName into `out`. */
 /* VCInterfaceItem: a region of an interface layout with its media and
- * triggers. `order` is the low byte of the last field: items with a
- * higher value are in front. */
+ * triggers. The low byte of `flags` is the drawing order: items with a
+ * lower value are in front. */
 typedef struct {
     vc_region region;
     u32 assets;   /* VCAssetRefList */

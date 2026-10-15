@@ -421,3 +421,6 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x49FDB0 evkit_rollover  RollOnEvKit: the kit's evidence popup on mouse over, closed on mouse off outside it
 0x49FCA0 evkit_click  EvKitIconClick: closes the popup and tool screens
 0x503E40 evkit_popup  opens (1, rectangle) or closes (0) the evidence popup
+0x51F960 phone_key  a keypad digit onto the number (13 at most) and the display, the key tone, the button sound
+0x51F640 phone_book  the address book: entry "NAME\nNUMBER" of item 45309's media, the name shown
+0x51FCD0 Phone_lookup  a number in the book sets the call; a 12-digit or unknown number queues 67415/67422 (ring on)

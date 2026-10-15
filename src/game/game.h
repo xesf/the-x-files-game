@@ -127,7 +127,9 @@ typedef struct {
     char card[256];       /* text of the last location card */
 
     u32 sound;            /* sound asset playing beside the clips */
-    u32 sound_serial;     /* changes when a sound starts */
+    u32 sound_serial;     /* changes when a sound starts or stops */
+    int sound_looped;     /* the sound plays looped (selector 2) */
+    u32 clip_stop_serial; /* changes when a media action stops the clip */
 
     game_timer timers[GAME_MAX_TIMERS];
     int timer_count;
@@ -142,12 +144,15 @@ typedef struct {
     int asked_count;
 
     char phone[24];       /* digits typed on the cell phone */
+    int phone_entry;      /* address book entry shown */
+    int phone_replace;    /* the next digit starts a new number */
     char ing[64];         /* text typed in the ING search field */
     char login[2][32];    /* computer login: name and password */
     xf_strings strings;   /* xfilest.dll: the game's text */
     game_item_label labels[GAME_MAX_LABELS];
     int label_count;
     u32 trigger_item;     /* layout item whose triggers are running */
+    u32 pending_kind6;    /* trigger list whose kind 6 runs next (a phone call) */
     u32 focus_item;       /* layout item that receives key presses */
     u32 kit_icons[GAME_MAX_EVIDENCE]; /* EnableKitIcon: icons in the kit */
     int kit_count;

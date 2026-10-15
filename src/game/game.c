@@ -15,6 +15,7 @@
 static void after_triggers(game *g);
 static int hand_empty(game *g);
 static u32 inventory_triggers(game *g, u32 id);
+static void set_item_text(game *g, u32 item, const char *text);
 static void update_evidence(game *g);
 static u32 first_enabled(game *g, u32 list);
 static const game_iface_item *find_item(game *g, u32 id);
@@ -397,6 +398,12 @@ static u32 binocular_view(game *g)
 
 static void after_triggers(game *g)
 {
+    if (g->pending_kind6) {
+        /* PhoneSend found the number: the send key's kind 6 places the call */
+        u32 list = g->pending_kind6;
+        g->pending_kind6 = 0;
+        vc_run_triggers(&g->interp, list, 6);
+    }
     if (g->binoc_from && hand_empty(g) && !g->pending_view) {
         /* The binoculars are put away: back from the close-up. */
         g->pending_view = g->binoc_from;
@@ -517,19 +524,43 @@ static u32 first_enabled(game *g, u32 list)
 
 /* Media actions name a media list. Sounds (paths under Sounds/) play
  * beside the clips instead of in the queue. */
+/* 0x479BA0 act_media: selector 1 plays the list's first enabled media,
+ * 2 plays it looped, 3 stops every media of the list: one playing stops
+ * (0x513270), one queued is dropped (0x516550). */
 static void host_play_media(void *user, u32 list, u8 selector)
 {
     game *g = user;
     vc_asset_ref a;
-    u32 asset = first_enabled(g, list);
-    (void)selector;
+    u32 asset;
+    if (selector == 3) {
+        u32 ids[64];
+        int n = vc_read_list(&g->db, list, ids, 64), i, k;
+        for (i = 0; i < n; i++) {
+            if (g->sound == ids[i]) {
+                g->sound = 0;
+                g->sound_serial++;
+            }
+            if (g->current.asset == ids[i]) {
+                g->current.asset = 0;
+                g->current.conversation = 0;
+                g->clip_stop_serial++;
+            }
+            for (k = g->queue_head; k != g->queue_tail; k = (k + 1) % GAME_MEDIA_QUEUE)
+                if (g->queue[k].asset == ids[i])
+                    g->queue[k].asset = 0; /* game_media_start skips it */
+        }
+        return;
+    }
+    asset = first_enabled(g, list);
     if (!asset || vc_read_asset_ref(&g->db, asset, &a) != 0) {
         xf_info("play media list #%u: nothing enabled", list);
         return;
     }
     if (strncmp(a.logical, "Sounds/", 7) == 0) {
         g->sound = asset;
+        g->sound_looped = selector == 2;
         g->sound_serial++;
+        g->played[g->played_count++ % GAME_PLAYED] = asset;
         vc_run_triggers(&g->interp, a.triggers, 8);
         return;
     }
@@ -605,8 +636,10 @@ void game_tick(game *g, u32 now_ms)
             for (k = 0; k < n; k++)
                 vc_run_timer_triggers(&g->interp, spots[k].triggers, id);
             for (k = 0; k < g->iface_count; k++)
-                for (j = 0; j < g->ifaces[k].count; j++)
+                for (j = 0; j < g->ifaces[k].count; j++) {
+                    g->trigger_item = g->ifaces[k].items[j].id;
                     vc_run_timer_triggers(&g->interp, g->ifaces[k].items[j].item.triggers, id);
+                }
         }
         if (g->current.asset) {
             vc_asset_ref a;
@@ -1500,6 +1533,64 @@ static int number_matches(const char *typed, const char *number)
 /* 0x51FCD0: looks the typed number up. On a match the trigger and the
  * action list of the call go into two variables, which the data then
  * runs with DoActionListID. */
+/* The phone's display (item 39513): the number typed, or a name. */
+static void phone_show(game *g, const char *text)
+{
+    game_item_label *l;
+    set_item_text(g, 39513, text);
+    if ((l = (game_item_label *)game_item_label_of(g, 39513))) {
+        l->font = 'P'; /* Phn.ttr */
+        l->size = 14;
+        l->align = 'c';
+    }
+}
+
+/* 0x51F960: a digit goes on the number; after a name from the address
+ * book the next digit starts a new number (flag 0x6B6BC0). */
+static void phone_key(game *g, char key)
+{
+    size_t n = strlen(g->phone);
+    if (key < '0' || key > '9')
+        return;
+    if (g->phone_replace) {
+        g->phone_replace = 0;
+        n = 0;
+    } else if (n >= 13)
+        return;
+    g->phone[n] = key;
+    g->phone[n + 1] = '\0';
+    phone_show(g, g->phone);
+}
+
+/* 0x51F640: an entry of the address book is "NAME\nNUMBER" (the name can
+ * take two lines); the display shows the name and the number is ready to
+ * send. step moves to the next (1) or previous (-1) entry. */
+static void phone_book_show(game *g, int step)
+{
+    vc_iface_item it;
+    u32 ids[32], on[32];
+    int n, k = 0, i;
+    char text[256], name[256], *nl;
+    if (vc_read_iface_item(&g->db, 45309, &it) != 0)
+        return;
+    n = vc_read_list(&g->db, it.assets, ids, 32);
+    for (i = 0; i < n; i++)
+        if (vc_is_enabled(&g->interp, ids[i]))
+            on[k++] = ids[i];
+    if (!k) {
+        g->phone[0] = '\0';
+        phone_show(g, "");
+        return;
+    }
+    g->phone_entry = ((g->phone_entry + step) % k + k) % k;
+    game_text(g, on[g->phone_entry], text, sizeof(text));
+    nl = strrchr(text, '\n');
+    snprintf(name, sizeof(name), "%.*s", nl ? (int)(nl - text) : (int)strlen(text), text);
+    snprintf(g->phone, sizeof(g->phone), "%s", nl ? nl + 1 : "");
+    g->phone_replace = 1;
+    phone_show(g, name);
+}
+
 static int phone_send(game *g, u32 trigger_var, u32 list_var)
 {
     size_t i;
@@ -3094,21 +3185,57 @@ static int host_call_function(void *user, const vc_action *a)
     }
     /* Cell phone: keys, clear, send */
     if (strcmp(name, "PhoneKeyPress") == 0 && argc >= 1) {
-        i32 key = arg_value(g, &args[0]);
-        size_t n = strlen(g->phone);
-        if (key >= '0' && key <= '9' && n + 1 < sizeof(g->phone)) {
-            g->phone[n] = (char)key;
-            g->phone[n + 1] = '\0';
+        phone_key(g, (char)arg_value(g, &args[0]));
+        return 1;
+    }
+    /* 0x4B7970 fn_PhoneButton(key, number, sound) -> 0x51F960: a keypad
+     * button. Digits go on the number (13 at most), the button sound
+     * plays. */
+    if (strcmp(name, "PhoneButton") == 0 && argc == 3) {
+        u32 sound = (u32)arg_value(g, &args[2]);
+        phone_key(g, (char)arg_value(g, &args[0]));
+        if (sound) {
+            g->sound = sound;
+            g->sound_serial++;
         }
         return 1;
     }
     if (strcmp(name, "PhoneClear") == 0) {
         g->phone[0] = '\0';
+        phone_show(g, "");
         return 1;
     }
+    /* 0x4B7EC0 fn_PhoneInit, 0x4B7D00 fn_PhoneDestroy */
+    if (strcmp(name, "PhoneInit") == 0) {
+        g->phone[0] = '\0';
+        g->phone_replace = 0;
+        phone_show(g, "");
+        return 1;
+    }
+    if (strcmp(name, "PhoneDestroy") == 0)
+        return 1;
+    /* 0x4B80D0 fn_PhoneMenuInit -> 0x51F640, 0x4B7D20 fn_PhoneFlipName(down):
+     * the address book, the enabled entries of item 45309's media. */
+    if (strcmp(name, "PhoneMenuInit") == 0) {
+        phone_book_show(g, 0);
+        return 1;
+    }
+    if (strcmp(name, "PhoneFlipName") == 0 && argc == 2) {
+        phone_book_show(g, arg_value(g, &args[0]) ? 1 : -1);
+        return 1;
+    }
+    /* 0x4B8240 fn_PhoneSend(number, trigger var, list var) -> Phone_lookup
+     * (0x51FCD0): a number in the book sets the call's trigger and list,
+     * which the send key's kind 6 triggers then run (DoActionListID). Any
+     * other number rings on and on (trigger 67415, list 67422). */
     if (strcmp(name, "PhoneSend") == 0 && argc == 3) {
-        phone_send(g, args[1].kind == VC_OPND_VARIABLE ? args[1].value : 0,
-                   args[2].kind == VC_OPND_VARIABLE ? args[2].value : 0);
+        const game_iface_item *it = find_item(g, g->trigger_item);
+        if (phone_send(g, args[1].kind == VC_OPND_VARIABLE ? args[1].value : 0,
+                       args[2].kind == VC_OPND_VARIABLE ? args[2].value : 0)) {
+            if (it)
+                g->pending_kind6 = it->item.triggers;
+        } else
+            run_trigger_list_pair(g, 67415, 67422);
         return 1;
     }
     /* 0x4B5BC0 fn_DoActionListID(trigger, list): DoActionList with IDs

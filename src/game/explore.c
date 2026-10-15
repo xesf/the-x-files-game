@@ -124,8 +124,11 @@ typedef struct {
     int have_card_font;
     xf_font hcd_font;     /* Hcd.ttr: computer screens */
     int have_hcd_font;
+    xf_font phn_font;     /* Phn.ttr: the cell phone's display */
+    int have_phn_font;
     int debug;            /* Ctrl+Shift+D: hotspot outlines and names */
     u32 paused_ms;        /* time spent in the menu and message boxes */
+    u32 clip_stop_serial;
     u32 pause_from;       /* when the pause started, 0 when running */
     /* dialogue box */
     xf_image dlg_talk, dlg_history, dlg_up, dlg_down;
@@ -500,12 +503,27 @@ static void draw_ifaces(explorer *e)
             if (!l || !l->text[0] || !vc_is_enabled(&e->g->interp, it->id))
                 continue;
             f = l->font == 'H' && e->have_hcd_font ? &e->hcd_font
+              : l->font == 'P' && e->have_phn_font ? &e->phn_font
               : l->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
             px = (float)l->size * 96.0f / 72.0f;
-            w = xf_text_width(f, px, l->text, strlen(l->text));
-            x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
-            xf_text_draw(&sf, f, px, x, r->bottom - (r->bottom - r->top - (int)px) / 2 - 3, l->text, strlen(l->text),
-                         l->color == 'b' ? 0xFFFFFF : 0x000000);
+            {
+                /* One line per newline, the block centred in the item. */
+                const char *line = l->text;
+                int lines = 1, lh = (int)(px * 1.2f), y;
+                const char *c;
+                for (c = l->text; *c; c++)
+                    lines += *c == '\n';
+                y = r->bottom - (r->bottom - r->top - (int)px) / 2 - 3 - (lines - 1) * lh / 2;
+                while (line) {
+                    const char *nl = strchr(line, '\n');
+                    size_t len = nl ? (size_t)(nl - line) : strlen(line);
+                    w = xf_text_width(f, px, line, len);
+                    x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
+                    xf_text_draw(&sf, f, px, x, y, line, len, l->color == 'b' ? 0xFFFFFF : 0x000000);
+                    y += lh;
+                    line = nl ? nl + 1 : NULL;
+                }
+            }
         }
     draw_scroll_box(e);
     /* Typed text in text fields, with a caret in the one that has focus. */
@@ -591,7 +609,7 @@ static void update_sound(explorer *e)
                 if (resolve_media(e, a.entries[j].path, e->sound_path, sizeof(e->sound_path)) == 0 &&
                     xf_player_open(&e->sound, e->sound_path, now) == 0)
                     e->sound_open = 1;
-            e->sound_loop = strstr(a.logical, "/Loops/") != NULL;
+            e->sound_loop = strstr(a.logical, "/Loops/") != NULL || e->g->sound_looped;
             xf_info("sound %s%s", a.logical, e->sound_open ? "" : ": no file on disk");
         }
     }
@@ -1801,6 +1819,12 @@ static void run_frame(explorer *e)
     if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
         (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
         finish_media(e);
+    if (e->clip_stop_serial != e->g->clip_stop_serial) {
+        /* a media action with selector 3 stopped the clip: no end triggers */
+        e->clip_stop_serial = e->g->clip_stop_serial;
+        if (e->playing)
+            stop_media(e);
+    }
     start_next_media(e);
     update_sound(e);
     update_overlay(e);
@@ -1934,6 +1958,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         e->have_font = xf_font_load(&e->font, path) == 0;
     if (xf_path_resolve(data_dir, "HCD.TTR", path, sizeof(path)) == 0)
         e->have_hcd_font = xf_font_load(&e->hcd_font, path) == 0;
+    if (xf_path_resolve(data_dir, "PHN.TTR", path, sizeof(path)) == 0)
+        e->have_phn_font = xf_font_load(&e->phn_font, path) == 0;
     if (plat_font_path("Courier New", path, sizeof(path)) == 0)
         e->have_card_font = xf_font_load(&e->card_font, path) == 0;
     if (!e->have_card_font)
@@ -1990,6 +2016,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         xf_font_free(&e->card_font);
     if (e->have_hcd_font)
         xf_font_free(&e->hcd_font);
+    if (e->have_phn_font)
+        xf_font_free(&e->phn_font);
     game_close(e->g);
     free(e->g);
     free(e);
