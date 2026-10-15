@@ -85,6 +85,11 @@ void vc_run_trigger_list(vc_interp *in, u32 trigger, u32 list);
 int vc_list_ready(vc_interp *in, u32 trigger, u32 list);
 /* Size of one entry of `tlocals`, for saving and restoring them. */
 size_t vc_trigger_locals_size(void);
+/* The parameters of trigger entry i as VC_TRIGGER_LOCALS values (8 integers,
+ * 12 booleans, 4 bytes); returns the trigger. Set creates the entry. */
+#define VC_TRIGGER_LOCALS 24
+u32 vc_trigger_locals_get(const vc_interp *in, u32 i, i32 *values);
+void vc_trigger_locals_set(vc_interp *in, u32 trigger, const i32 *values);
 /* Runs the triggers of `kind` in a trigger list. */
 void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind);
 

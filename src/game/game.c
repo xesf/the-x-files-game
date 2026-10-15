@@ -127,7 +127,7 @@ static void build_spots(game *g)
                 changed = 1;
             }
         for (i = 0; i < g->spot_count; i++)
-            if (!has_spot_id(old, n, g->spots[i].id)) {
+            if (!has_spot_id(old, n, g->spots[i].id) && !g->resuming) {
                 vc_run_triggers(&g->interp, g->spots[i].triggers, 8);
                 changed = 1;
             }
@@ -345,6 +345,25 @@ int game_enter_view(game *g, u32 id)
     g->pending_view = 0;
     build_spots(g);
     xf_info("view %u: %d hotspots", id, g->spot_count);
+    return 0;
+}
+
+/* Puts the player back in a view without running any entry trigger: a
+ * loaded game already holds what those triggers did. */
+int game_resume_view(game *g, u32 id)
+{
+    vc_view v;
+    if (vc_read_view(&g->db, id, &v) != 0)
+        return -1;
+    clear_spots(g);
+    g->view = id;
+    g->view_epoch++;
+    g->view_triggers = v.triggers;
+    g->view_asset = first_enabled(g, v.assets);
+    g->pending_view = 0;
+    g->resuming = 1; /* the hotspots appear without their triggers */
+    build_spots(g);
+    g->resuming = 0;
     return 0;
 }
 
@@ -2225,6 +2244,11 @@ static int host_call_function(void *user, const vc_action *a)
                 vc_set_var(&g->interp, args[3 + i].value, out[i]);
         return 1;
     }
+    /* 0x4BBFA0 fn_SaveGameState: a checkpoint (save.c). */
+    if (strcmp(name, "SaveGameState") == 0) {
+        game_checkpoint(g);
+        return 1;
+    }
     /* 0x4B6020 fn_EndGame(var): Willmore is dead or the case is lost.
      * 0x4EF5E0 offers to restore the last save when the variable is set
      * (string 0x27), else goes back to the main menu. */
@@ -2693,6 +2717,8 @@ int game_open(game *g, const char *data_dir)
 
 void game_close(game *g)
 {
+    free(g->checkpoint);
+    g->checkpoint = NULL;
     xf_strings_free(&g->strings);
     vc_place_map_free(&g->places);
     vc_interp_free(&g->interp);

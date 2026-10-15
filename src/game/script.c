@@ -776,6 +776,8 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
     }
     if (strcmp(what, "over") == 0)
         return (g->game_over != 0) == (a != 0);
+    if (strcmp(what, "checkpoint") == 0)
+        return (g->checkpoint != NULL) == (a != 0);
     if (strcmp(what, "var") == 0 && have_b)
         return vc_get_var(&g->interp, (u32)a) == (i32)b;
     if (strcmp(what, "enabled") == 0 && have_b)
@@ -838,6 +840,21 @@ int script_run(script *s, const char *path, int quiet)
             ok = script_run(s, inc, 1) == 0;
         } else if (strcmp(cmd, "new") == 0) {
             ok = game_new(g) == 0;
+        } else if (strcmp(cmd, "save") == 0 && sscanf(line, "%*s %255s %31[^\n#]", file, what) >= 1) {
+            ok = game_save_file(g, file, what) == 0;
+        } else if (strcmp(cmd, "load") == 0 && sscanf(line, "%*s %255s", file) == 1) {
+            ok = game_load_file(g, file) == 0;
+        } else if (strcmp(cmd, "reload") == 0) {
+            /* Saves and loads again at once: what a save keeps. */
+            u8 *data;
+            size_t size;
+            ok = game_save_mem(g, "reload", &data, &size) == 0;
+            if (ok) {
+                ok = game_load_mem(g, data, size) == 0;
+                free(data);
+            }
+        } else if (strcmp(cmd, "restore") == 0) {
+            ok = game_restore_checkpoint(g) == 0;
         } else if (strcmp(cmd, "view") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = game_enter_view(g, (u32)a) == 0;
         } else if (strcmp(cmd, "click") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
@@ -958,6 +975,17 @@ int script_run(script *s, const char *path, int quiet)
          * them (until `skip` or until they end). */
         if (!s->keep_clips && !hold_clip)
             settle(s);
+        /* XF_PLAY_RELOAD: save and load again after every step, to show
+         * that a save keeps everything the story needs. */
+        if (ok && !hold_clip && !s->keep_clips && !g->game_over && !g->iface_count && !g->talking && getenv("XF_PLAY_RELOAD") && strcmp(cmd, "include") != 0) {
+            u8 *data;
+            size_t size;
+            if (game_save_mem(g, "reload", &data, &size) == 0) {
+                ok = game_load_mem(g, data, size) == 0;
+                free(data);
+                settle(s);
+            }
+        }
         if (!ok) {
             printf("%s:%d: %s  FAILED\n", path, lineno, line);
             print_state(g);

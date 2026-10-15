@@ -390,3 +390,14 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4688D0 ai_list_set  SetAIList: keeps the hint trigger and action list
 0x4FE820 ai_list_ready  whether an action of the hint list has a condition that holds
 0x4EF5E0 end_game  game over: offer to restore, else back to the main menu
+0x43D9F0 email_read  InitEmailRead: shows the attachment items, then the text (computer 54950 or PDA)
+0x4A3AF0 text_box_show  puts a media's text in a layout item, with font and colour
+0x4A3B20 text_box_build  text object for a layout item: text, font, colour, queued
+0x467710 on_int_inv_click  OnIntInvClick: ends the queued action, empties the hand, closes tool layouts
+0x469030 ing_destroy  INGDestroy: frees the ING search state
+0x506EE0 save_game_state  SaveGameState: takes the checkpoint
+0x4D14B0 save_game_write  writes the save: header (node, location, viewpoint, view) and state objects
+0x518820 save_load_init  SaveLoadInit: reads the slot names
+0x518870 save_load_commit  SaveLoadComit: 0 cancel, 1 save or load the selected slot
+0x4CCAC0 save_load_commit_impl  checks the name, asks to overwrite (strings 31, 32, 38), saves or loads
+0x496680 game_restore_request  queues a load of a saved game, used by EndGame

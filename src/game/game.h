@@ -110,6 +110,7 @@ typedef struct {
     u32 view, view_triggers, pending_view;
     u32 view_epoch;       /* counts view changes, to notice nested ones */
     u32 entering;         /* view being entered, while its triggers run */
+    int resuming;         /* game_resume_view: no hotspot triggers */
     game_spot spots[GAME_MAX_SPOTS];
     int spot_count;
     u32 history[GAME_HISTORY];
@@ -171,18 +172,21 @@ typedef struct {
     int lbox_tinted;
     u32 binoc_from;       /* the view the binoculars look out of */
     u32 ai_trigger, ai_list;
-    i32 ai_glow;          /* SetAIGlow */ /* SetAIList: the Artificial Intuition hint */
+    i32 ai_glow;          /* SetAIGlow; ai_trigger and ai_list: SetAIList, the hint */
     u32 smol_vars[3];     /* InitSmShootout: per area, set when clear */
     int smol_clear[3], smol_visits[3], smol_area;
-    u32 shot_media, shot_view, shot_epoch;
-    int woods_down;
-    int game_over;
+    u32 shot_media, shot_view, shot_epoch; /* the gun shot clip playing, and what follows */
+    int woods_down;          /* NSA agents down in the woods: bits 1 and 2 */
+    int game_over;           /* EndGame: 1 to the menu, 2 offer to restore */
     int text_off;         /* TextOn(0): the text windows are hidden */
     u32 pda_notes[GAME_MAX_NOTES]; /* EnablePDANote: notes in the PDA */
     int pda_note_count;
     int credits_rolling;  /* RollHdCredits */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
-    u32 played_count;        /* EndGame: 1 to the menu, 2 offer to restore */       /* NSA agents down in the woods: bits 1 and 2 */ /* the gun shot clip playing, and what follows */
+    u32 played_count;
+    u8 *checkpoint;          /* SaveGameState: the state to go back to after a death */
+    size_t checkpoint_size;
+    char save_dir[512];      /* where the slots are saved; empty: no files */
     int flight_mode;      /* SetFLightProps: 1 day, 2 dark */
     char flight_place;    /* 'I' inside, 'O' outside */
 
@@ -199,6 +203,8 @@ void game_close(game *g);
  * view. Returns 0, or -1 when the data has no start view. */
 int game_new(game *g);
 int game_enter_view(game *g, u32 view);
+/* The view of a loaded game, without entry triggers. */
+int game_resume_view(game *g, u32 view);
 /* Goes back to the previous view. */
 void game_back(game *g);
 
@@ -306,5 +312,19 @@ const game_iface_item *game_iface_item_at(game *g, int x, int y);
 const game_iface_item *game_find_item(game *g, u32 id);
 /* Whether the Artificial Intuition icon glows: a hint is ready. */
 int game_ai_glowing(game *g);
+
+/* Saved games (save.c). game_save_mem returns a malloc'd buffer. Loading
+ * starts from a fresh game, restores the state and enters the saved
+ * view. */
+int game_save_mem(game *g, const char *name, u8 **out, size_t *size);
+int game_load_mem(game *g, const u8 *data, size_t size);
+int game_save_file(game *g, const char *path, const char *name);
+int game_load_file(game *g, const char *path);
+/* The name a save was given; 0 when the data is a save. */
+int game_save_name(const u8 *data, size_t size, char *name, size_t name_size);
+int game_save_file_name(const char *path, char *name, size_t name_size);
+/* SaveGameState keeps a checkpoint; EndGame after a death goes back to it. */
+void game_checkpoint(game *g);
+int game_restore_checkpoint(game *g);
 
 #endif

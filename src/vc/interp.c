@@ -437,6 +437,25 @@ int vc_list_ready(vc_interp *in, u32 trigger, u32 list)
 
 size_t vc_trigger_locals_size(void) { return sizeof(struct vc_trigger_locals); }
 
+u32 vc_trigger_locals_get(const vc_interp *in, u32 i, i32 *values)
+{
+    const locals *l = &in->tlocals[i].l;
+    memcpy(values, l->ints, sizeof(l->ints));
+    memcpy(values + 8, l->bools, sizeof(l->bools));
+    memcpy(values + 20, l->bytes, sizeof(l->bytes));
+    return in->tlocals[i].trigger;
+}
+
+void vc_trigger_locals_set(vc_interp *in, u32 trigger, const i32 *values)
+{
+    locals *l = trigger_locals(in, trigger);
+    if (!l)
+        return;
+    memcpy(l->ints, values, sizeof(l->ints));
+    memcpy(l->bools, values + 8, sizeof(l->bools));
+    memcpy(l->bytes, values + 20, sizeof(l->bytes));
+}
+
 void vc_run_triggers(vc_interp *in, u32 trigger_list, int kind)
 {
     u32 ids[64];

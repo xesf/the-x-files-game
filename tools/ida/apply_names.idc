@@ -391,5 +391,16 @@ static main()
     set_name(0x4688D0, "ai_list_set", SN_NOWARN);
     set_name(0x4FE820, "ai_list_ready", SN_NOWARN);
     set_name(0x4EF5E0, "end_game", SN_NOWARN);
+    set_name(0x43D9F0, "email_read", SN_NOWARN);
+    set_name(0x4A3AF0, "text_box_show", SN_NOWARN);
+    set_name(0x4A3B20, "text_box_build", SN_NOWARN);
+    set_name(0x467710, "on_int_inv_click", SN_NOWARN);
+    set_name(0x469030, "ing_destroy", SN_NOWARN);
+    set_name(0x506EE0, "save_game_state", SN_NOWARN);
+    set_name(0x4D14B0, "save_game_write", SN_NOWARN);
+    set_name(0x518820, "save_load_init", SN_NOWARN);
+    set_name(0x518870, "save_load_commit", SN_NOWARN);
+    set_name(0x4CCAC0, "save_load_commit_impl", SN_NOWARN);
+    set_name(0x496680, "game_restore_request", SN_NOWARN);
     msg("names applied\n");
 }
