@@ -15,3 +15,8 @@ walk 31395                      # the phone in the room: Willmore notes it
 expect enabled 21927 1          # idea: motel phone
 walk 6622                       # Scully's room, Skinner
 askall 22760                    # includes the motel phone idea
+walk 6661                       # Scully's Powerbook on the desk
+click 39617
+walk 6548                       # back to the clerk
+askall 22631                    # motel phone: the record of calls
+expect iface 39183
