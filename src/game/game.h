@@ -177,7 +177,7 @@ typedef struct {
     u32 shot_media, shot_view, shot_epoch;
     int woods_down;
     int game_over;
-    int text_off;         /* TextOn(0): icons and dialogue box hidden */
+    int text_off;         /* TextOn(0): the text windows are hidden */
     u32 pda_notes[GAME_MAX_NOTES]; /* EnablePDANote: notes in the PDA */
     int pda_note_count;
     int credits_rolling;  /* RollHdCredits */

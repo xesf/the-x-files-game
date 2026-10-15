@@ -429,7 +429,7 @@ static void draw_scroll_box(explorer *e)
     xf_surface sf = screen_surface(e);
     float px;
     int y, line = 0, pos = 0, len, lh;
-    if (!sb || !(it = game_find_item(e->g, sb->item)) || !e->have_font)
+    if (!sb || e->g->text_off || !(it = game_find_item(e->g, sb->item)) || !e->have_font)
         return;
     f = sb->font == 'H' && e->have_hcd_font ? &e->hcd_font
       : sb->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
@@ -1299,7 +1299,7 @@ static void draw(explorer *e, int mx, int my)
         if (sub && e->have_font)
             xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
                                  sub, 0xFFFFFF, 0x000000);
-        if (e->card_active)
+        if (e->card_active && !e->g->text_off)
             draw_card(e, cx, cy, cw, ch);
         draw_icons(e, mx, my);
         draw_cursor(e, mx, my);
@@ -1330,11 +1330,9 @@ static void draw(explorer *e, int mx, int my)
         if (e->have_font)
             xf_text_draw(&s, &e->font, 14, 8, 20, e->label, strlen(e->label), 0xC0C0C0);
     }
-    if (!g->text_off) { /* TextOn(0) hides them during scenes */
-        draw_icons(e, mx, my);
-        if (g->talking)
-            draw_dialog(e, mx, my);
-    }
+    draw_icons(e, mx, my);
+    if (g->talking)
+        draw_dialog(e, mx, my);
     refresh_inventory(e);
     if (my >= (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL) && !g->iface_count)
         draw_inventory(e, mx, my);

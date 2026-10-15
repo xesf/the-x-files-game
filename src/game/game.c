@@ -2156,8 +2156,9 @@ static int host_call_function(void *user, const vc_action *a)
             vc_run_trigger_list(&g->interp, 75524, 75530);
         return 1;
     }
-    /* 0x4BCD40 fn_TextOn(on): 0x4F6370 shows or hides the icon bar and
-     * the dialogue box during scenes. */
+    /* 0x4BCD40 fn_TextOn(on): 0x4F6370 shows or hides the two text
+     * windows of the engine (app +0x104, +0x108): the scrolling text and
+     * the text over clips. */
     if (strcmp(name, "TextOn") == 0 && argc == 1) {
         g->text_off = arg_value(g, &args[0]) == 0;
         return 1;
