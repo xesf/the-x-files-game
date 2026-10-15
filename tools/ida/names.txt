@@ -401,3 +401,6 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x518870 save_load_commit  SaveLoadComit: 0 cancel, 1 save or load the selected slot
 0x4CCAC0 save_load_commit_impl  checks the name, asks to overwrite (strings 31, 32, 38), saves or loads
 0x496680 game_restore_request  queues a load of a saved game, used by EndGame
+0x4F5720 shot_count_rauch  Rauch's porch: counts the NSA agents still standing; 1 when both are down
+0x4F5A80 shot_count_woods  the woods: counts the NSA agents still standing; 1 when both are down
+0x4F3C60 queue_go_to_view  queues a go-to-view action

@@ -402,5 +402,8 @@ static main()
     set_name(0x518870, "save_load_commit", SN_NOWARN);
     set_name(0x4CCAC0, "save_load_commit_impl", SN_NOWARN);
     set_name(0x496680, "game_restore_request", SN_NOWARN);
+    set_name(0x4F5720, "shot_count_rauch", SN_NOWARN);
+    set_name(0x4F5A80, "shot_count_woods", SN_NOWARN);
+    set_name(0x4F3C60, "queue_go_to_view", SN_NOWARN);
     msg("names applied\n");
 }

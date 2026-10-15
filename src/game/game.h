@@ -182,6 +182,7 @@ typedef struct {
     int smol_clear[3], smol_visits[3], smol_area;
     u32 shot_media, shot_view, shot_epoch; /* the gun shot clip playing, and what follows */
     int woods_down;          /* NSA agents down in the woods: bits 1 and 2 */
+    int rauch_down;          /* NSA agents down at Rauch's porch: bits 1 and 2 */
     int game_over;           /* EndGame: 1 to the menu, 2 offer to restore */
     int text_off;         /* TextOn(0): the text windows are hidden */
     u32 pda_notes[GAME_MAX_NOTES]; /* EnablePDANote: notes in the PDA */

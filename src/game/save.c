@@ -219,7 +219,7 @@ int game_save_mem(game *g, const char *name, u8 **out, size_t *size)
             (u32)g->woods_down, (u32)g->text_off, (u32)g->credits_rolling,
             (u32)g->flight_mode, (u32)(u8)g->flight_place,
             (u32)g->lbox_tinted, g->lbox_tint[0], g->lbox_tint[1], g->lbox_tint[2],
-            g->binoc_from, g->sound, (u32)g->show_evidence,
+            g->binoc_from, g->sound, (u32)g->show_evidence, (u32)g->rauch_down,
         };
         w_u32s(&w, "MISC", misc, (int)XF_COUNT(misc));
     }
@@ -422,6 +422,7 @@ int game_load_mem(game *g, const u8 *data, size_t size)
             g->binoc_from = m[25];
             g->sound = m[26];
             g->show_evidence = (int)m[27];
+            g->rauch_down = (int)m[28];
             if (g->sound)
                 g->sound_serial++;
         }

@@ -1366,6 +1366,17 @@ int game_shoot(game *g, u32 hot)
                 g->shot_view = g_shots[k].view == GAME_SHOT_RESTART ? g->view : g_shots[k].view;
                 g->shot_epoch = g->view_epoch;
                 game_queue_media(g, g_shots[k].media);
+                if (g_shots[k].shot == 1 || g_shots[k].shot == 2) {
+                    /* Rauch's porch: two NSA agents (0x4F5720 counts who
+                     * is left). With both down the view is not started
+                     * again: RegViewState 'a' tells its leave triggers,
+                     * and the porch (view 8138) follows (0x4F3C60). */
+                    g->rauch_down |= g_shots[k].shot;
+                    if (g->rauch_down == 3) {
+                        set_reg_var(g, "RegViewState", 0, 'a');
+                        g->shot_view = 8138;
+                    }
+                }
                 if (g_shots[k].shot == 4 || g_shots[k].shot == 5) {
                     /* The woods: two NSA agents (0x4F5A80 counts who is
                      * left); with both down Sc114L plays and the chase
