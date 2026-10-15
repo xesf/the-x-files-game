@@ -1135,21 +1135,23 @@ int game_click_object(game *g, u32 id)
  * starts the view again (the shot missed or only wounded), or leaves it
  * to the clip's own end triggers (a goon is down). */
 
-#define SHOT_ANY 1  /* no gun needed */
+#define SHOT_ANY 0xFF  /* any item in hand, or none */
 
-/* 0x4F4510: rectangle ID -> shot number. */
+/* 0x4F4510: rectangle ID -> shot number with the gun in hand, and with
+ * X's stiletto in hand (0: no shot). Mode 7 is the gun, 0x17 the
+ * stiletto. */
 static const struct {
     u16 hot;
-    u8 shot, flags;
+    u8 gun, stiletto;
 } g_hot_shots[] = {
     { 100, 27, 0 }, { 101, 1, 0 },  { 102, 2, 0 },  { 103, 1, 0 },  { 104, 2, 0 },
     { 111, 4, 0 },  { 112, 5, 0 },  { 113, 4, 0 },  { 114, 5, 0 },  { 121, 4, 0 },
     { 122, 5, 0 },  { 131, 4, 0 },  { 132, 5, 0 },  { 141, 4, 0 },  { 142, 5, 0 },
     { 201, 9, 0 },  { 211, 10, 0 }, { 221, 6, 0 },  { 222, 7, 0 },  { 223, 8, 0 },
     { 401, 11, 0 }, { 411, 12, 0 }, { 421, 13, 0 }, { 431, 14, 0 }, { 432, 15, 0 },
-    { 433, 16, 0 }, { 434, 23, 0 }, { 441, 18, SHOT_ANY }, { 442, 19, 0 },
-    { 451, 20, SHOT_ANY }, { 461, 21, 0 }, { 462, 24, 0 }, { 463, 25, SHOT_ANY },
-    { 470, 26, 0 }, { 500, 27, 0 }, { 600, 28, 0 },
+    { 433, 16, 17 }, { 434, 23, 0 }, { 441, SHOT_ANY, 18 }, { 442, 19, 0 },
+    { 451, SHOT_ANY, 20 }, { 461, 21, 21 }, { 462, 24, 22 }, { 463, SHOT_ANY, 25 },
+    { 470, 26, 26 }, { 500, 27, 0 }, { 600, 28, 0 },
 };
 
 /* 0x4F4AC0: shot number -> clip, the view that follows it (0: none;
@@ -1298,12 +1300,21 @@ int game_shoot(game *g, u32 hot)
     else if (first && !has)
         return 0;
     for (i = 0; i < XF_COUNT(g_hot_shots); i++) {
+        u8 shot;
         if (g_hot_shots[i].hot != hot)
             continue;
-        if (!(g_hot_shots[i].flags & SHOT_ANY) && !holding(g, "Gun"))
+        if (g_hot_shots[i].gun == SHOT_ANY) /* 441, 451, 463: any hand */
+            shot = g_hot_shots[i].stiletto;
+        else if (holding(g, "Gun"))
+            shot = g_hot_shots[i].gun;
+        else if (holding(g, "Stiletto"))
+            shot = g_hot_shots[i].stiletto;
+        else
+            shot = 0;
+        if (!shot)
             return 0;
         for (k = 0; k < XF_COUNT(g_shots); k++)
-            if (g_shots[k].shot == g_hot_shots[i].shot) {
+            if (g_shots[k].shot == shot) {
                 xf_info("shot %u: clip %u", g_shots[k].shot, g_shots[k].media);
                 if (g_shots[k].state) /* 0x50D0E0 */
                     set_reg_var(g, "RegViewState", 0, g_shots[k].state);
@@ -1323,7 +1334,7 @@ int game_shoot(game *g, u32 hot)
                 }
                 return 1;
             }
-        xf_info("shot %u: not implemented", g_hot_shots[i].shot);
+        xf_info("shot %u: not implemented", shot);
         return 0;
     }
     return 0;
