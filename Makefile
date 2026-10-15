@@ -15,14 +15,33 @@ CFLAGS  += -O2 -g
 endif
 
 UNAME := $(shell uname -s)
+# The platform backend: macos, linux or windows (cross-build with
+# make PLATFORM=windows CC=x86_64-w64-mingw32-gcc).
+ifeq ($(UNAME),Darwin)
+PLATFORM ?= macos
+else
+PLATFORM ?= linux
+endif
 
 CORE_SRC := $(wildcard src/core/*.c) $(wildcard src/media/*.c) $(wildcard src/data/*.c) $(wildcard src/audio/*.c) $(wildcard src/gfx/*.c) $(wildcard src/vc/*.c)
 CORE_OBJ := $(CORE_SRC:%.c=$(BUILD)/%.o)
 
-ifeq ($(UNAME),Darwin)
+EXE :=
+ifeq ($(PLATFORM),macos)
 PLAT_SRC := $(wildcard src/platform/macos/*.m)
 PLAT_OBJ := $(PLAT_SRC:%.m=$(BUILD)/%.o)
 PLAT_LIBS := -framework Cocoa -framework AudioToolbox -framework CoreAudio
+endif
+ifeq ($(PLATFORM),linux)
+PLAT_SRC := $(wildcard src/platform/linux/*.c)
+PLAT_OBJ := $(PLAT_SRC:%.c=$(BUILD)/%.o)
+PLAT_LIBS := -lX11 -lasound -lpthread
+endif
+ifeq ($(PLATFORM),windows)
+PLAT_SRC := $(wildcard src/platform/windows/*.c)
+PLAT_OBJ := $(PLAT_SRC:%.c=$(BUILD)/%.o)
+PLAT_LIBS := -lgdi32 -lwinmm -mwindows
+EXE := .exe
 endif
 
 GAME_SRC := $(wildcard src/game/*.c) src/main.c
@@ -31,12 +50,12 @@ GAME_OBJ := $(GAME_SRC:%.c=$(BUILD)/%.o)
 TOOL_SRC := $(wildcard tools/xftool/*.c)
 TOOL_OBJ := $(TOOL_SRC:%.c=$(BUILD)/%.o)
 
-all: $(BUILD)/xfiles $(if $(TOOL_SRC),$(BUILD)/xftool)
+all: $(BUILD)/xfiles$(EXE) $(if $(TOOL_SRC),$(BUILD)/xftool$(EXE))
 
-$(BUILD)/xfiles: $(GAME_OBJ) $(CORE_OBJ) $(PLAT_OBJ)
+$(BUILD)/xfiles$(EXE): $(GAME_OBJ) $(CORE_OBJ) $(PLAT_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(PLAT_LIBS) -lm
 
-$(BUILD)/xftool: $(TOOL_OBJ) $(CORE_OBJ) $(BUILD)/src/game/game.o $(BUILD)/src/game/script.o
+$(BUILD)/xftool$(EXE): $(TOOL_OBJ) $(CORE_OBJ) $(BUILD)/src/game/game.o $(BUILD)/src/game/script.o
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/%.o: %.c
@@ -50,11 +69,11 @@ $(BUILD)/%.o: %.m
 TEST_SRC := $(wildcard tests/*.c)
 TEST_OBJ := $(TEST_SRC:%.c=$(BUILD)/%.o)
 
-$(BUILD)/xftest: $(TEST_OBJ) $(CORE_OBJ)
+$(BUILD)/xftest$(EXE): $(TEST_OBJ) $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
-test: $(BUILD)/xftest
-	$(BUILD)/xftest
+test: $(BUILD)/xftest$(EXE)
+	$(BUILD)/xftest$(EXE)
 
 # Run against a game install. Override on the command line, for example:
 #   make run GAME_DIR=/path/to/game VIEW=1236 DISC=2

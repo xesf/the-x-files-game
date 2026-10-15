@@ -162,7 +162,6 @@ static u32 num_token(const u8 **p, const u8 *end, int *ok)
 int vc_parse_media(const u8 *data, size_t size, vc_asset_ref *a)
 {
     const u8 *p = data, *end = data + size;
-    u32 nums[4];
     int ok = 1, n = 0;
 
     a->entry_count = 0;
@@ -172,10 +171,10 @@ int vc_parse_media(const u8 *data, size_t size, vc_asset_ref *a)
      * the first entry. A path token follows the disc number. */
     while (ok && n < 4 && p < end) {
         const u8 *save = p;
-        u32 v = num_token(&p, end, &ok);
         /* A token is the disc number when the next token is a path length
          * followed by a path. */
-        nums[n++] = v;
+        num_token(&p, end, &ok);
+        n++;
         if (!ok)
             break;
         {

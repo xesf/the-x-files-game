@@ -205,6 +205,7 @@ static int add_quad(seglist *s, pt a, pt c, pt b)
 static u32 glyph_offset(const xf_font *f, int g, u32 *len)
 {
     u32 a, b;
+    *len = 0;
     if (g < 0 || g >= f->num_glyphs)
         return 0;
     if (f->loca_long) {
