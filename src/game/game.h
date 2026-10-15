@@ -164,7 +164,8 @@ typedef struct {
     u32 smol_vars[3];     /* InitSmShootout: per area, set when clear */
     int smol_clear[3], smol_visits[3], smol_area;
     u32 shot_media, shot_view;
-    int woods_down;       /* NSA agents down in the woods: bits 1 and 2 */ /* the gun shot clip playing, and what follows */
+    int woods_down;
+    int game_over;        /* EndGame: 1 to the menu, 2 offer to restore */       /* NSA agents down in the woods: bits 1 and 2 */ /* the gun shot clip playing, and what follows */
     int flight_mode;      /* SetFLightProps: 1 day, 2 dark */
     char flight_place;    /* 'I' inside, 'O' outside */
 

@@ -500,6 +500,8 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
     }
     if (strcmp(what, "view") == 0)
         return g->view == (u32)a;
+    if (strcmp(what, "over") == 0)
+        return (g->game_over != 0) == (a != 0);
     if (strcmp(what, "var") == 0 && have_b)
         return vc_get_var(&g->interp, (u32)a) == (i32)b;
     if (strcmp(what, "enabled") == 0 && have_b)

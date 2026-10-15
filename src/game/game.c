@@ -2101,6 +2101,25 @@ static int host_call_function(void *user, const vc_action *a)
     /* fn_SetAIGlow(n): only changes how the icon is drawn. */
     if (strcmp(name, "SetAIGlow") == 0)
         return 1;
+    /* 0x4B6020 fn_EndGame(var): Willmore is dead or the case is lost.
+     * 0x4EF5E0 offers to restore the last save when the variable is set
+     * (string 0x27), else goes back to the main menu. */
+    if (strcmp(name, "EndGame") == 0 && argc == 1) {
+        g->game_over = 1 + (arg_value(g, &args[0]) != 0);
+        xf_info("game over");
+        return 1;
+    }
+    /* 0x4B7370 fn_NukeAllIcons: takes every emotion and action icon off
+     * the screen. */
+    if (strcmp(name, "NukeAllIcons") == 0) {
+        u32 i;
+        for (i = 0; i < g->db.count; i++) {
+            int c = g->db.entries[i].class_id;
+            if (c == VC_EMOTION_ICON || c == VC_ACTION_ICON)
+                vc_set_enabled(&g->interp, g->db.entries[i].id, 0);
+        }
+        return 1;
+    }
     /* The Smolnikoff fight (see smol_next). */
     if (strcmp(name, "InitSmShootout") == 0 && argc == 3) {
         int i;
