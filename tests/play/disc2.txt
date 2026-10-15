@@ -99,4 +99,15 @@ click 32351                     # a step towards the car
 inv 17426                       # the camera: photograph the plate
 expect photo 79662
 
-# Next: the Crime Lab, Skinner at the Field Office, the plate in the ING.
+# The Crime Lab: hand the evidence to Amis from the evidence bar.
+inv 17451
+click 58726
+click 59133                     # King County Crime Lab
+click 88655                     # get Amis to the window
+evidence 17469                  # black powder: harmless industrial lead
+evidence 17465                  # the cigarette butt
+evidence 21838                  # the bullet
+evidence 17473                  # the blood
+expect enabled 17469 0
+
+# Next: Skinner at the Field Office, the plate in the ING.
