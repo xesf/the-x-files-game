@@ -62,4 +62,41 @@ walk 3730                       # a cigarette butt (Morley)
 click 28149
 hold none
 
-# Next: the crates (crowbar), black powder, the back office with Skinner.
+# The crowbar is in a tool box on the dark mezzanine: the flashlight
+# opens the way up the stairs.
+walk 3713                       # the back office, by the stairs
+click 6202                      # up the stairs
+inv 17438                       # the flashlight
+walk 5835
+click 26602                     # the tool box: the crowbar
+walk 3721                       # back down, to the crates
+click 32317
+hold Crowbar
+click 28030                     # pry the crate open
+hold none
+hold EvidenceKit
+click 32294                     # the black powder
+hold none
+
+# Skinner waits in the office; the office loop puts him there.
+walk 2308
+expect enabled 22606 1
+askall 22606
+
+# Out the back to the docks: James Wong, washing his boat.
+walk 26030
+walk 4605
+hold Badge
+click 81880
+hold none
+askall 23532                    # the fish icon comes up during the talk
+expect choice 23582
+
+# Skinner by the car: the sedan has been following them.
+walk 3131
+askall 26892
+click 32351                     # a step towards the car
+inv 17426                       # the camera: photograph the plate
+expect photo 79662
+
+# Next: the Crime Lab, Skinner at the Field Office, the plate in the ING.
