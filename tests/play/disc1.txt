@@ -62,6 +62,7 @@ wait 3000                       # Shanks's next question opens on a timer
 expect choice 22150
 ask 22150                       # What should I do with my current assignments?
 wait 3000                       # Skinner and Shanks wrap up: cases to Cook, APB
+click 22148                     # the box closed (DisplayDBox 0): Shanks again
 expect choice 56174             # What were my instructions?
 
 # Cook's office: hand over the case files.

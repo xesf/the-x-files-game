@@ -2033,6 +2033,13 @@ static int host_call_function(void *user, const vc_action *a)
         smol_will_shot(g, (u8)arg_value(g, &args[0]));
         return 1;
     }
+    /* 0x47CF00 fn_DisplayDBox(character view): 0x4516D0 finds the
+     * character on screen and opens its dialogue box, as a click would,
+     * after a scene (a badge shown); 0 closes the box. */
+    if (strcmp(name, "DisplayDBox") == 0 && argc == 1) {
+        g->talking = (u32)arg_value(g, &args[0]);
+        return 1;
+    }
     /* 0x4B58E0 fn_CharTeleport(event, event, node, location, viewpoint,
      * view): 0x4EE100 queues a move to each of the four that differs
      * from where Willmore is, so it ends in that view. A character the

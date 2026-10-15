@@ -386,5 +386,6 @@ static main()
     set_name(0x4B07E0, "smol_will_shot", SN_NOWARN);
     set_name(0x4B0A70, "smol_goon_shot", SN_NOWARN);
     set_name(0x46AE30, "smol_init", SN_NOWARN);
+    set_name(0x4516D0, "dialog_box_show", SN_NOWARN);
     msg("names applied\n");
 }
