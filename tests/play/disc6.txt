@@ -43,3 +43,66 @@ inv 17451
 click 79708
 wait 5000
 expect view 8568
+inv 56185                       # Artificial Intuition: climb the pole
+skip
+icon 24546
+skip
+inv 21821                       # binoculars: car 82434 down the line
+expect view 9215
+hold none
+walk 8700
+click 29957                     # into the burned boxcar
+skip
+walk 31437
+click 88872
+skip
+walk 32225
+click 88884
+skip
+walk 31436
+click 32264                     # "Hey! I didn't do nothing..."
+skip
+askall 23967                    # the bum's guessing game
+skip
+click 23967
+ask 30121                       # "Videotape": he hands over the 8mm tape
+skip
+wait 5000
+askall 26234
+skip
+
+# The Field Office: the tape and the image ING, then the Lone Gunmen.
+inv 17451
+click 58726
+click 59118
+wait 5000
+walk 1237
+hold Videotape
+click 45052                     # play the tape at the desk
+hold none
+skip
+wait 5000
+click 52184                     # the image ING
+click 65750                     # the third frame
+click 65807                     # search
+wait 10000
+skip
+expect var 4878 1
+click 65807
+skip
+wait 3000
+click 52262                     # the Lone Gunmen make contact
+skip
+wait 3000
+askall 45095
+skip
+
+# Their mail: GPS coordinates in Alaska, opened in the PDA.
+inv 17451
+click 34222                     # the PDA's mail
+click 63182                     # the Lone Gunmen's mail
+click 72759                     # the coordinates: the map of Alaska
+click 58778
+click 58797                     # node 8: Alaska
+wait 5000
+expect var 1219 8
