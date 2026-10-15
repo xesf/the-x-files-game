@@ -285,6 +285,43 @@ clips each:
 Play scripts use `shoot [id]`: a shot at that rectangle of the view's
 clip, or at the clip's first rectangle.
 
+## Artificial Intuition
+
+The AI icon (evidence icon 56185) sits in the inventory row while a hint
+is set. `SetAIList(trigger, list)` (0x460170) sets the hint: a click on
+the icon runs the action list with the trigger's parameters, which often
+shows an action icon ("climb the railroad pole"). The engine makes the
+icon glow while one of the list's conditions holds (0x4FE820).
+`ClearAIList` removes the hint; travelling clears it.
+
+## Binoculars
+
+Taking the binoculars in hand (`OnBinocClick`, 0x518C80) shows the
+close-up of the view at once, when it has one: a view of the same
+viewpoint that no move leads to, named after the compass direction
+("S number cu" beside the south view). Its picture shows whatever its
+enable state, and its triggers run as usual. Putting the binoculars away
+returns to the view.
+
+## Characters that walk Willmore
+
+`CharTeleport(event, event, node, location, viewpoint, view)` (0x4B58E0)
+moves Willmore to a view, with the node, location and viewpoint changes
+in between. A character uses it when clicked: Cook in the hall walks
+Willmore to the meeting room. `DisplayDBox(character view)` (0x47CF00)
+opens a character's dialogue box after a scene; `DisplayDBox(0)` closes
+it.
+
+## The end of the game
+
+`EndGame(var)` (0x4B6020) ends the game: death, or the credits after the
+last scene. When the variable is set, the engine offers to restore the
+last save; otherwise it returns to the main menu. Nothing runs after it.
+
+The isolation chamber in the secret base reports its doors and power
+through `IsoChamberStat(door A, door B, power, eight outputs)` (0x4B6850),
+which sets one output for each combination.
+
 ## Fades
 
 `FadeToBlack(event)` (0x4B6140) fades the screen to black over 2
