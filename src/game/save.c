@@ -216,7 +216,7 @@ int game_save_mem(game *g, const char *name, u8 **out, size_t *size)
     {
         /* Filled one by one: C89 compilers (Watcom) want constant
          * initializers. */
-        u32 misc[30];
+        u32 misc[31];
         int n = 0;
         misc[n++] = g->rand_seed;
         misc[n++] = (u32)g->ing_cook_shown;
@@ -248,6 +248,7 @@ int game_save_mem(game *g, const char *name, u8 **out, size_t *size)
         misc[n++] = (u32)g->show_evidence;
         misc[n++] = (u32)g->rauch_down;
         misc[n++] = (u32)g->note_page;
+        misc[n++] = g->photo_downloaded;
         w_u32s(&w, "MISC", misc, n);
     }
     if (w.error) {
@@ -460,6 +461,7 @@ int game_load_mem(game *g, const u8 *data, size_t size)
             g->show_evidence = (int)m[27];
             g->rauch_down = (int)m[28];
             g->note_page = (int)m[29];
+            g->photo_downloaded = m[30];
             if (g->sound)
                 g->sound_serial++;
         }

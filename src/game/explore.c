@@ -129,6 +129,10 @@ typedef struct {
     int debug;            /* Ctrl+Shift+D: hotspot outlines and names */
     u32 paused_ms;        /* time spent in the menu and message boxes */
     u32 clip_stop_serial;
+    struct {
+        u32 asset;
+        xf_image img;
+    } photo_cache[GAME_MAX_PHOTOS]; /* the photo screen's pictures */
     u32 pause_from;       /* when the pause started, 0 when running */
     /* dialogue box */
     xf_image dlg_talk, dlg_history, dlg_up, dlg_down;
@@ -369,44 +373,49 @@ static void use_pff(explorer *e, const char *path)
     snprintf(e->pff_path, sizeof(e->pff_path), "%s", path);
 }
 
-static void load_item_picture(explorer *e, const game_iface_item *it, xf_image *img)
+/* The picture of one media reference: a PICT in a PFF bundle, or a frame
+ * of the navigation movie (w by h). */
+static void load_asset_picture(explorer *e, u32 asset, int w, int h, xf_image *img)
 {
-    u32 ids[8];
-    int n = vc_read_list(&e->g->db, it->item.assets, ids, 8), i, j;
+    vc_asset_ref a;
+    int j;
     memset(img, 0, sizeof(*img));
-    for (i = 0; i < n && !img->pixels; i++) {
-        vc_asset_ref a;
-        if (vc_read_asset_ref(&e->g->db, ids[i], &a) != 0)
+    if (vc_read_asset_ref(&e->g->db, asset, &a) != 0)
+        return;
+    for (j = 0; j < a.entry_count && !img->pixels; j++) {
+        const vc_media_entry *m = &a.entries[j];
+        const char *ext = strrchr(m->path, '.');
+        char path[1024];
+        if (resolve_media(e, m->path, path, sizeof(path)) != 0)
             continue;
-        for (j = 0; j < a.entry_count && !img->pixels; j++) {
-            const vc_media_entry *m = &a.entries[j];
-            const char *ext = strrchr(m->path, '.');
-            char path[1024];
-            if (resolve_media(e, m->path, path, sizeof(path)) != 0)
-                continue;
-            if (ext && strcmp(ext, ".pff") == 0) {
-                u32 size;
-                u8 *data;
-                use_pff(e, path);
-                data = e->pff_open ? xf_pff_read(&e->pff, m->start, &size) : NULL;
-                if (data && xf_pict_decode(data, size, img) != 0)
-                    memset(img, 0, sizeof(*img));
-                free(data);
-            } else {
-                int w = it->item.region.right - it->item.region.left;
-                int h = it->item.region.bottom - it->item.region.top;
-                if (open_nav_file(e, m->path) == 0 && w > 0 && h > 0) {
-                    img->pixels = calloc((size_t)w * h, 4);
-                    img->width = w;
-                    img->height = h;
-                    if (img->pixels && xf_movie_frame_at(&e->nav, m->start, img->pixels, w, h) != 0) {
-                        free(img->pixels);
-                        memset(img, 0, sizeof(*img));
-                    }
-                }
+        if (ext && strcmp(ext, ".pff") == 0) {
+            u32 size;
+            u8 *data;
+            use_pff(e, path);
+            data = e->pff_open ? xf_pff_read(&e->pff, m->start, &size) : NULL;
+            if (data && xf_pict_decode(data, size, img) != 0)
+                memset(img, 0, sizeof(*img));
+            free(data);
+        } else if (open_nav_file(e, m->path) == 0 && w > 0 && h > 0) {
+            img->pixels = calloc((size_t)w * h, 4);
+            img->width = w;
+            img->height = h;
+            if (img->pixels && xf_movie_frame_at(&e->nav, m->start, img->pixels, w, h) != 0) {
+                free(img->pixels);
+                memset(img, 0, sizeof(*img));
             }
         }
     }
+}
+
+static void load_item_picture(explorer *e, const game_iface_item *it, xf_image *img)
+{
+    u32 ids[8];
+    int n = vc_read_list(&e->g->db, it->item.assets, ids, 8), i;
+    memset(img, 0, sizeof(*img));
+    for (i = 0; i < n && !img->pixels; i++)
+        load_asset_picture(e, ids[i], it->item.region.right - it->item.region.left,
+                           it->item.region.bottom - it->item.region.top, img);
 }
 
 static void free_iface_pictures(explorer *e)
@@ -478,6 +487,67 @@ static void draw_scroll_box(explorer *e)
     }
 }
 
+/* A picture scaled (nearest pixel) into a w by h box at x0, y0. */
+static void blit_scaled(explorer *e, const xf_image *img, int x0, int y0, int w, int h)
+{
+    int x, y;
+    if (!img->pixels || w <= 0 || h <= 0)
+        return;
+    for (y = 0; y < h; y++) {
+        int sy = y * img->height / h, dy = y0 + y;
+        if (dy < 0 || dy >= SCREEN_H)
+            continue;
+        for (x = 0; x < w; x++) {
+            int dx = x0 + x;
+            if (dx >= 0 && dx < SCREEN_W)
+                e->fb[dy * SCREEN_W + dx] = img->pixels[sy * img->width + x * img->width / w] & 0xFFFFFF;
+        }
+    }
+}
+
+static const xf_image *photo_picture(explorer *e, u32 asset)
+{
+    int i, free_slot = -1;
+    for (i = 0; i < GAME_MAX_PHOTOS; i++) {
+        if (e->photo_cache[i].asset == asset)
+            return &e->photo_cache[i].img;
+        if (!e->photo_cache[i].asset && free_slot < 0)
+            free_slot = i;
+    }
+    if (free_slot < 0) { /* full: drop the first */
+        free(e->photo_cache[0].img.pixels);
+        memmove(&e->photo_cache[0], &e->photo_cache[1], sizeof(e->photo_cache[0]) * (GAME_MAX_PHOTOS - 1));
+        free_slot = GAME_MAX_PHOTOS - 1;
+    }
+    e->photo_cache[free_slot].asset = asset;
+    load_asset_picture(e, asset, 0, 0, &e->photo_cache[free_slot].img);
+    return &e->photo_cache[free_slot].img;
+}
+
+/* The computer's photo screen (layout 15232): the thumbnails in the
+ * items that call PhotoEnlarge(slot), the enlarged photo in item 51396. */
+static void draw_photos(explorer *e)
+{
+    static const u32 slots[20] = { 51376, 51378, 51379, 51377, 51380, 51381, 51384, 51385, 51386, 51387,
+                                   51382, 51388, 51389, 51390, 51391, 51383, 51392, 51393, 51394, 51395 };
+    const game_iface_item *big = game_find_item(e->g, 51396);
+    int k;
+    u32 asset;
+    if (!big)
+        return;
+    for (k = 0; k < 20; k++) {
+        const game_iface_item *it = game_find_item(e->g, slots[k]);
+        const vc_region *r;
+        if (!it || !(asset = game_photo_at(e->g, k)))
+            continue;
+        r = &it->item.region;
+        blit_scaled(e, photo_picture(e, asset), r->left, r->top, r->right - r->left, r->bottom - r->top);
+    }
+    if ((asset = game_photo_at(e->g, -1)))
+        blit_scaled(e, photo_picture(e, asset), big->item.region.left, big->item.region.top,
+                    big->item.region.right - big->item.region.left, big->item.region.bottom - big->item.region.top);
+}
+
 static void draw_ifaces(explorer *e)
 {
     int k, i, order;
@@ -526,6 +596,7 @@ static void draw_ifaces(explorer *e)
             }
         }
     draw_scroll_box(e);
+    draw_photos(e);
     /* Typed text in text fields, with a caret in the one that has focus. */
     for (k = 0; k < e->g->iface_count && e->have_font; k++)
         for (i = 0; i < e->g->ifaces[k].count; i++) {
@@ -1995,6 +2066,11 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     stop_sound(e);
     close_anims(e);
     free_iface_pictures(e);
+    {
+        int i;
+        for (i = 0; i < GAME_MAX_PHOTOS; i++)
+            free(e->photo_cache[i].img.pixels);
+    }
     close_icons(e);
     free_inventory(e);
     free_cursors(e);

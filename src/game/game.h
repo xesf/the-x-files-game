@@ -180,6 +180,8 @@ typedef struct {
     int evidence_count;
     u32 photos[GAME_MAX_PHOTOS]; /* TakePhoto: media of each photo */
     int photo_count;
+    u32 photo_downloaded;            /* bit per photo: on the computer */
+    int photo_scroll, photo_selected; /* the photo screen */
     u32 view_asset;       /* the view's clip, whose triggers ran on entry */
     u8 lbox_tint[3];      /* SetLBoxTint colour */
     int lbox_tinted;
@@ -262,6 +264,10 @@ const game_item_label *game_item_label_of(game *g, u32 item);
 int game_evidence(game *g, u32 *ids, int max);
 /* Hands one piece of evidence over: runs its click triggers. */
 int game_click_evidence(game *g, u32 id);
+
+/* The photo screen: the photo of thumbnail slot 0..19, or the enlarged
+ * one (slot -1); 0 for none. */
+u32 game_photo_at(game *g, int slot);
 
 /* Extra start time of a clip in ms (PrepBombTime), 0 for most. */
 u32 game_clip_offset(const game *g, u32 asset);

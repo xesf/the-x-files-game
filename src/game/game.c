@@ -16,6 +16,7 @@ static void after_triggers(game *g);
 static int hand_empty(game *g);
 static u32 inventory_triggers(game *g, u32 id);
 static void set_item_text(game *g, u32 item, const char *text);
+static int photo_function(game *g, const char *name, int argc, const vc_operand *args);
 static void update_evidence(game *g);
 static u32 first_enabled(game *g, u32 list);
 static const game_iface_item *find_item(game *g, u32 id);
@@ -2056,6 +2057,88 @@ static void shanks_var(game *g, u32 flag)
 #undef V
 }
 
+/* --- The computer's photo screen --------------------------------------- */
+
+/* Layout 15232 (0x4B2370 and on): 20 thumbnails, 5 a row, of the photos
+ * downloaded from the camera; one enlarged. 70853 and 51397 are the
+ * Download button off and on, 70855 and 51398 the Delete button. */
+static int photo_index(game *g, int slot)
+{
+    int i, k = 0, want = g->photo_scroll * 5 + slot;
+    for (i = 0; i < g->photo_count; i++)
+        if (g->photo_downloaded & (1u << i)) {
+            if (k == want)
+                return i;
+            k++;
+        }
+    return -1;
+}
+
+static void photo_buttons(game *g)
+{
+    int i, waiting = 0;
+    for (i = 0; i < g->photo_count; i++)
+        waiting |= !(g->photo_downloaded & (1u << i));
+    vc_set_enabled(&g->interp, 70853, !waiting);
+    vc_set_enabled(&g->interp, 51397, waiting);
+    vc_set_enabled(&g->interp, 70855, g->photo_selected < 0);
+    vc_set_enabled(&g->interp, 51398, g->photo_selected >= 0);
+    g->iface_serial++;
+}
+
+u32 game_photo_at(game *g, int slot)
+{
+    int i = slot < 0 ? g->photo_selected : photo_index(g, slot);
+    return i >= 0 && i < g->photo_count ? g->photos[i] : 0;
+}
+
+static int photo_function(game *g, const char *name, int argc, const vc_operand *args)
+{
+    if (strcmp(name, "PhotoInit") == 0) {
+        g->photo_scroll = 0;
+        g->photo_selected = -1;
+        photo_buttons(g);
+        return 1;
+    }
+    if (strcmp(name, "PhotoDownload") == 0) { /* 0x4D8FD0 */
+        g->photo_downloaded = g->photo_count >= 32 ? ~0u : (1u << g->photo_count) - 1;
+        photo_buttons(g);
+        return 1;
+    }
+    if (strcmp(name, "PhotoEnlarge") == 0 && argc == 1) { /* 0x4D8FB0 */
+        int i = photo_index(g, arg_value(g, &args[0]));
+        if (i >= 0) {
+            g->photo_selected = i;
+            photo_buttons(g);
+        }
+        return 1;
+    }
+    if (strcmp(name, "PhotoDelete") == 0) { /* 0x4D8FA0 */
+        int i = g->photo_selected;
+        if (i >= 0 && i < g->photo_count) {
+            u32 low = g->photo_downloaded & ((1u << i) - 1), high = g->photo_downloaded >> (i + 1);
+            memmove(&g->photos[i], &g->photos[i + 1], sizeof(g->photos[0]) * (size_t)(g->photo_count - i - 1));
+            g->photo_count--;
+            g->photo_downloaded = low | (high << i);
+            g->photo_selected = -1;
+            photo_buttons(g);
+        }
+        return 1;
+    }
+    if (strcmp(name, "PhotoScroll") == 0 && argc == 1) { /* 0x4D8F60: a row at a time */
+        int i, n = 0;
+        for (i = 0; i < g->photo_count; i++)
+            n += (g->photo_downloaded >> i) & 1;
+        g->photo_scroll += arg_value(g, &args[0]) ? 1 : -1;
+        g->photo_scroll = XF_CLAMP(g->photo_scroll, 0, n > 20 ? (n - 20 + 4) / 5 : 0);
+        return 1;
+    }
+    /* 0x4B85C0 fn_PhotoForward is an empty function; 0x4D8F90 closes */
+    if (strcmp(name, "PhotoForward") == 0 || strcmp(name, "PhotoClose") == 0)
+        return 1;
+    return 0;
+}
+
 /* --- PDA field notes ---------------------------------------------------- */
 
 /* 0x658F28: the 23 pages of notes, each a layout item whose media are
@@ -3134,10 +3217,14 @@ static int host_call_function(void *user, const vc_action *a)
     /* 0x4BCCC0 fn_TakePhoto(media): 0x4D8FE0 Camera_take_photo keeps
      * the picture in the camera, up to 24, for the computer to download. */
     if (strcmp(name, "TakePhoto") == 0 && argc == 1) {
-        if (g->photo_count < GAME_MAX_PHOTOS)
+        if (g->photo_count < GAME_MAX_PHOTOS) {
+            g->photo_downloaded &= ~(1u << g->photo_count);
             g->photos[g->photo_count++] = (u32)arg_value(g, &args[0]);
+        }
         return 1;
     }
+    if (photo_function(g, name, argc, args))
+        return 1;
     /* 0x4BC230 fn_SelectInv(inventory object): puts the item in hand.
      * The item's value is the argument of the On...Click call in its
      * click list (OnInvClick, OnCameraClick, OnFLightClick). */
