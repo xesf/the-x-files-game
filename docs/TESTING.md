@@ -81,7 +81,14 @@ Current results:
 `xftool play` runs the game logic from a script, without a window or
 media: every clip ends as soon as it starts, so its start and end
 triggers still run in order. The scripts in `tests/play` follow the
-story disc by disc. `make playtest` runs all of them.
+story disc by disc, from the first scene to the credits (`disc7.txt`
+ends with `expect over 1` after the closing clips). `make playtest` runs
+all of them.
+
+The DVD release has HOT files for only a few clips; the scripts name the
+rectangle in `shoot <id>`, which works without the file. The explorer
+needs the files to hit-test a click, so for gunfights on the DVD data
+copy the `XV/*.hot` files of a CD release into the DVD's `xv` folder.
 
 ```sh
 build/xftool play ../Installations/x-files-en-dvd tests/play/disc1.txt
@@ -108,6 +115,7 @@ A script has one command per line; `#` starts a comment.
 | `icon <id>` | Clicks an emotion or action icon |
 | `dial <number>` | Types a number on the cell phone and sends it |
 | `shoot [id]` | Shoots at a HOT rectangle of the view's clip (by default its first); most shots need the gun in hand |
+| `until-clip <ms>` | Lets time pass until a clip is queued, and leaves it unplayed so the next step can shoot into it |
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <database> <text>` / `noing ...` | Runs an ING search at the office computer and expects a record, or none |
 | `set <var> <value>` | Sets a GAM variable |
@@ -116,12 +124,15 @@ A script has one command per line; `#` starts a comment.
 | `var <id>` | Prints a GAM variable with its name |
 | `text <id>` | Prints the text of a media reference |
 | `state` | Prints the view, its hotspots and the interface layouts that are up |
+| `solve <depth> var <id> <value>` / `solve <depth> view <id>` | Searches for moves (clicks with or without an item, questions, icons, shots, waits) that reach the goal, and prints the first sequence found |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
 | `expect var <id> <value>` | Fails unless the GAM variable has the value |
 | `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |
 | `expect spot <id>` / `nospot <id>` | Checks that a hotspot is or is not in the view |
 | `expect iface <id>` / `noiface <id>` | Checks that a layout is or is not up |
+| `expect over 0\|1` | Checks whether the game has ended (`EndGame`: death, or the credits) |
+| `expect played <id>` | Checks that a clip was among the last 32 started |
 | `expect choice <id>` / `nochoice <id>` | Checks that a question is or is not on offer |
 | `expect photo <id>` | Checks that the camera holds a photo of this media |
 

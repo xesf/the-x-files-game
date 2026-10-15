@@ -386,3 +386,7 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4B0A70 smol_goon_shot  SmolGoonShot1: marks the area clear
 0x46AE30 smol_init  InitSmShootout: area variables and counters
 0x4516D0 dialog_box_show  opens the dialogue box of a character view on screen; 0 closes it
+0x50C5B0 iso_chamber_state  sets the 8 isolation chamber outputs from the doors and power
+0x4688D0 ai_list_set  SetAIList: keeps the hint trigger and action list
+0x4FE820 ai_list_ready  whether an action of the hint list has a condition that holds
+0x4EF5E0 end_game  game over: offer to restore, else back to the main menu

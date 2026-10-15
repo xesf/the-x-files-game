@@ -387,5 +387,9 @@ static main()
     set_name(0x4B0A70, "smol_goon_shot", SN_NOWARN);
     set_name(0x46AE30, "smol_init", SN_NOWARN);
     set_name(0x4516D0, "dialog_box_show", SN_NOWARN);
+    set_name(0x50C5B0, "iso_chamber_state", SN_NOWARN);
+    set_name(0x4688D0, "ai_list_set", SN_NOWARN);
+    set_name(0x4FE820, "ai_list_ready", SN_NOWARN);
+    set_name(0x4EF5E0, "end_game", SN_NOWARN);
     msg("names applied\n");
 }
