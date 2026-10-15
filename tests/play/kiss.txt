@@ -1,0 +1,97 @@
+# Guide, Day 3: after the escape from Gordon's Hauling, try to kiss
+# Astadourian (action icon 24649). The clip depends on how she feels about
+# Willmore (var1411 against var4682); the try is remembered (var4968).
+include disc3.txt
+
+# Amis has mailed the Tarakan prints. At the apartment computer: log in,
+# open the mail, load the attachment in the ING and search the FBI.
+walk 3872
+click 38627                     # the computer
+click 50747
+type Craig Willmore
+click 50748
+type shiloh
+click 39474                     # connect
+click 36306                     # E-MAIL
+click 55011                     # Amis's mail (fourth row)
+expect var 2711 61775
+click 72722                     # the attachment: TARAKAN.DAT
+click 73068                     # the FBI database
+click 73306                     # search
+wait 3000
+expect var 1711 1               # the prints are Cook's
+click 15142                     # quit
+wait 9000                       # a knock at the door
+
+# Cook, angry and followed.
+walk 3842
+click 75410                     # open the door
+icon 27739                      # stay calm
+click 24272
+ask 39924                       # "You may be right"
+click 24272
+ask 39940                       # lie to him
+click 24272
+askall 24272                    # his prints on the Tarakan
+expect var 2049 1               # node 4's last conversation is done
+
+# Link 2: the Gordon's Hauling van at the warehouse at night.
+inv 17451
+click 58726
+click 59712
+expect var 1219 12              # node 4 is complete: link 2
+walk 43016
+click 43062                     # into the cab, driver's side
+click 43157                     # the visors
+click 27407                     # the glove box
+click 57626
+click 57632                     # the paper: RR# 1121 & 82434
+click 43133                     # put it away; the driver is coming
+walk 3008
+click 43102                     # out by the passenger door
+wait 10000
+expect var 2575 1
+
+# Home to bed.
+inv 17451
+click 58726
+click 59694
+walk 3974
+click 87437
+wait 10000
+expect var 2055 1
+expect var 1219 5               # node 5: Astadourian wakes Willmore
+
+# Node 5, Thursday: Astadourian brings a videotape of new burn victims.
+askall 24285
+askall 77893
+click 45535                     # play the tape
+askall 41195
+hold FaxLeadSphere              # show her Amis's fax: her idea counter
+click 41195                     # reaches 6, "Okay cowboy, let's go"
+hold none
+wait 5000
+
+# Gordon's Hauling, on the second page of the PDA map.
+inv 17451
+click 58726
+click 35343                     # the map's second page
+click 58766                     # zoom in
+click 58982                     # Gordon's Hauling
+walk 6875
+askall 90162
+walk 6963
+walk 7026
+click 41081                     # the manifest; Rauch jumps Willmore
+walk 7052
+click 41019                     # take the shovel
+expect var 3970 1
+walk 7047
+hold Shovel
+click 41003                     # dig out under the grate before the bomb
+hold none
+expect var 4968 0
+icon 24649                      # kiss her
+wait 8000
+expect var 4968 1
+expect var 1992 1               # the story goes on

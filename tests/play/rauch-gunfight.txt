@@ -20,7 +20,7 @@ click 93020                     # out on the porch: the NSA
 skip
 wait 3000
 expect view 8138
-icon 24616                      # the gunfight
+inv 17459                       # draw the gun (DrawGunRauch): the gunfight
 shoot 101                       # the first agent
 skip
 shoot 102                       # the second: no restart, the porch
