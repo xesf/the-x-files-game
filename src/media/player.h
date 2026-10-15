@@ -26,6 +26,8 @@ typedef struct {
     u32 start_ticks;    /* wall clock at start, for movies without sound */
     u32 now_ms;
     int finished;
+    int paused;
+    u32 pause_ticks;    /* wall clock when paused */
 } xf_player;
 
 int xf_player_open(xf_player *p, const char *path, u32 now_ticks);
@@ -35,6 +37,9 @@ int xf_player_open_range(xf_player *p, const char *path, u32 now_ticks, u32 star
 void xf_player_close(xf_player *p);
 /* Advances to wall-clock time `now_ticks` (ms). Returns 1 while playing. */
 int xf_player_update(xf_player *p, u32 now_ticks);
+/* Holds the movie, picture and sound, at `now_ticks`; resuming carries
+ * on from the same place. */
+void xf_player_pause(xf_player *p, int paused, u32 now_ticks);
 /* Current picture, or NULL for a movie without video. */
 const u32 *xf_player_frame(const xf_player *p);
 /* Subtitle line to show now, or NULL. */

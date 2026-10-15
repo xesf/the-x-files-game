@@ -29,6 +29,8 @@ u64 xf_mixer_played(int ch);
 /* 1 while the channel still has data to play. */
 int xf_mixer_active(int ch);
 void xf_mixer_set_volume(int ch, int volume); /* 0 to 256 */
+/* A paused channel keeps its data and its place until resumed. */
+void xf_mixer_set_paused(int ch, int paused);
 
 /* Called by the platform audio callback (with the audio lock held). */
 void xf_mixer_render(void *user, i16 *out, int frames);

@@ -85,10 +85,26 @@ static void feed_audio(xf_player *p)
     }
 }
 
+void xf_player_pause(xf_player *p, int paused, u32 now_ticks)
+{
+    paused = paused != 0;
+    if (p->paused == paused)
+        return;
+    if (paused)
+        p->pause_ticks = now_ticks;
+    else
+        p->start_ticks += now_ticks - p->pause_ticks;
+    if (p->has_audio && p->channel >= 0)
+        xf_mixer_set_paused(p->channel, paused);
+    p->paused = paused;
+}
+
 int xf_player_update(xf_player *p, u32 now_ticks)
 {
     if (p->finished)
         return 0;
+    if (p->paused)
+        return 1;
     if (p->has_audio) {
         u32 wall = now_ticks - p->start_ticks;
         feed_audio(p);

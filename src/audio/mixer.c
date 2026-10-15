@@ -9,6 +9,7 @@
 
 typedef struct {
     int used, finished;
+    int paused;     /* holds its place: nothing is played or consumed */
     int rate, channels, volume;
     i16 *ring;      /* stereo frames */
     u32 read, write; /* frame positions, wrap at RING_FRAMES */
@@ -135,6 +136,13 @@ int xf_mixer_active(int ch)
     return a;
 }
 
+void xf_mixer_set_paused(int ch, int paused)
+{
+    lock();
+    g_ch[ch].paused = paused != 0;
+    unlock();
+}
+
 void xf_mixer_set_volume(int ch, int volume)
 {
     lock();
@@ -153,7 +161,7 @@ void xf_mixer_render(void *user, i16 *out, int frames)
         memset(acc, 0, (size_t)n * 2 * sizeof(i32));
         for (k = 0; k < XF_MIXER_CHANNELS; k++) {
             channel *c = &g_ch[k];
-            if (!c->used)
+            if (!c->used || c->paused)
                 continue;
             for (i = 0; i < n; i++) {
                 u32 avail = filled(c), r0, r1;
