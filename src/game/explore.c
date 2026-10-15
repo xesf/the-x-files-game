@@ -989,15 +989,21 @@ static u32 held_cursor(explorer *e)
     return xf_neo_u32(&r);
 }
 
+/* The "X" cursor (25541): the pointer wherever nothing else applies,
+ * the dialogue box included. */
+#define CURSOR_DEFAULT 25541
+
 /* Draws the game's cursor at the pointer, or shows the system pointer
- * where the game has none. */
+ * when the cursor art is missing. */
 static void draw_cursor(explorer *e, int mx, int my)
 {
     u32 id = held_cursor(e);
     const cursor_art *c;
-    if (!id && !e->playing && e->in_menu != 1)
+    if (!id && !e->playing && e->in_menu != 1 && !e->g->talking)
         id = game_cursor_at(e->g, mx, my);
-    c = id ? get_cursor(e, id) : NULL;
+    if (!id)
+        id = CURSOR_DEFAULT;
+    c = get_cursor(e, id);
     plat_show_cursor(!c);
     if (c)
         blit_keyed(e, &c->frames[(plat_ticks_ms() / 100) % (u32)c->count], mx - c->hot_x, my - c->hot_y);

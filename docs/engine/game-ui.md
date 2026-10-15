@@ -98,7 +98,22 @@ is an animation from its start frame to its end frame.
 `VCDefaultCursors` (321) names the cursor for characters (290, lips)
 and for objects (7164, eye). Moves use the cursor of their hotspot, and
 the backdrop of a close-up uses 287 (back up). With an item in hand,
-the cursor is the item's cursor picture.
+the cursor is the item's cursor picture. Everywhere else, the dialogue
+box included, the cursor is 25541, the spinning blue X
+(`Graphics/cursors/Blue X Icon Picts/BlueX.pff`, 12 frames).
+
+## Darkness and the flashlight
+
+Some places are dark: the warehouse mezzanine by day, and the
+warehouse at night.
+
+| Function | Address | Use |
+|---|---|---|
+| `OnFLightClick(item)` | 0x4B7530 | Takes the flashlight in hand. Its inventory click also opens the dark moves of the view |
+| `SetFLightProps(mode, place, 'M')` | 0x44B4C0 | Mode 1 by day, 2 in the dark; place `'I'` inside, `'O'` outside |
+| `SetLBoxTint(r, g, b)` | 0x4BC410 | Tints the letterbox around the picture, for example (20, 20, 50) at night |
+| `ClearLBoxTint()` | 0x4B5AA0 | Black letterbox again |
+| `SelectInv(item)` | 0x4BC230 | Puts an inventory item in hand, as a click on it does |
 
 ## Computer
 
