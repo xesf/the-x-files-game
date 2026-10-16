@@ -300,91 +300,209 @@ static int cmd_actions(int argc, char **argv)
 
 static u32 rec_u32(const u8 *p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]; }
 
-static int list_has(const xf_neo_db *db, u32 list, u32 id)
+/* --- hdb-up: what uses an object, up to the places of the game ---------- */
+
+typedef struct {
+    u32 child, parent;
+} up_edge;
+
+static up_edge *g_edges;
+static size_t g_edge_count, g_edge_cap;
+
+static void up_add(const xf_neo_db *db, u32 parent, u32 child)
 {
-    static u32 ids[2048];
-    int n = vc_read_list(db, list, ids, 2048), k;
-    for (k = 0; k < n; k++)
-        if (ids[k] == id)
-            return 1;
-    return 0;
+    if (!child || child == parent || vc_class(db, child) < 0)
+        return;
+    if (g_edge_count == g_edge_cap) {
+        size_t cap = g_edge_cap ? g_edge_cap * 2 : 65536;
+        up_edge *e = realloc(g_edges, cap * sizeof(*e));
+        if (!e)
+            return;
+        g_edges = e;
+        g_edge_cap = cap;
+    }
+    g_edges[g_edge_count].child = child;
+    g_edges[g_edge_count++].parent = parent;
 }
 
-/* Prints what owns an action: action -> action list -> trigger ->
- * trigger list -> the media, view, hotspot, conversation or layout item
- * whose record names that trigger list. Lists called with DoActionList
- * lead to the calling action. */
-static void print_owners(const xf_neo_db *db, u32 action, int depth)
+static int up_cmp(const void *a, const void *b)
 {
-    u32 i, j, k;
-    if (depth > 3)
-        return;
+    const up_edge *x = a, *y = b;
+    return x->child < y->child ? -1 : x->child > y->child;
+}
+
+static void up_build(const xf_neo_db *db)
+{
+    static u32 ids[4096];
+    u32 i;
+    int k, n;
     for (i = 0; i < db->count; i++) {
-        u32 al = db->entries[i].id;
-        if (db->entries[i].class_id != 0x42 || !list_has(db, al, action))
-            continue;
-        for (j = 0; j < db->count; j++) {
-            xf_neo_reader r;
-            u32 t = db->entries[j].id;
-            if (db->entries[j].class_id == 0x41) {
-                vc_action a;
-                if (vc_read_action(db, t, &a) == 0 && a.type == VC_ACT_FUNCTION &&
-                    strcmp(a.u.function.name, "DoActionList") == 0 && a.u.function.argc == 2 &&
-                    a.u.function.args[1].value == al) {
-                    printf("%*scalled by #%u\n", depth * 2, "", t);
-                    print_owners(db, t, depth + 1);
-                }
-                continue;
-            }
-            if (db->entries[j].class_id != 0x51 || xf_neo_object(db, t, &r, NULL, NULL) != 0 ||
-                r.p + 4 > r.end || rec_u32(r.p) != al)
-                continue;
-            for (k = 0; k < db->count; k++) {
-                u32 tl = db->entries[k].id, o;
-                if (db->entries[k].class_id != 0x52 || !list_has(db, tl, t))
-                    continue;
-                for (o = 0; o < db->count; o++) {
-                    xf_neo_reader q;
-                    const u8 *p;
-                    int c = db->entries[o].class_id;
-                    if (c < 0x2A || c == 0x41 || c == 0x42 || c == 0x51 || c == 0x52 ||
-                        xf_neo_object(db, db->entries[o].id, &q, NULL, NULL) != 0)
-                        continue;
-                    /* records do not carry their length: the fields that
-                     * name trigger lists sit in the first 64 bytes */
-                    for (p = q.p; p + 4 <= q.end && p < q.p + 64; p += 2)
-                        if (rec_u32(p) == tl) {
-                            vc_asset_ref m;
-                            char name[128] = "";
-                            if (vc_read_asset_ref(db, db->entries[o].id, &m) == 0)
-                                snprintf(name, sizeof(name), "%s", m.logical);
-                            else
-                                vc_read_name(db, db->entries[o].id, name, sizeof(name));
-                            printf("%*strigger %u in list %u of %u (class 0x%02X) %s\n", depth * 2, "", t, tl,
-                                   db->entries[o].id, c, name);
-                            break;
-                        }
-                }
-            }
+        u32 id = db->entries[i].id;
+        int c = db->entries[i].class_id;
+        xf_neo_reader r;
+        if (c == VC_ASSET_REF_LIST || c == VC_ACTION_LIST || c == VC_TRIGGER_LIST || c == VC_NAV_LIST ||
+            c == VC_EXPLORABLE_LIST || c == VC_IFACE_LAYOUT || c == 0x2C || c == 0x2E || c == 0x32) {
+            n = vc_read_list(db, id, ids, 4096);
+            for (k = 0; k < n; k++)
+                up_add(db, id, ids[k]);
         }
+        if (c == VC_ACTION) {
+            vc_action a;
+            char text[512];
+            const char *t;
+            if (vc_read_action(db, id, &a) != 0)
+                continue;
+            vc_action_text(&a, text, sizeof(text));
+            for (t = strchr(text, '#'); t; t = strchr(t + 1, '#'))
+                up_add(db, id, (u32)strtoul(t + 1, NULL, 10));
+            if (a.type == VC_ACT_FUNCTION)
+                for (k = 0; k < a.u.function.argc; k++)
+                    if (a.u.function.args[k].value > 1000)
+                        up_add(db, id, (u32)a.u.function.args[k].value);
+        } else if (c == VC_TRIGGER && xf_neo_object(db, id, &r, NULL, NULL) == 0 && r.p + 4 <= r.end) {
+            up_add(db, id, rec_u32(r.p));
+        } else if (c == VC_ASSET_REF) {
+            vc_asset_ref m;
+            if (vc_read_asset_ref(db, id, &m) == 0)
+                up_add(db, id, m.triggers);
+        } else if (c == VC_VIEW) {
+            vc_view v;
+            if (vc_read_view(db, id, &v) == 0) {
+                up_add(db, id, v.assets);
+                up_add(db, id, v.characters);
+                up_add(db, id, v.navs);
+                up_add(db, id, v.explorables);
+                up_add(db, id, v.triggers);
+            }
+        } else if (c == VC_CHAR_VIEW) {
+            vc_char_view ch;
+            if (vc_read_char_view(db, id, &ch) == 0) {
+                up_add(db, id, ch.conversations);
+                up_add(db, id, ch.idea_maps);
+                up_add(db, id, ch.assets);
+                up_add(db, id, ch.triggers);
+            }
+        } else if (c == VC_CONVERSATION) {
+            vc_conversation cv;
+            if (vc_read_conversation(db, id, &cv) == 0) {
+                up_add(db, id, cv.icons);
+                up_add(db, id, cv.answer);
+                up_add(db, id, cv.triggers);
+                up_add(db, id, cv.question);
+                up_add(db, id, cv.repeat);
+            }
+        } else if (c == VC_IFACE_ITEM) {
+            vc_iface_item it;
+            if (vc_read_iface_item(db, id, &it) == 0) {
+                up_add(db, id, it.assets);
+                up_add(db, id, it.triggers);
+            }
+        } else if (c == VC_NAV) {
+            vc_nav nv;
+            if (vc_read_nav(db, id, &nv) == 0) {
+                up_add(db, id, nv.hotspot);
+                up_add(db, id, nv.target); /* a move leads to its view */
+            }
+        } else if (c == VC_EXPLORABLE || (c >= VC_ACTION_ICON && c <= VC_IDEA_MAP)) {
+            /* no reader: the IDs near the start of the record */
+            const u8 *p;
+            if (xf_neo_object(db, id, &r, NULL, NULL) == 0)
+                for (p = r.p; p + 4 <= r.end && p < r.p + 48; p += 4) {
+                    u32 v = rec_u32(p);
+                    int vc = v > 1000 ? vc_class(db, v) : -1;
+                    if (vc == VC_TRIGGER_LIST || vc == VC_ASSET_REF_LIST || vc == VC_ACTION_LIST)
+                        up_add(db, id, v);
+                }
+        }
+    }
+    qsort(g_edges, g_edge_count, sizeof(*g_edges), up_cmp);
+}
+
+static const char *class_label(int c)
+{
+    switch (c) {
+    case VC_VIEW: return "view";
+    case VC_CONVERSATION: return "question";
+    case VC_CHAR_VIEW: return "character";
+    case VC_EXPLORABLE: return "object";
+    case VC_IFACE_ITEM: return "layout item";
+    case VC_IFACE_LAYOUT: return "layout";
+    case VC_ASSET_REF: return "media";
+    case VC_ACTION: return "action";
+    case VC_TRIGGER: return "trigger";
+    case VC_NAV: return "move";
+    case VC_ACTION_ICON: return "action icon";
+    case VC_EMOTION_ICON: return "emotion icon";
+    case VC_EVIDENCE_ICON: return "evidence icon";
+    case VC_INVENTORY: return "inventory";
+    case VC_IDEA_MAP: return "idea";
+    default: return NULL;
     }
 }
 
-static int cmd_owner(int argc, char **argv)
+static void up_print(const xf_neo_db *db, u32 id, int depth, u32 *seen, int *nseen)
 {
+    up_edge key, *e;
+    size_t lo = 0, hi = g_edge_count;
+    int k;
+    key.child = id;
+    while (lo < hi) { /* first edge of this child */
+        size_t mid = (lo + hi) / 2;
+        if (g_edges[mid].child < id)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    (void)key;
+    for (e = g_edges + lo; e < g_edges + g_edge_count && e->child == id; e++) {
+        u32 p = e->parent;
+        int c = vc_class(db, p);
+        const char *label = class_label(c);
+        int place = c == VC_VIEW || c == VC_CONVERSATION || c == VC_IFACE_LAYOUT || c == VC_EXPLORABLE ||
+                    c == VC_CHAR_VIEW || (c >= VC_ACTION_ICON && c <= VC_IDEA_MAP);
+        for (k = 0; k < *nseen && seen[k] != p; k++)
+            ;
+        if (k < *nseen)
+            continue;
+        if (*nseen < 4096)
+            seen[(*nseen)++] = p;
+        if (label) {
+            char name[160] = "";
+            vc_asset_ref m;
+            if (c == VC_ASSET_REF && vc_read_asset_ref(db, p, &m) == 0)
+                snprintf(name, sizeof(name), "%s", m.logical);
+            else if (c == VC_ACTION) {
+                vc_action a;
+                if (vc_read_action(db, p, &a) == 0)
+                    vc_action_text(&a, name, sizeof(name));
+            } else
+                vc_read_name(db, p, name, sizeof(name));
+            printf("%*s%s %u %s\n", depth * 2, "", label, p, name);
+        }
+        if (!place && depth < 10)
+            up_print(db, p, label ? depth + 1 : depth, seen, nseen);
+    }
+}
+
+static int cmd_up(int argc, char **argv)
+{
+    static u32 seen[4096];
     xf_neo_db db;
-    int i;
+    int i, n;
     if (argc < 3) {
-        fputs("usage: xftool hdb-owner <file.hdb> <action id>...\n", stderr);
+        fputs("usage: xftool hdb-up <file.hdb> <id>...\n", stderr);
         return 2;
     }
     if (xf_neo_open(&db, argv[1]) != 0)
         return 1;
+    up_build(&db);
     for (i = 2; i < argc; i++) {
         u32 id = (u32)strtoul(argv[i], NULL, 0);
-        printf("#%u:\n", id);
-        print_owners(&db, id, 1);
+        printf("%u:\n", id);
+        n = 0;
+        up_print(&db, id, 1, seen, &n);
     }
+    free(g_edges);
     xf_neo_close(&db);
     return 0;
 }
@@ -418,7 +536,7 @@ static int cmd_run(int argc, char **argv)
 const xftool_cmd xftool_hdb_cmds[] = {
     { "hdb-run", "<hdb> <gam> <list> [kind]  run an action or trigger list with tracing", cmd_run },
     { "hdb-triggers", "<file.hdb> <trigger list>  decode each trigger: kind and actions", cmd_triggers },
-    { "hdb-owner", "<file.hdb> <action>...  the media, view or item whose triggers run an action", cmd_owner },
+    { "hdb-up", "<file.hdb> <id>...  what uses an object, up to the views, questions and objects of the game", cmd_up },
     { "hdb-actions", "<file.hdb> [list id]  decode actions, or count them by type", cmd_actions },
     { "hdb-walk", "<file.hdb> <view> [disc]  follow every move from a view", cmd_walk },
     { "hdb-asset", "<file.hdb> <id>...  decode media references", cmd_asset },
