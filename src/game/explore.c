@@ -804,6 +804,7 @@ static void stop_sound(explorer *e)
     if (e->sound_open)
         xf_player_close(&e->sound);
     e->sound_open = 0;
+    e->sound_loop = 0; /* a stopped loop must not start again */
 }
 
 /* --- Game interface ---------------------------------------------------- */
