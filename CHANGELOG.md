@@ -2,6 +2,16 @@
 
 All notable changes to this project.
 
+## Unreleased
+
+- Keyboard and d-pad navigation: arrows, Tab, Enter and I; on the Vita, the d-pad, R, L, Square and Triangle.
+- A `media` folder in the game folder for the CD's clips, for installs that only have the DVD's `.vob` files.
+- The computer's login connects with Enter, and Tab moves to the password.
+- The phone stops ringing once a call is answered.
+- The opening credits and their music start together, when Cook leaves after the answer clip.
+- Captions show under the emotion icons, not behind them.
+- Close-up pictures are no longer cut at the bottom.
+
 ## 0.1.0 - 2026-10-16
 
 The first release: the whole game plays from the original game files.
