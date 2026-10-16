@@ -178,6 +178,16 @@ int xf_langs_resolve(const xf_langs *l, const char *rel, char *out, size_t size)
     return resolve_along(l, xf_langs_is_voice(rel) ? l->voices : l->text, rel, out, size);
 }
 
+int xf_langs_resolve_names(const xf_langs *l, const char *const *names, int count, char *out, size_t size)
+{
+    int c[3], n = l->count ? chain(l, l->text, c) : 0, i, k;
+    for (i = 0; i < n; i++)
+        for (k = 0; k < count; k++)
+            if (xf_path_resolve(l->langs[c[i]].dir, names[k], out, size) == 0)
+                return 0;
+    return -1;
+}
+
 int xf_langs_resolve_text(const xf_langs *l, const char *rel, char *out, size_t size)
 {
     return l->count ? resolve_along(l, l->text, rel, out, size) : -1;

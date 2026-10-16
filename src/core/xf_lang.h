@@ -43,6 +43,10 @@ int xf_langs_is_voice(const char *rel);
 /* Finds a game file in the chosen language for its kind, then that
  * language's fallbacks, then English. Returns 0 when found. */
 int xf_langs_resolve(const xf_langs *l, const char *rel, char *out, size_t size);
+/* Finds the first of several names (the same file under other names,
+ * such as DLG.TTR and DLG.TTF) along the text language's chain: each
+ * language is searched for all of them before its fallback. */
+int xf_langs_resolve_names(const xf_langs *l, const char *const *names, int count, char *out, size_t size);
 /* Like xf_langs_resolve, but always along the text language's chain. */
 int xf_langs_resolve_text(const xf_langs *l, const char *rel, char *out, size_t size);
 /* Finds a file in one language's own folder only. */

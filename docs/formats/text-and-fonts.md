@@ -32,7 +32,11 @@ different extension:
 
 In the English CD install the fonts are named `dlg.ttf`, `hcd.ttf` and
 `jrn.ttf`, with only `phn.ttr` keeping the original extension. The engine
-looks for both names.
+looks for both names, in each language folder before its fallback.
+
+The four fonts are the same files in every release (English, French,
+German, Italian, Spanish and Japanese): only the extension differs. The
+Japanese release's fonts have no Japanese glyphs.
 
 | File | Glyphs | Units per em | Character map |
 |---|---|---|---|

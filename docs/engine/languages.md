@@ -17,6 +17,7 @@ media and the text files change.
 | Interface text | `XFILEST.DLL`, `XFILESE.DLL`, `XFILESC.DLL` | Every release |
 | Documents | `XT/*.xtx` (mails, notes, articles) | Every release, about 385 of 467 |
 | Pictures with text | `X.PFF`, `X7.PFF`, `XG/*` | Every release |
+| Fonts | `DLG`, `HCD`, `JRN`, `PHN` (`.TTR`, or `.TTF` in the English CD install) | None: the same files everywhere |
 | Captions | Text tracks of the English clips | English only |
 
 Only the English clips have captions: the dubbed clips keep 37 English

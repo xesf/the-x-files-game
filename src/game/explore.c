@@ -2723,6 +2723,25 @@ static void ask_text(explorer *e, u32 clicked)
     plat_text_input("The X-Files", secret ? "" : text, secret, (int)strlen(text));
 }
 
+/* A game font: FONT.TTR as shipped, or FONT.TTF as the English CD
+ * install names three of them (the same files). */
+static int resolve_font(const explorer *e, const char *stem, char *out, size_t size)
+{
+    char ttr[16], ttf[16];
+    const char *names[2];
+    int k;
+    snprintf(ttr, sizeof(ttr), "%s.TTR", stem);
+    snprintf(ttf, sizeof(ttf), "%s.TTF", stem);
+    names[0] = ttr;
+    names[1] = ttf;
+    if (xf_langs_resolve_names(&e->g->langs, names, 2, out, size) == 0)
+        return 0;
+    for (k = 0; k < 2; k++)
+        if (xf_path_resolve(e->g->data_dir, names[k], out, size) == 0)
+            return 0;
+    return -1;
+}
+
 /* The game's fonts, from the text language. */
 static void load_game_fonts(explorer *e)
 {
@@ -2735,11 +2754,13 @@ static void load_game_fonts(explorer *e)
     if (e->have_phn_font)
         xf_font_free(&e->phn_font);
     e->have_font = e->have_hcd_font = e->have_phn_font = 0;
-    if (game_resolve(e->g, "DLG.TTF", path, sizeof(path)) == 0 || game_resolve(e->g, "DLG.TTR", path, sizeof(path)) == 0)
+    if (resolve_font(e, "DLG", path, sizeof(path)) == 0) {
         e->have_font = xf_font_load(&e->font, path) == 0;
-    if (game_resolve(e->g, "HCD.TTR", path, sizeof(path)) == 0 || game_resolve(e->g, "HCD.TTF", path, sizeof(path)) == 0)
+        xf_debug("dialogue font %s", path);
+    }
+    if (resolve_font(e, "HCD", path, sizeof(path)) == 0)
         e->have_hcd_font = xf_font_load(&e->hcd_font, path) == 0;
-    if (game_resolve(e->g, "PHN.TTR", path, sizeof(path)) == 0)
+    if (resolve_font(e, "PHN", path, sizeof(path)) == 0)
         e->have_phn_font = xf_font_load(&e->phn_font, path) == 0;
 }
 
