@@ -18,6 +18,7 @@ extern const xftool_cmd xftool_frame_cmds[];
 extern const xftool_cmd xftool_vob_cmds[];
 extern const xftool_cmd xftool_audio_cmds[];
 extern const xftool_cmd xftool_subs_cmds[];
+extern const xftool_cmd xftool_lang_cmds[];
 extern const xftool_cmd xftool_font_cmds[];
 extern const xftool_cmd xftool_hdb_cmds[];
 extern const xftool_cmd xftool_play_cmds[];

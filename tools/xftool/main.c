@@ -17,6 +17,7 @@ static const xftool_cmd *const g_groups[] = {
     xftool_vob_cmds,
     xftool_audio_cmds,
     xftool_subs_cmds,
+    xftool_lang_cmds,
     xftool_font_cmds,
     xftool_hdb_cmds,
     xftool_play_cmds,
