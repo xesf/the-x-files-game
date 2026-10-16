@@ -209,18 +209,45 @@ the key as the event value.
 
 | Function | Address | Use |
 |---|---|---|
-| `LoginInit` | 0x47D090 | Clears the name and password fields |
+| `LoginInit(kind)` | 0x47D090 | `'C'`: clears the fields of Willmore's computer; `'P'`: Scully's PowerBook (0x4F2C30) |
 | `LoginClick` | 0x4B7250 | Moves the focus to the clicked field |
-| `LoginKeyPress(field, key)` | 0x46A000 | Adds the key to the field; backspace removes one |
-| `PswdConnect(result)` | 0x4598B0 | Checks the login |
+| `LoginKeyPress(field, key)` | 0x46A000 | Adds the key to the field; backspace removes one. Fields 1 and 2 are the computer's, 3 and 4 the PowerBook's; both logins share one name and one password |
+| `PswdConnect(result)` | 0x4598B0 | Checks the computer's login (0x459AB0) |
+| `PwbkOK(result)` | 0x4F3070 | Checks the PowerBook's login |
+
+In both logins Return runs the OK button's list and Tab moves between
+the name and the password (0x4F3500).
 
 `PswdConnect` compares the name, ignoring case, with media 57905
 (string 937, "craig willmore") and the password with media 68915
-("shiloh"). The password field shows stars.
+("shiloh"). The password field shows stars. A refused login shows a
+message: one item of the message layout 60115 (0x4A3FE0), then the
+fields clear. Four hidden name and password pairs have their own
+message:
+
+| Name | Password | Message item |
+|---|---|---|
+| dwight | xyzzy | 92089 |
+| nickolai | jason | 92097 |
+| angelina | jason | 92105 |
+| twila | jason | 92113 |
+
+Any other pair shows 67487 ("Incorrect password or account name"), or
+67500 (the password hint) once three tries with Willmore's name have
+failed (variable 5327).
+
+Scully's PowerBook opens from the inventory. Its name field holds "Dana
+Scully" and the focus. `PwbkOK` wants her name and the text of media
+68910, which is string 1100 of `xfilest.dll`: an empty string. That pair
+sets the result variable (1784), but every try, right or wrong, counts
+(variable 5326) and shows 67487. From the fourth try on it shows 89627
+and disables both fields.
 
 `SetIItemText(item, text, color, font, size, bold, align)` writes a
+`SetIItemText(item, text, color, font, size, bold, align)` writes a
 label on a layout item: `font` is `'H'` (`Hcd.ttr`) or `'c'` (Courier),
-`size` is in points, `bold` is `'y'` or `'n'`, and `align` is `'l'`,
+`size` is the character height in pixels (0x53D560 creates the font with
+`lfHeight = -size`), `bold` is `'y'` or `'n'`, and `align` is `'l'`,
 `'c'` or `'r'`. `RelocateIFace(left, top, right, bottom, event)` moves
 the item whose trigger is running.
 

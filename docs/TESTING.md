@@ -192,7 +192,8 @@ again (`bomb-death.txt`), the kiss (`kiss.txt`), lying to Scully
 (`scully-lie.txt`), the NSA car and the porch gunfight (`nsa-car.txt`,
 `rauch-gunfight.txt`), a death in the woods (`woods-death.txt`), Cook in
 the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
-(`suicide.txt`), the phone (`phone.txt`), the Options screen
+(`suicide.txt`), the phone (`phone.txt`), the logins' other answers and Scully's
+PowerBook (`passwords.txt`), the Options screen
 (`options.txt`) and saving (`save.txt`).
 
 Scripts in `tests/window` need the window: `menu.txt` opens the main

@@ -478,5 +478,14 @@ static main()
     set_name(0x458AA0, "Credits_show_card", SN_NOWARN);
     set_name(0x6C4988, "g_rect_strip", SN_NOWARN);
     set_name(0x6C4958, "g_rect_screen", SN_NOWARN);
+    set_name(0x459AB0, "Login_fbi_check", SN_NOWARN);
+    set_name(0x468660, "Login_fbi_reset", SN_NOWARN);
+    set_name(0x4F3070, "Login_powerbook_check", SN_NOWARN);
+    set_name(0x4F2C30, "Login_powerbook_reset", SN_NOWARN);
+    set_name(0x470190, "Login_init", SN_NOWARN);
+    set_name(0x4F3500, "Login_return_tab", SN_NOWARN);
+    set_name(0x4247C0, "Login_key_field", SN_NOWARN);
+    set_name(0x4A3FE0, "Message_show_item", SN_NOWARN);
+    set_name(0x53D560, "Font_create", SN_NOWARN);
     msg("names applied\n");
 }

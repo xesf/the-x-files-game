@@ -69,7 +69,7 @@
 0x44E990 MainMenu_on_command   slot 29: passes the command code to MainMenu_show
 0x44DB40 MainMenu_show         shows or hides the menu players and adds them to the display list at manager+0x7D4
 0x482500 media_player_create   creates a player object for a VCAssetRef, with a parent canvas
-0x517190 media_object_create   factory: media object for a VCAssetRef and a time range
+0x517190 media_object_create   factory: media object for a VCAssetRef and a time range; a movie plays from vob/<name>.vob when it exists (DVD)
 0x422A00 Time_ctor             time value with a scale (1000 = milliseconds)
 0x4087C0 display_list_add      adds an item to a display list with a layer number
 0x44E5F0 MainMenu_left_player  menu+0x18
@@ -477,3 +477,12 @@ data 0x6C3F38 g_menu_rect_top  (57, 0)-(409, 60), TOPro.mov
 0x458AA0 Credits_show_card  slot 9: a text item at the bottom right of the strip (0x6C4988, bottom - 5)
 data 0x6C4988 g_rect_strip  (20, 90)-(620, 330), the scene strip
 data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
+0x459AB0 Login_fbi_check  PswdConnect: Willmore's name and password, four hidden pairs with their messages, else wrong password (67487) or locked (67500)
+0x468660 Login_fbi_reset  clears the FBI login's fields
+0x4F3070 Login_powerbook_check  PwbkOK: "Dana Scully" and string 1100 (empty) set the result; every try counts (var 5326); message 67487, or 89627 from the fourth
+0x4F2C30 Login_powerbook_reset  her name in the name field, an empty password; locks both fields after four tries
+0x470190 Login_init  LoginInit: 'C' the FBI computer, 'P' the PowerBook
+0x4F3500 Login_return_tab  Return runs the Connect list; Tab moves between the name and the password
+0x4247C0 Login_key_field  LoginKeyPress by field: 1-2 the FBI computer, 3-4 the PowerBook
+0x4A3FE0 Message_show_item  opens the message layout 60115 and shows one of its items
+0x53D560 Font_create  CreateFontIndirect with lfHeight = -size: sizes are pixels
