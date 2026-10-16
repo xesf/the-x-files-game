@@ -12,11 +12,13 @@
 
 #define MAX_POINTS 4096
 
-static u32 find_table(const u8 *d, size_t size, const char *tag)
+/* `dir`: where the table directory starts (0, or the font's offset in a
+ * collection); table offsets count from the start of the file. */
+static u32 find_table(const u8 *d, size_t size, u32 dir, const char *tag)
 {
-    u32 n = xf_be16(d + 4), i;
-    for (i = 0; i < n && 12 + i * 16 + 16 <= size; i++) {
-        const u8 *e = d + 12 + i * 16;
+    u32 n = xf_be16(d + dir + 4), i;
+    for (i = 0; i < n && dir + 12 + i * 16 + 16 <= size; i++) {
+        const u8 *e = d + dir + 12 + i * 16;
         if (memcmp(e, tag, 4) == 0) {
             u32 off = xf_be32(e + 8), len = xf_be32(e + 12);
             return (u64)off + len <= size ? off : 0;
@@ -27,21 +29,23 @@ static u32 find_table(const u8 *d, size_t size, const char *tag)
 
 int xf_font_init(xf_font *f, u8 *data, size_t size)
 {
-    u32 head, hhea, maxp, cmap, i, best = 0;
+    u32 head, hhea, maxp, cmap, i, best = 0, dir = 0;
     int best_kind = 0;
 
     memset(f, 0, sizeof(*f));
     f->data = data;
     f->size = size;
-    if (size < 12)
+    if (size < 16)
         return -1;
-    head = find_table(data, size, "head");
-    hhea = find_table(data, size, "hhea");
-    maxp = find_table(data, size, "maxp");
-    cmap = find_table(data, size, "cmap");
-    f->glyf = find_table(data, size, "glyf");
-    f->loca = find_table(data, size, "loca");
-    f->hmtx = find_table(data, size, "hmtx");
+    if (memcmp(data, "ttcf", 4) == 0 && (dir = xf_be32(data + 12)) + 12 > size)
+        return -1; /* a collection: its first font */
+    head = find_table(data, size, dir, "head");
+    hhea = find_table(data, size, dir, "hhea");
+    maxp = find_table(data, size, dir, "maxp");
+    cmap = find_table(data, size, dir, "cmap");
+    f->glyf = find_table(data, size, dir, "glyf");
+    f->loca = find_table(data, size, dir, "loca");
+    f->hmtx = find_table(data, size, dir, "hmtx");
     if (!head || !hhea || !maxp || !cmap || !f->glyf || !f->loca || !f->hmtx)
         return -1;
     f->units_per_em = xf_be16(data + head + 18);

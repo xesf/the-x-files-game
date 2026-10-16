@@ -1,15 +1,19 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 xesf */
 /* TrueType font reader and antialiased rasterizer for the game's .ttr
- * fonts (glyf outlines, cmap formats 0, 4 and 6). */
+ * fonts (glyf outlines, cmap formats 0, 4 and 6), and TrueType
+ * collections (.ttc: the first font). */
 #ifndef XF_TTF_H
 #define XF_TTF_H
 
 #include "xf_types.h"
 
-typedef struct {
+typedef struct xf_font {
     u8 *data;
     size_t size;
+    /* Characters this font lacks are drawn with this one (a Japanese
+     * font under the game's Latin ones); set after loading. */
+    const struct xf_font *fallback;
     u32 glyf, loca, hmtx, cmap_sub;
     int cmap_format;       /* 0, 4 or 6 */
     int cmap_mac_roman;    /* 1 when the cmap maps Mac Roman bytes */
