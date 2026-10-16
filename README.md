@@ -33,7 +33,8 @@ interface around it (the default on the Vita). See
 The DOS, Windows 9x and Vita builds are new and have only been tried in
 DOSBox-X, Wine and the VitaSDK build.
 
-To build from source, see [docs/BUILDING.md](docs/BUILDING.md).
+To build from source, see [docs/BUILDING.md](docs/BUILDING.md). What has
+changed is in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
