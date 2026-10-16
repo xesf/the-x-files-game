@@ -436,6 +436,13 @@ static void load_asset_picture(explorer *e, u32 asset, int w, int h, xf_image *i
                 memset(img, 0, sizeof(*img));
             free(data);
         } else if (open_nav_file(e, m->path) == 0 && w > 0 && h > 0) {
+            /* The whole frame: a close-up's item can be smaller than its
+             * picture, which then showed cut at the bottom. */
+            const xf_mov_track *t = xf_mov_find(&e->nav, XF_TRACK_VIDEO);
+            if (t && t->width && t->height) {
+                w = t->width;
+                h = t->height;
+            }
             img->pixels = calloc((size_t)w * h, 4);
             img->width = w;
             img->height = h;
