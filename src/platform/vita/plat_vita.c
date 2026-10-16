@@ -107,8 +107,9 @@ int plat_init(const char *title, int width, int height)
         /* With ux0:data/xfiles/profile.txt the log goes to xfiles.log
          * there (the profile lines included). */
         SceIoStat st;
-        if (sceIoGetstat("ux0:data/xfiles/profile.txt", &st) >= 0)
-            freopen("ux0:data/xfiles/xfiles.log", "w", stderr);
+        if (sceIoGetstat("ux0:data/xfiles/profile.txt", &st) >= 0 &&
+            freopen("ux0:data/xfiles/xfiles.log", "w", stderr))
+            setvbuf(stderr, NULL, _IOLBF, 1024); /* a line at a time: the app can be closed at any moment */
     }
     scePowerSetArmClockFrequency(444);
     scePowerSetBusClockFrequency(222);
