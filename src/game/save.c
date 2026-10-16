@@ -301,6 +301,7 @@ int game_reset(game *g)
     u8 play_once[sizeof(g->play_once)];
     i32 prefs[GAME_PREFS];
     int screen_wide = g->screen_wide;
+    u32 seed = g->rand_seed;
     serials[0] = g->iface_serial;
     serials[1] = g->sound_serial;
     serials[2] = g->fade_serial;
@@ -325,6 +326,9 @@ int game_reset(game *g)
     memcpy(g->play_once, play_once, sizeof(play_once));
     memcpy(g->prefs, prefs, sizeof(prefs));
     g->screen_wide = screen_wide;
+    /* The original seeds each random number from the clock: a new game
+     * or Try again does not replay the same chances. */
+    g->rand_seed = seed;
     game_prefs_apply(g);
     memcpy(g->save_dir, save_dir, sizeof(save_dir));
     return 0;
@@ -448,7 +452,7 @@ int game_load_mem(game *g, const u8 *data, size_t size)
         } else if (memcmp(tag, "MISC", 4) == 0) {
             u32 m[32] = { 0 };
             r_u32s(&c, m, 32);
-            g->rand_seed = m[0];
+            (void)m[0]; /* the random seed when saved: the running one stays */
             g->ing_cook_shown = (int)m[1];
             g->ing_notes = m[2];
             g->ai_trigger = m[3];

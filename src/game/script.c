@@ -859,7 +859,8 @@ int script_run(script *s, const char *path, int quiet)
             }
             fclose(nf);
         } else if (strcmp(cmd, "new") == 0) {
-            ok = game_new(g) == 0;
+            /* as the main menu's New: a game already started is dropped */
+            ok = (!g->view || game_reset(g) == 0) && game_new(g) == 0;
         } else if (strcmp(cmd, "save") == 0 && sscanf(line, "%*s %255s %31[^\n#]", file, what) >= 1) {
             ok = game_save_file(g, file, what) == 0;
         } else if (strcmp(cmd, "load") == 0 && sscanf(line, "%*s %255s", file) == 1) {

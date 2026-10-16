@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "audio/mixer.h"
 #include "game/game.h"
@@ -2899,6 +2900,10 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     else if (plat_save_dir(e->g->save_dir, sizeof(e->g->save_dir)) != 0)
         e->g->save_dir[0] = '\0';
     game_prefs_load(e->g);
+    /* Random chances differ from run to run, as the original's generators
+     * seeded from the clock; play scripts keep the fixed seed. */
+    if (!script_path)
+        e->g->rand_seed = (u32)time(NULL) ^ plat_ticks_ms();
     {
         /* XF_SCREEN=wide or original overrides the saved setting */
         const char *screen = getenv("XF_SCREEN");
