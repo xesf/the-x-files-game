@@ -17,4 +17,10 @@ u32 xf_macroman_to_unicode(u8 c);
 /* Converts Mac Roman text to UTF-8, like xf_cp1252_to_utf8. */
 size_t xf_macroman_to_utf8(char *dst, size_t dst_size, const u8 *src, size_t src_size);
 
+/* Converts text in place from UTF-8 to Windows-1252 when it is UTF-8
+ * with more than ASCII (translations are written in UTF-8); leaves other
+ * text alone. Characters Windows-1252 lacks become '?'. Returns the new
+ * length. */
+size_t xf_utf8_to_cp1252(char *text, size_t size);
+
 #endif

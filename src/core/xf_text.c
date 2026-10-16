@@ -69,3 +69,59 @@ size_t xf_macroman_to_utf8(char *dst, size_t dst_size, const u8 *src, size_t src
 {
     return to_utf8(dst, dst_size, src, src_size, xf_macroman_to_unicode);
 }
+
+/* The next code point of UTF-8 text, or -1 when the bytes are not UTF-8. */
+static long utf8_next(const u8 *s, size_t n, size_t *len)
+{
+    u32 c = s[0], need, i;
+    if (c < 0x80) {
+        *len = 1;
+        return (long)c;
+    }
+    need = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC2 ? 1 : 0;
+    if (!need || need >= n || c >= 0xF5)
+        return -1;
+    c &= 0x3F >> need;
+    for (i = 1; i <= need; i++) {
+        if ((s[i] & 0xC0) != 0x80)
+            return -1;
+        c = c << 6 | (s[i] & 0x3F);
+    }
+    *len = need + 1;
+    return (long)c;
+}
+
+size_t xf_utf8_to_cp1252(char *text, size_t size)
+{
+    size_t r = 0, w = 0, len;
+    u8 *s = (u8 *)text;
+    for (r = 0; r < size; r++) /* only text that is UTF-8 with more than ASCII */
+        if (s[r] >= 0x80)
+            break;
+    if (r == size)
+        return size;
+    for (r = 0; r < size; r += len)
+        if (utf8_next(s + r, size - r, &len) < 0)
+            return size; /* Windows-1252 already */
+    if (size >= 3 && s[0] == 0xEF && s[1] == 0xBB && s[2] == 0xBF)
+        r = 3; /* a byte order mark */
+    else
+        r = 0;
+    while (r < size) {
+        long c = utf8_next(s + r, size - r, &len);
+        u8 out = '?';
+        r += len;
+        if (c < 0x80 || (c >= 0xA0 && c < 0x100)) {
+            out = (u8)c;
+        } else {
+            int k;
+            for (k = 0x80; k < 0xA0; k++)
+                if (xf_cp1252_to_unicode((u8)k) == (u32)c)
+                    out = (u8)k;
+        }
+        s[w++] = out;
+    }
+    if (w < size)
+        s[w] = '\0';
+    return w;
+}
