@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "xf_jobs.h"
 #include "xf_log.h"
 
 /* --- Code tables ------------------------------------------------------ */
@@ -293,7 +294,18 @@ struct xf_mpeg2 {
     int cur;
     int newest_shown;
     int out;     /* picture to return, or -1 */
-    /* slice and macroblock */
+    /* the slices of the picture being read: offsets in buf */
+    struct {
+        size_t off, size;
+        int row;
+    } *slices;
+    int slice_count, slice_cap;
+};
+
+/* What decoding one slice changes: slices reset all of it at their
+ * start, so the slices of a picture decode on different cores. */
+typedef struct {
+    xf_mpeg2 *d;
     int qscale;
     int dc_pred[3];
     int pmv[2][2][2];    /* [first/second][forward/backward][x/y] */
@@ -301,7 +313,7 @@ struct xf_mpeg2 {
     int mv[2][4][2];     /* [direction][vector][x/y]; dual prime uses 0, 2 and 3 */
     int fsel[2][2];      /* [direction][first/second] */
     i16 blk[6][64];
-};
+} slice;
 
 /* --- Inverse DCT ----------------------------------------------------------- */
 
@@ -420,8 +432,9 @@ static int read_coef(bits *b, const vlc *table, int *run, int *level)
     return 0;
 }
 
-static int block_intra(xf_mpeg2 *d, bits *b, int cc, i16 *blk)
+static int block_intra(slice *s, bits *b, int cc, i16 *blk)
 {
+    const xf_mpeg2 *d = s->d;
     int size = vlc_get(b, cc ? &v_dc_chroma : &v_dc_lum);
     int i = 0, sum, run, level, r;
     const vlc *table = d->intra_vlc ? &v_b15 : &v_b14;
@@ -431,9 +444,9 @@ static int block_intra(xf_mpeg2 *d, bits *b, int cc, i16 *blk)
         int diff = (int)get(b, size);
         if (diff < 1 << (size - 1))
             diff -= (1 << size) - 1;
-        d->dc_pred[cc] += diff;
+        s->dc_pred[cc] += diff;
     }
-    blk[0] = (i16)(d->dc_pred[cc] << (3 - d->dc_prec));
+    blk[0] = (i16)(s->dc_pred[cc] << (3 - d->dc_prec));
     sum = blk[0];
     for (;;) {
         int j, v;
@@ -446,7 +459,7 @@ static int block_intra(xf_mpeg2 *d, bits *b, int cc, i16 *blk)
         if (i > 63)
             return -1;
         j = d->scan_order[i];
-        v = (level < 0 ? -level : level) * d->qscale * d->intra_q[j] / 16;
+        v = (level < 0 ? -level : level) * s->qscale * d->intra_q[j] / 16;
         v = saturate(level < 0 ? -v : v);
         blk[j] = (i16)v;
         sum ^= v;
@@ -456,8 +469,9 @@ static int block_intra(xf_mpeg2 *d, bits *b, int cc, i16 *blk)
     return 0;
 }
 
-static int block_inter(xf_mpeg2 *d, bits *b, i16 *blk)
+static int block_inter(slice *s, bits *b, i16 *blk)
 {
+    const xf_mpeg2 *d = s->d;
     int i = -1, sum = 0, run, level, r, first = 1;
     for (;;) {
         int j, v;
@@ -478,7 +492,7 @@ static int block_inter(xf_mpeg2 *d, bits *b, i16 *blk)
         if (i > 63)
             return -1;
         j = d->scan_order[i];
-        v = (2 * (level < 0 ? -level : level) + 1) * d->qscale * d->inter_q[j] / 32;
+        v = (2 * (level < 0 ? -level : level) + 1) * s->qscale * d->inter_q[j] / 32;
         v = saturate(level < 0 ? -v : v);
         blk[j] = (i16)v;
         sum ^= v;
@@ -561,31 +575,32 @@ static void mc_field(xf_mpeg2 *d, const frame *ref, const frame *cur, int mbx, i
             mbx * 16 + mx, mby * 8 + my, 8, 4, avg);
 }
 
-static void predict_mb(xf_mpeg2 *d, int mbx, int mby)
+static void predict_mb(slice *s, int mbx, int mby)
 {
+    xf_mpeg2 *d = s->d;
     const frame *cur = &d->frames[d->cur];
     int dir, avg = 0;
     for (dir = 0; dir < 2; dir++) {
         const frame *ref;
         int f;
-        if (!(d->mb_flags & (dir ? MB_BACKWARD : MB_FORWARD)))
+        if (!(s->mb_flags & (dir ? MB_BACKWARD : MB_FORWARD)))
             continue;
         /* P pictures: ref[1] is the picture itself, ref[0] the one before.
          * B pictures: forward from ref[0] (or ref[1] when the GOP opens
          * on a reference we never had), backward from ref[1]. */
         ref = &d->frames[dir == 0 && d->ref[0] >= 0 ? d->ref[0] : d->ref[1]];
-        switch (d->mtype) {
+        switch (s->mtype) {
         case MT_FRAME:
-            mc_frame(d, ref, cur, mbx, mby, d->mv[dir][0][0], d->mv[dir][0][1], avg);
+            mc_frame(d, ref, cur, mbx, mby, s->mv[dir][0][0], s->mv[dir][0][1], avg);
             break;
         case MT_FIELD:
             for (f = 0; f < 2; f++)
-                mc_field(d, ref, cur, mbx, mby, f, d->fsel[dir][f], d->mv[dir][f][0], d->mv[dir][f][1], avg);
+                mc_field(d, ref, cur, mbx, mby, f, s->fsel[dir][f], s->mv[dir][f][0], s->mv[dir][f][1], avg);
             break;
         default: /* dual prime: same parity, then opposite parity averaged in */
             for (f = 0; f < 2; f++) {
-                mc_field(d, ref, cur, mbx, mby, f, f, d->mv[dir][0][0], d->mv[dir][0][1], avg);
-                mc_field(d, ref, cur, mbx, mby, f, f ^ 1, d->mv[dir][2 + f][0], d->mv[dir][2 + f][1], 1);
+                mc_field(d, ref, cur, mbx, mby, f, f, s->mv[dir][0][0], s->mv[dir][0][1], avg);
+                mc_field(d, ref, cur, mbx, mby, f, f ^ 1, s->mv[dir][2 + f][0], s->mv[dir][2 + f][1], 1);
             }
             break;
         }
@@ -625,48 +640,50 @@ static int dmv(bits *b)
 }
 
 /* motion_vectors(s) of a frame picture. */
-static void read_vectors(xf_mpeg2 *d, bits *b, int s, int mtype)
+static void read_vectors(slice *sl, bits *b, int s, int mtype)
 {
+    const xf_mpeg2 *d = sl->d;
     int r;
     switch (mtype) {
     case MT_FRAME:
-        d->mv[s][0][0] = d->pmv[0][s][0] = d->pmv[1][s][0] = motion_delta(b, d->f_code[s][0], d->pmv[0][s][0]);
-        d->mv[s][0][1] = d->pmv[0][s][1] = d->pmv[1][s][1] = motion_delta(b, d->f_code[s][1], d->pmv[0][s][1]);
+        sl->mv[s][0][0] = sl->pmv[0][s][0] = sl->pmv[1][s][0] = motion_delta(b, d->f_code[s][0], sl->pmv[0][s][0]);
+        sl->mv[s][0][1] = sl->pmv[0][s][1] = sl->pmv[1][s][1] = motion_delta(b, d->f_code[s][1], sl->pmv[0][s][1]);
         break;
     case MT_FIELD:
         for (r = 0; r < 2; r++) {
-            d->fsel[s][r] = get1(b);
-            d->mv[s][r][0] = d->pmv[r][s][0] = motion_delta(b, d->f_code[s][0], d->pmv[r][s][0]);
-            d->mv[s][r][1] = motion_delta(b, d->f_code[s][1], d->pmv[r][s][1] >> 1);
-            d->pmv[r][s][1] = d->mv[s][r][1] * 2;
+            sl->fsel[s][r] = get1(b);
+            sl->mv[s][r][0] = sl->pmv[r][s][0] = motion_delta(b, d->f_code[s][0], sl->pmv[r][s][0]);
+            sl->mv[s][r][1] = motion_delta(b, d->f_code[s][1], sl->pmv[r][s][1] >> 1);
+            sl->pmv[r][s][1] = sl->mv[s][r][1] * 2;
         }
         break;
     default: {
         int mx, my, dx, dy, m;
-        mx = motion_delta(b, d->f_code[s][0], d->pmv[0][s][0]);
+        mx = motion_delta(b, d->f_code[s][0], sl->pmv[0][s][0]);
         dx = dmv(b);
-        my = motion_delta(b, d->f_code[s][1], d->pmv[0][s][1] >> 1);
+        my = motion_delta(b, d->f_code[s][1], sl->pmv[0][s][1] >> 1);
         dy = dmv(b);
-        d->pmv[0][s][0] = d->pmv[1][s][0] = mx;
-        d->pmv[0][s][1] = d->pmv[1][s][1] = my * 2;
-        d->mv[s][0][0] = mx;
-        d->mv[s][0][1] = my;
+        sl->pmv[0][s][0] = sl->pmv[1][s][0] = mx;
+        sl->pmv[0][s][1] = sl->pmv[1][s][1] = my * 2;
+        sl->mv[s][0][0] = mx;
+        sl->mv[s][0][1] = my;
         /* the opposite-parity vectors, scaled by the field distance */
         m = d->tff ? 1 : 3;
-        d->mv[s][2][0] = ((mx * m + (mx > 0)) >> 1) + dx;
-        d->mv[s][2][1] = ((my * m + (my > 0)) >> 1) + dy - 1;
+        sl->mv[s][2][0] = ((mx * m + (mx > 0)) >> 1) + dx;
+        sl->mv[s][2][1] = ((my * m + (my > 0)) >> 1) + dy - 1;
         m = 4 - m;
-        d->mv[s][3][0] = ((mx * m + (mx > 0)) >> 1) + dx;
-        d->mv[s][3][1] = ((my * m + (my > 0)) >> 1) + dy + 1;
+        sl->mv[s][3][0] = ((mx * m + (mx > 0)) >> 1) + dx;
+        sl->mv[s][3][1] = ((my * m + (my > 0)) >> 1) + dy + 1;
         break;
     }
     }
 }
 
-static void reset_dc(xf_mpeg2 *d) { d->dc_pred[0] = d->dc_pred[1] = d->dc_pred[2] = 1 << (7 + d->dc_prec); }
+static void reset_dc(slice *s) { s->dc_pred[0] = s->dc_pred[1] = s->dc_pred[2] = 1 << (7 + s->d->dc_prec); }
 
-static void add_blocks(xf_mpeg2 *d, int mbx, int mby, int cbp, int intra)
+static void add_blocks(slice *s, int mbx, int mby, int cbp, int intra)
 {
+    const xf_mpeg2 *d = s->d;
     const frame *cur = &d->frames[d->cur];
     int w = d->w, cw = d->w / 2, k;
     u8 *y = cur->y + mby * 16 * w + mbx * 16;
@@ -674,26 +691,27 @@ static void add_blocks(xf_mpeg2 *d, int mbx, int mby, int cbp, int intra)
         u8 *dst;
         if (!(cbp & (32 >> k)))
             continue;
-        if (d->dct_field)
+        if (s->dct_field)
             dst = y + (k >> 1) * w + (k & 1) * 8;
         else
             dst = y + (k >> 1) * 8 * w + (k & 1) * 8;
-        idct_out(d->blk[k], dst, d->dct_field ? w * 2 : w, !intra);
+        idct_out(s->blk[k], dst, s->dct_field ? w * 2 : w, !intra);
     }
     if (cbp & 2)
-        idct_out(d->blk[4], cur->cb + mby * 8 * cw + mbx * 8, cw, !intra);
+        idct_out(s->blk[4], cur->cb + mby * 8 * cw + mbx * 8, cw, !intra);
     if (cbp & 1)
-        idct_out(d->blk[5], cur->cr + mby * 8 * cw + mbx * 8, cw, !intra);
+        idct_out(s->blk[5], cur->cr + mby * 8 * cw + mbx * 8, cw, !intra);
 }
 
-static int read_qscale(xf_mpeg2 *d, bits *b)
+static int read_qscale(const xf_mpeg2 *d, bits *b)
 {
     int code = (int)get(b, 5);
     return d->q_type ? non_linear_qscale[code] : code * 2;
 }
 
-static int decode_mb(xf_mpeg2 *d, bits *b, int mbx, int mby)
+static int decode_mb(slice *s, bits *b, int mbx, int mby)
 {
+    const xf_mpeg2 *d = s->d;
     int flags, cbp, k;
     switch (d->pic_type) {
     case PIC_I:
@@ -708,78 +726,79 @@ static int decode_mb(xf_mpeg2 *d, bits *b, int mbx, int mby)
     }
     if (flags < 0)
         return -1;
-    d->mtype = MT_FRAME;
+    s->mtype = MT_FRAME;
     if ((flags & (MB_FORWARD | MB_BACKWARD)) && !d->fpfd) {
-        d->mtype = (int)get(b, 2);
-        if (d->mtype == 0)
+        s->mtype = (int)get(b, 2);
+        if (s->mtype == 0)
             return -1;
     }
-    d->dct_field = !d->fpfd && (flags & (MB_INTRA | MB_PATTERN)) ? get1(b) : 0;
+    s->dct_field = !d->fpfd && (flags & (MB_INTRA | MB_PATTERN)) ? get1(b) : 0;
     if (flags & MB_QUANT)
-        d->qscale = read_qscale(d, b);
+        s->qscale = read_qscale(d, b);
 
     if (flags & MB_INTRA) {
         if (d->cmv) {
-            read_vectors(d, b, 0, MT_FRAME);
+            read_vectors(s, b, 0, MT_FRAME);
             get1(b); /* marker */
         } else {
-            memset(d->pmv, 0, sizeof(d->pmv));
+            memset(s->pmv, 0, sizeof(s->pmv));
         }
-        d->mb_flags = flags;
+        s->mb_flags = flags;
         for (k = 0; k < 6; k++)
-            if (block_intra(d, b, k < 4 ? 0 : k - 3, d->blk[k]) != 0)
+            if (block_intra(s, b, k < 4 ? 0 : k - 3, s->blk[k]) != 0)
                 return -1;
-        add_blocks(d, mbx, mby, 63, 1);
+        add_blocks(s, mbx, mby, 63, 1);
         return 0;
     }
 
-    reset_dc(d);
+    reset_dc(s);
     if (flags & MB_FORWARD)
-        read_vectors(d, b, 0, d->mtype);
+        read_vectors(s, b, 0, s->mtype);
     if (flags & MB_BACKWARD)
-        read_vectors(d, b, 1, d->mtype);
+        read_vectors(s, b, 1, s->mtype);
     if (d->pic_type == PIC_P && !(flags & MB_FORWARD)) {
         /* no motion compensation: a zero frame vector */
-        memset(d->pmv, 0, sizeof(d->pmv));
-        d->mv[0][0][0] = d->mv[0][0][1] = 0;
-        d->mtype = MT_FRAME;
+        memset(s->pmv, 0, sizeof(s->pmv));
+        s->mv[0][0][0] = s->mv[0][0][1] = 0;
+        s->mtype = MT_FRAME;
         flags |= MB_FORWARD;
     }
-    d->mb_flags = flags;
+    s->mb_flags = flags;
     cbp = 0;
     if (flags & MB_PATTERN) {
         cbp = vlc_get(b, &v_cbp);
         if (cbp < 0)
             return -1;
         for (k = 0; k < 6; k++)
-            if ((cbp & (32 >> k)) && block_inter(d, b, d->blk[k]) != 0)
+            if ((cbp & (32 >> k)) && block_inter(s, b, s->blk[k]) != 0)
                 return -1;
     }
-    predict_mb(d, mbx, mby);
-    add_blocks(d, mbx, mby, cbp, 0);
+    predict_mb(s, mbx, mby);
+    add_blocks(s, mbx, mby, cbp, 0);
     return 0;
 }
 
-static void skip_mb(xf_mpeg2 *d, int mbx, int mby)
+static void skip_mb(slice *s, int mbx, int mby)
 {
-    reset_dc(d);
+    const xf_mpeg2 *d = s->d;
+    reset_dc(s);
     if (d->pic_type == PIC_P) {
-        memset(d->pmv, 0, sizeof(d->pmv));
-        d->mb_flags = MB_FORWARD;
-        d->mtype = MT_FRAME;
-        d->mv[0][0][0] = d->mv[0][0][1] = 0;
-    } else if (d->mb_flags & MB_INTRA) {
+        memset(s->pmv, 0, sizeof(s->pmv));
+        s->mb_flags = MB_FORWARD;
+        s->mtype = MT_FRAME;
+        s->mv[0][0][0] = s->mv[0][0][1] = 0;
+    } else if (s->mb_flags & MB_INTRA) {
         return; /* not allowed after an intra macroblock */
     } else {
         /* the previous directions, frame prediction with the predictors */
-        int s;
-        d->mtype = MT_FRAME;
-        for (s = 0; s < 2; s++) {
-            d->mv[s][0][0] = d->pmv[0][s][0];
-            d->mv[s][0][1] = d->pmv[0][s][1];
+        int dir;
+        s->mtype = MT_FRAME;
+        for (dir = 0; dir < 2; dir++) {
+            s->mv[dir][0][0] = s->pmv[0][dir][0];
+            s->mv[dir][0][1] = s->pmv[0][dir][1];
         }
     }
-    predict_mb(d, mbx, mby);
+    predict_mb(s, mbx, mby);
 }
 
 /* Returns the increment, or -1 on error or at the end of the slice. */
@@ -797,8 +816,9 @@ static int read_incr(bits *b)
     }
 }
 
-static void decode_slice(xf_mpeg2 *d, int row, const u8 *data, size_t size)
+static void decode_slice(slice *s, int row, const u8 *data, size_t size)
 {
+    const xf_mpeg2 *d = s->d;
     bits b;
     int addr, incr, total = d->mb_w * d->mb_h;
     b.p = data;
@@ -806,21 +826,21 @@ static void decode_slice(xf_mpeg2 *d, int row, const u8 *data, size_t size)
     b.end = (u32)size * 8;
     if (row >= d->mb_h)
         return;
-    d->qscale = read_qscale(d, &b);
+    s->qscale = read_qscale(d, &b);
     if (get1(&b)) { /* intra_slice_flag, intra_slice, reserved, extra information */
         get(&b, 8);
         while (get1(&b))
             get(&b, 8);
     }
-    reset_dc(d);
-    memset(d->pmv, 0, sizeof(d->pmv));
+    reset_dc(s);
+    memset(s->pmv, 0, sizeof(s->pmv));
     incr = read_incr(&b);
     if (incr < 1)
         return;
     addr = row * d->mb_w + incr - 1;
-    d->mb_flags = MB_INTRA;
+    s->mb_flags = MB_INTRA;
     for (;;) {
-        if (addr >= total || decode_mb(d, &b, addr % d->mb_w, addr / d->mb_w) != 0 || b.pos > b.end)
+        if (addr >= total || decode_mb(s, &b, addr % d->mb_w, addr / d->mb_w) != 0 || b.pos > b.end)
             return;
         if (show(&b, 23) == 0) /* only zero bits before the next start code */
             return;
@@ -830,7 +850,7 @@ static void decode_slice(xf_mpeg2 *d, int row, const u8 *data, size_t size)
         while (--incr > 0) {
             if (++addr >= total)
                 return;
-            skip_mb(d, addr % d->mb_w, addr / d->mb_w);
+            skip_mb(s, addr % d->mb_w, addr / d->mb_w);
         }
         addr++;
     }
@@ -912,6 +932,7 @@ static void picture_header(xf_mpeg2 *d, bits *b)
     get(b, 10); /* temporal reference */
     d->pic_type = (int)get(b, 3);
     d->in_picture = 1;
+    d->slice_count = 0;
     d->valid = 0;
     d->structure = 0;
 }
@@ -975,11 +996,43 @@ static void start_picture(xf_mpeg2 *d)
     d->valid = 1;
 }
 
+static void add_slice(xf_mpeg2 *d, int row, const u8 *data, size_t size)
+{
+    if (d->slice_count == d->slice_cap) {
+        int cap = d->slice_cap ? d->slice_cap * 2 : 64;
+        void *p = realloc(d->slices, (size_t)cap * sizeof(*d->slices));
+        if (!p)
+            return;
+        d->slices = p;
+        d->slice_cap = cap;
+    }
+    d->slices[d->slice_count].off = (size_t)(data - d->buf);
+    d->slices[d->slice_count].size = size;
+    d->slices[d->slice_count].row = row;
+    d->slice_count++;
+}
+
+/* Slices part, part + parts, ... of the picture. */
+static void slice_part(void *ctx, int part, int parts)
+{
+    xf_mpeg2 *d = ctx;
+    slice sl;
+    int i;
+    for (i = part; i < d->slice_count; i += parts) {
+        memset(&sl, 0, sizeof(sl));
+        sl.d = d;
+        decode_slice(&sl, d->slices[i].row, d->buf + d->slices[i].off, d->slices[i].size);
+    }
+}
+
 static void finish_picture(xf_mpeg2 *d)
 {
     if (!d->in_picture)
         return;
     d->in_picture = 0;
+    if (d->valid && d->slice_count)
+        xf_jobs_run(slice_part, d, XF_MIN(xf_jobs_count(), d->slice_count));
+    d->slice_count = 0;
     if (!d->valid)
         return;
     d->valid = 0;
@@ -1005,7 +1058,7 @@ static void process_unit(xf_mpeg2 *d, int code, const u8 *data, size_t size)
             d->in_picture = 2;
         }
         if (d->valid)
-            decode_slice(d, code - 1, data, size);
+            add_slice(d, code - 1, data, size); /* decoded with the others at the end */
         return;
     }
     if (code == 0x00 || code == 0xB3 || code == 0xB7 || code == 0xB8)
@@ -1056,6 +1109,7 @@ void xf_mpeg2_free(xf_mpeg2 *d)
     for (i = 0; i < 3; i++)
         free(d->frames[i].y);
     free(d->buf);
+    free(d->slices);
     free(d);
 }
 
@@ -1064,16 +1118,23 @@ void xf_mpeg2_reset(xf_mpeg2 *d)
     d->len = d->scan = 0;
     d->ended = 0;
     d->in_picture = d->valid = 0;
+    d->slice_count = 0;
     d->ref[0] = d->ref[1] = d->out = -1;
     d->newest_shown = 1;
 }
 
 int xf_mpeg2_push(xf_mpeg2 *d, const u8 *data, size_t size)
 {
-    if (d->scan > 0 && d->scan >= d->len / 2) {
-        memmove(d->buf, d->buf + d->scan, d->len - d->scan);
-        d->len -= d->scan;
-        d->scan = 0;
+    /* Drops what has been read, but not the slices of the picture being
+     * read: they are decoded when it ends. */
+    size_t keep = d->slice_count ? d->slices[0].off : d->scan;
+    if (keep > 0 && keep >= d->len / 2) {
+        int i;
+        memmove(d->buf, d->buf + keep, d->len - keep);
+        d->len -= keep;
+        d->scan -= keep;
+        for (i = 0; i < d->slice_count; i++)
+            d->slices[i].off -= keep;
     }
     if (d->len + size + 8 > d->cap) {
         size_t cap = (d->len + size + 8) * 2;
