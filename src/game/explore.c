@@ -79,7 +79,8 @@ static const struct {
 };
 
 /* A moving picture of the view: a range of a movie, looped or held on
- * its last frame. */
+ * its last frame. A clip that plays once has a full player, with its
+ * sound and captions, and its end triggers run when it ends. */
 typedef struct {
     xf_mov mov;
     xf_video video;
@@ -88,7 +89,11 @@ typedef struct {
     int loop;
     u32 started;
     u32 asset;            /* the media reference it shows */
+    xf_player player;
+    int use_player, ended;
 } view_anim;
+
+static const xf_video *anim_video(const view_anim *an) { return an->use_player ? &an->player.video : &an->video; }
 
 #define MAX_ANIMS 4
 #define MAX_ICONS 6
@@ -264,11 +269,17 @@ static void close_anims(explorer *e)
 {
     int i;
     for (i = 0; i < e->anim_count; i++) {
-        xf_video_close(&e->anims[i].video);
-        xf_mov_close(&e->anims[i].mov);
+        if (e->anims[i].use_player) {
+            xf_player_close(&e->anims[i].player);
+        } else {
+            xf_video_close(&e->anims[i].video);
+            xf_mov_close(&e->anims[i].mov);
+        }
     }
     e->anim_count = 0;
 }
+
+static void set_volume(explorer *e, const xf_player *p, u32 pref);
 
 /* Opens a movie range as a view animation. Times are movie time in ms;
  * 0..0 means the whole movie. */
@@ -276,7 +287,23 @@ static int open_anim(explorer *e, const char *path, u32 start, u32 end, int loop
 {
     view_anim *an = &e->anims[e->anim_count];
     u32 k;
-    if (e->anim_count >= MAX_ANIMS || xf_mov_open(&an->mov, path) != 0)
+    if (e->anim_count >= MAX_ANIMS)
+        return -1;
+    memset(an, 0, sizeof(*an));
+    if (!loop && xf_player_open_range(&an->player, path, plat_ticks_ms(), start, end) == 0) {
+        if (!an->player.has_video) {
+            xf_player_close(&an->player);
+            return -1;
+        }
+        an->use_player = 1;
+        an->start_ms = start;
+        an->length_ms = XF_MAX(an->player.duration_ms, 1);
+        an->started = plat_ticks_ms();
+        set_volume(e, &an->player, 976); /* Pref_iVolumeDialog */
+        e->anim_count++;
+        return 0;
+    }
+    if (xf_mov_open(&an->mov, path) != 0)
         return -1;
     an->track = NULL;
     for (k = 0; k < an->mov.track_count && !an->track; k++)
@@ -298,11 +325,19 @@ static int open_anim(explorer *e, const char *path, u32 start, u32 end, int loop
     return 0;
 }
 
-/* Steps a view animation to the current time. */
-static void update_anim(view_anim *an, u32 now)
+/* Steps a view animation to the current time. A clip that plays once
+ * runs its end triggers when it ends (game_view_clip_end). */
+static void update_anim(explorer *e, view_anim *an, u32 now)
 {
     u32 t = now - an->started;
     u64 movie_time, media;
+    if (an->use_player) {
+        if (!xf_player_update(&an->player, now) && !an->ended) {
+            an->ended = 1;
+            game_view_clip_end(e->g, an->asset);
+        }
+        return;
+    }
     t = an->loop ? t % an->length_ms : XF_MIN(t, an->length_ms - 1);
     movie_time = (u64)(an->start_ms + t) * an->mov.timescale / 1000;
     if (xf_mov_edit_lookup(&an->mov, an->track, movie_time, &media) == 0)
@@ -316,10 +351,10 @@ static int shoot_at(explorer *e, int x, int y)
     int i;
     for (i = 0; i < e->anim_count; i++) {
         const view_anim *an = &e->anims[i];
-        const xf_video *vd = &an->video;
+        const xf_video *vd = anim_video(an);
         int w = XF_MIN(vd->width, PICTURE_W), h = XF_MIN(vd->height, PICTURE_H);
         int x0 = PICTURE_X + (PICTURE_W - w) / 2, y0 = PICTURE_Y + (PICTURE_H - h) / 2;
-        u32 t = plat_ticks_ms() - an->started, hot;
+        u32 t = an->use_player ? an->player.now_ms : plat_ticks_ms() - an->started, hot;
         t = an->loop ? t % an->length_ms : XF_MIN(t, an->length_ms - 1);
         if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h)
             continue;
@@ -1160,6 +1195,7 @@ static void refresh_icons(explorer *e)
         view_anim *an = &e->icon_anim[i];
         e->icon_ids[i] = ids[i];
         e->icon_open[i] = 0;
+        an->use_player = an->ended = 0;
         if (game_read_icon(e->g, ids[i], &ic) != 0 || vc_read_list(&e->g->db, ic.icon, media, 4) <= 0 ||
             vc_read_asset_ref(&e->g->db, media[0], &a) != 0 || a.entry_count == 0 ||
             resolve_media(e, a.entries[0].path, path, sizeof(path)) != 0 || xf_mov_open(&an->mov, path) != 0)
@@ -1203,7 +1239,7 @@ static void draw_icons(explorer *e, int mx, int my)
         int x0 = icon_x(e, i), w, h;
         if (!e->icon_open[i])
             continue;
-        update_anim(an, plat_ticks_ms());
+        update_anim(e, an, plat_ticks_ms());
         w = XF_MIN(an->video.width, ICON_W);
         h = XF_MIN(an->video.height, ICON_H);
         for (y = 0; y < h; y++)
@@ -1798,10 +1834,15 @@ static void draw(explorer *e, int mx, int my)
                    PICTURE_W * 4);
     for (i = 0; i < e->anim_count; i++) {
         /* Centred in the picture area; full-size ones cover it. */
-        const xf_video *vd = &e->anims[i].video;
-        int w = XF_MIN(vd->width, PICTURE_W), h = XF_MIN(vd->height, PICTURE_H);
-        int x0 = PICTURE_X + (PICTURE_W - w) / 2, y0 = PICTURE_Y + (PICTURE_H - h) / 2;
-        update_anim(&e->anims[i], plat_ticks_ms());
+        const xf_video *vd = anim_video(&e->anims[i]);
+        int w, h, x0, y0;
+        update_anim(e, &e->anims[i], plat_ticks_ms());
+        if (!vd->frame)
+            continue;
+        w = XF_MIN(vd->width, PICTURE_W);
+        h = XF_MIN(vd->height, PICTURE_H);
+        x0 = PICTURE_X + (PICTURE_W - w) / 2;
+        y0 = PICTURE_Y + (PICTURE_H - h) / 2;
         for (y = 0; y < h; y++)
             memcpy(&e->fb[(y0 + y) * SCREEN_W + x0], vd->frame + (size_t)y * vd->width, (size_t)w * 4);
     }
@@ -1836,6 +1877,18 @@ static void draw(explorer *e, int mx, int my)
     draw_icons(e, mx, my);
     if (e->icon_count)
         ui_piece(e, 0, ICON_Y, SCREEN_W, ICON_H, SCR_ANCHOR_BELOW);
+    {
+        /* the captions of a view's clip that plays once */
+        const char *sub = NULL;
+        for (i = 0; i < e->anim_count && !sub && game_pref(g, 2573); i++) /* Pref_bClosedCaptioning */
+            if (e->anims[i].use_player)
+                sub = xf_player_subtitle(&e->anims[i].player);
+        if (sub && e->have_font) {
+            int top = e->icon_count ? ICON_Y + ICON_H + 4 : PICTURE_Y + PICTURE_H + 4;
+            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, top + 22, SCREEN_W - 40, sub, 0xFFFFFF, 0x000000);
+            ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BELOW);
+        }
+    }
     if (g->talking) {
         int x0 = dialog_x(e);
         draw_dialog(e, mx, my);
@@ -2053,6 +2106,12 @@ static void pause_game_media(explorer *e, int paused)
         xf_player_pause(&e->sound, paused, now);
     if (e->overlay_open)
         xf_player_pause(&e->overlay, paused, now);
+    {
+        int i;
+        for (i = 0; i < e->anim_count; i++)
+            if (e->anims[i].use_player)
+                xf_player_pause(&e->anims[i].player, paused, now);
+    }
     if (paused)
         e->media_pause_from = now;
     else if (e->card_until) {

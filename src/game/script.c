@@ -973,6 +973,9 @@ int script_run(script *s, const char *path, int quiet)
             ok = !s->host.shot || s->host.shot(s->host.user, file) == 0;
         } else if (strcmp(cmd, "set") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
             vc_set_var(&g->interp, (u32)a, (i32)b);
+        } else if (strcmp(cmd, "clipend") == 0) {
+            /* the view's clip plays to its end: its end triggers run */
+            game_view_clip_end(g, g->view_asset);
         } else if (strcmp(cmd, "reach") == 0) {
             reach(g);
         } else if (strcmp(cmd, "state") == 0) {

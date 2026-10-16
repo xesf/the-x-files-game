@@ -195,6 +195,7 @@ typedef struct {
     u32 photo_downloaded;            /* bit per photo: on the computer */
     int photo_scroll, photo_selected; /* the photo screen */
     u32 view_asset;       /* the view's clip, whose triggers ran on entry */
+    int view_asset_ended; /* its end triggers ran when it ended */
     u8 lbox_tint[3];      /* SetLBoxTint colour */
     int lbox_tinted;
     u32 binoc_from;       /* the view the binoculars look out of */
@@ -372,6 +373,9 @@ i32 game_reg_value(game *g, const char *name, int i);
 
 /* The enabled media of the current view, in list order. */
 int game_view_media(game *g, u32 *ids, int max);
+/* The view's clip `asset` played to its end: its kind 9 triggers run,
+ * once (the original's media objects do this for every clip). */
+void game_view_clip_end(game *g, u32 asset);
 
 const game_spot *game_spot_at(const game *g, int x, int y);
 const game_iface_item *game_iface_item_at(game *g, int x, int y);

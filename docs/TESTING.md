@@ -128,6 +128,7 @@ A script has one command per line; `#` starts a comment.
 | `type <text>` | Types the text, key by key, into the interface item with focus |
 | `ing <P\|L\|N> <database> <text>` / `noing ...` | Runs an ING search at the office computer and expects a record, or none |
 | `set <var> <value>` | Sets a GAM variable |
+| `clipend` | The view's clip plays to its end: a clip that plays once runs its end triggers |
 | `save <file> [name]` / `load <file>` | Writes the game to a save file, or loads one; a `.x` file is in the original's format |
 | `need <file>` | Stops the script, as passed, when the file is missing: for files that are not part of the game |
 | `reload` | Saves to memory and loads again at once |

@@ -114,9 +114,10 @@ static void build_spots(game *g)
         u32 now = first_enabled(g, v.assets);
         if (now != g->view_asset) {
             vc_asset_ref a;
-            if (g->view_asset && vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
+            if (g->view_asset && !g->view_asset_ended && vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
                 vc_run_triggers(&g->interp, a.triggers, 9);
             g->view_asset = now;
+            g->view_asset_ended = 0;
             if (now && vc_read_asset_ref(&g->db, now, &a) == 0)
                 vc_run_triggers(&g->interp, a.triggers, 8);
         }
@@ -311,7 +312,7 @@ int game_enter_view(game *g, u32 id)
             vc_run_triggers(&g->interp, g->view_triggers, 9);
         if (g->view_asset) {
             vc_asset_ref a;
-            if (vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
+            if (!g->view_asset_ended && vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
                 vc_run_triggers(&g->interp, a.triggers, 9);
             g->view_asset = 0;
         }
@@ -341,6 +342,7 @@ int game_enter_view(game *g, u32 id)
     /* The view's clip starts next, with its own start triggers: the
      * office loop at the warehouse puts Skinner in the office. */
     g->view_asset = first_enabled(g, v.assets);
+    g->view_asset_ended = 0;
     if (g->view_asset) {
         vc_asset_ref a;
         if (vc_read_asset_ref(&g->db, g->view_asset, &a) == 0)
@@ -358,6 +360,19 @@ int game_enter_view(game *g, u32 id)
     return 0;
 }
 
+void game_view_clip_end(game *g, u32 asset)
+{
+    vc_asset_ref a;
+    if (!asset || asset != g->view_asset || g->view_asset_ended || vc_read_asset_ref(&g->db, asset, &a) != 0)
+        return;
+    g->view_asset_ended = 1;
+    xf_info("view clip %u ended", asset);
+    if (a.triggers) {
+        vc_run_triggers(&g->interp, a.triggers, 9);
+        after_triggers(g);
+    }
+}
+
 /* Puts the player back in a view without running any entry trigger: a
  * loaded game already holds what those triggers did. */
 int game_resume_view(game *g, u32 id)
@@ -370,6 +385,7 @@ int game_resume_view(game *g, u32 id)
     g->view_epoch++;
     g->view_triggers = v.triggers;
     g->view_asset = first_enabled(g, v.assets);
+    g->view_asset_ended = 0;
     g->pending_view = 0;
     g->resuming = 1; /* the hotspots appear without their triggers */
     build_spots(g);
