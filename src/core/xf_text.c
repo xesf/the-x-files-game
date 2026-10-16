@@ -93,41 +93,6 @@ static long utf8_next(const u8 *s, size_t n, size_t *len)
     return (long)c;
 }
 
-size_t xf_utf8_to_cp1252(char *text, size_t size)
-{
-    size_t r = 0, w = 0, len;
-    u8 *s = (u8 *)text;
-    for (r = 0; r < size; r++) /* only text that is UTF-8 with more than ASCII */
-        if (s[r] >= 0x80)
-            break;
-    if (r == size)
-        return size;
-    for (r = 0; r < size; r += len)
-        if (utf8_next(s + r, size - r, &len) < 0)
-            return size; /* Windows-1252 already */
-    if (size >= 3 && s[0] == 0xEF && s[1] == 0xBB && s[2] == 0xBF)
-        r = 3; /* a byte order mark */
-    else
-        r = 0;
-    while (r < size) {
-        long c = utf8_next(s + r, size - r, &len);
-        u8 out = '?';
-        r += len;
-        if (c < 0x80 || (c >= 0xA0 && c < 0x100)) {
-            out = (u8)c;
-        } else {
-            int k;
-            for (k = 0x80; k < 0xA0; k++)
-                if (xf_cp1252_to_unicode((u8)k) == (u32)c)
-                    out = (u8)k;
-        }
-        s[w++] = out;
-    }
-    if (w < size)
-        s[w] = '\0';
-    return w;
-}
-
 size_t xf_fold_ascii(char *dst, size_t size, const char *src)
 {
     /* the base letters of U+00C0..U+00FF; '?' where there is none */
@@ -152,4 +117,60 @@ size_t xf_fold_ascii(char *dst, size_t size, const char *src)
     }
     dst[n] = '\0';
     return n;
+}
+
+#include "xf_sjis_table.h"
+
+/* One code point as UTF-8; returns the bytes written, 0 when it does not fit. */
+static size_t put_utf8(char *dst, size_t room, u32 u)
+{
+    if (u < 0x80 && room > 1) {
+        dst[0] = (char)u;
+        return 1;
+    }
+    if (u < 0x800 && room > 2) {
+        dst[0] = (char)(0xC0 | u >> 6);
+        dst[1] = (char)(0x80 | (u & 0x3F));
+        return 2;
+    }
+    if (u >= 0x800 && room > 3) {
+        dst[0] = (char)(0xE0 | u >> 12);
+        dst[1] = (char)(0x80 | (u >> 6 & 0x3F));
+        dst[2] = (char)(0x80 | (u & 0x3F));
+        return 3;
+    }
+    return 0;
+}
+
+size_t xf_sjis_to_utf8(char *dst, size_t dst_size, const u8 *src, size_t src_size)
+{
+    size_t i = 0, o = 0, n;
+    if (dst_size == 0)
+        return 0;
+    while (i < src_size) {
+        u32 c = src[i++], u = '?';
+        if (c < 0x80) {
+            u = c;
+        } else if (c >= 0xA1 && c <= 0xDF) {
+            u = 0xFF61 + (c - 0xA1); /* half-width katakana */
+        } else if (((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC)) && i < src_size) {
+            u32 t = src[i++], lead = c <= 0x9F ? c - 0x81 : c - 0xE0 + 31;
+            if (t >= 0x40 && t <= 0xFC && g_sjis_double[lead][t - 0x40])
+                u = g_sjis_double[lead][t - 0x40];
+        }
+        if (!(n = put_utf8(dst + o, dst_size - o, u)))
+            break;
+        o += n;
+    }
+    dst[o] = '\0';
+    return o;
+}
+
+int xf_is_utf8(const char *text, size_t size)
+{
+    size_t r, len;
+    for (r = 0; r < size; r += len)
+        if (utf8_next((const u8 *)text + r, size - r, &len) < 0)
+            return 0;
+    return 1;
 }

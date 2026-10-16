@@ -8,6 +8,7 @@
 #include "gfx/screen.h"
 #include "inflate_vectors.h"
 #include "xf_inflate.h"
+#include "xf_text.h"
 
 static int g_failed;
 
@@ -135,11 +136,27 @@ static void test_screen(void)
     CHECK(!l.wide && l.screen.w == 1024);
 }
 
+/* Shift-JIS documents, UTF-8 checks and the accent folding of search words. */
+static void test_text(void)
+{
+    static const u8 sjis[] = { 0x82, 0xA0, 'A', 0xB1, 0x81, 0x46 }; /* あ A ｱ ： */
+    char out[32];
+    CHECK(xf_sjis_to_utf8(out, sizeof(out), sjis, sizeof(sjis)) == 10);
+    CHECK(strcmp(out, "\xE3\x81\x82" "A" "\xEF\xBD\xB1" "\xEF\xBC\x9A") == 0);
+    CHECK(xf_is_utf8("Portugu\xC3\xAAs", 10));
+    CHECK(!xf_is_utf8("caf\xE9", 4)); /* Windows-1252 */
+    xf_fold_ascii(out, sizeof(out), "Plut\xC3\xB3nio, OVNI");
+    CHECK(strcmp(out, "plutonio, ovni") == 0);
+    xf_fold_ascii(out, sizeof(out), "Fen\xF3meno"); /* Windows-1252 */
+    CHECK(strcmp(out, "fenomeno") == 0);
+}
+
 int main(void)
 {
     test_inflate();
     test_mixer();
     test_screen();
+    test_text();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;
