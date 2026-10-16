@@ -40,7 +40,7 @@ design documents. They are **reference only**:
 
 - **ScummVM wiki:** container and codec list. `.xmv`, `.nmv`, `.amv`,
   `.dmv` and `.mus` are QuickTime MOV files. Video codecs: `cvid`, `jpeg`,
-  `rpza`. Audio codecs: `ima4`, `qdmc` (QDesign Music 2). Subtitles use a
+  `rpza`. Audio codecs: `ima4`, `qdmc` (QDesign Music 1). Subtitles use a
   `text` track. `.pff` is a JPEG bundle, `.hot` stores hotspot rectangles,
   `.xtx` is text and `.ttr` is TrueType.
 - **mthcore/x-files-game (MIT):** byte-exact NeoPersist 3.0 decoding of
@@ -59,8 +59,10 @@ design documents. They are **reference only**:
 **GPL-3.0-or-later.** ScummVM is GPL-3.0-or-later, and the MIT sources can be
 included in a GPL-3 project. So GPL-3 lets us learn from, and where useful
 port, ScummVM's QuickTime and codec code, and still credit both MIT
-projects. The code carries no references to these projects. All credits and
-MIT notices go in `README.md`. Do not copy the vendored NeoPersist headers
+projects. The code carries no references to these projects, except a file
+that follows another project's code closely: it keeps that project's
+copyright line next to ours (`src/media/qdmc.c`, from FFmpeg). All credits
+and MIT notices go in `README.md`. Do not copy the vendored NeoPersist headers
 from mthcore: they are proprietary, and NOTICE limits them to
 interoperability use. Write our own definitions from the format notes. Never
 commit game data, binaries or IDA databases built from them (see §8).
@@ -180,7 +182,7 @@ tests/       format round-trips and decoder golden frames
 |---|---|---|---|
 | M0 | Repo skeleton, LICENSE, Makefile, macOS backend shows a window and plays sound | Builds with `clang` only, no external dependencies | Done |
 | M1 | `xftool` + format readers: HDB/GAM (NeoPersist), PFF, HOT, XTX, MOV atoms | Byte-exact round-trip on HDB/GAM. All assets in `../Installations/data` listed and mapped | PFF, HOT, XTX, MOV done. HDB/GAM in progress (needs RE) |
-| M2 | Codecs: JPEG, Cinepak, RPZA, Motion JPEG A, IMA4, PCM, text track, then QDMC | Every `.xmv`/`.nmv`/`.amv` decodes; output matches a reference decoder | Done except QDMC (24 files) |
+| M2 | Codecs: JPEG, Cinepak, RPZA, Motion JPEG A, IMA4, PCM, text track, then QDMC | Every `.xmv`/`.nmv`/`.amv` decodes; output matches a reference decoder | Done |
 | M3 | Media player: A/V sync, subtitles, TTF text | One FMV with subtitles plays correctly in the macOS app | Done (`xfiles --play`) |
 | M4 | VC model + script VM from the HDB; navigation, hotspots, cursor | Walk the CD1 opening (Mulder's apartment / Seattle) with the mouse | In progress: HDB reader, scene graph and `xfiles --explore` done |
 | M5 | Inventory, PDA, phone, computer, conversations, UberStates, timers, save/load (`.x`) | Original `start*.x` saves load and continue. State traces match the original | |
@@ -254,9 +256,9 @@ The engine runs any release from its data:
 
 ## 8. Risks
 
-- **QDMC audio** (QDesign Music 1, not QDM2) is the hardest codec. It is
-  used by 24 files (music and a few scenes). ScummVM only has QDM2; check
-  against ffmpeg output.
+- **QDMC audio** (QDesign Music 1, not QDM2): done, following FFmpeg's
+  decoder (LGPL-2.1-or-later, credited in `README.md` and in the file).
+  Our output matches ffmpeg's within one step on every file.
 - **MPEG-2 for DVD `.vob`:** this is a large job. Ship CD assets first and
   treat DVD video as optional.
 - **HDB semantics:** the bytes are decoded, but what the fields mean comes

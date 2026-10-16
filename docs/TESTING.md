@@ -18,8 +18,11 @@ xftool check $G/XV/*.xmv $G/XS/*.mus     # decode every frame and sound chunk
 ```
 
 On the English CD release, `xftool check` over all 1,198 movie files takes
-about a minute. Today it reports only the 15 files with `QDMC` sound
-(decoder not written yet) and the two `XG` files with no movie header.
+about a minute. It reports only the two `XG` files with no movie header.
+
+The `QDMC` sound decoder is checked against ffmpeg: `xftool audio` and
+`ffmpeg -i <file> -f wav -acodec pcm_s16le` give the same samples within
+one step (float rounding) for all 15 `QDMC` files of the CDs.
 
 ## Ground truth from the original game
 

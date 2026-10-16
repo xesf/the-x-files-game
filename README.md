@@ -55,6 +55,9 @@ licenses allow this use, and their notices are kept here:
 
 - **ScummVM** (GPL-3.0-or-later): QuickTime container and codec
   references. https://github.com/scummvm/scummvm
+- **FFmpeg** (LGPL-2.1-or-later): the QDesign Music 1 (`QDMC`) decoder in
+  `src/media/qdmc.c` follows FFmpeg's `libavcodec/qdmc.c`, Copyright (c)
+  2017 Paul B Mahol; its tables come from there. https://ffmpeg.org
 - **mthcore/x-files-game** (MIT): NeoPersist HDB/GAM format research.
   https://github.com/mthcore/x-files-game
 - **Zeffuro/x-files-pc-enhancement-patch** (MIT): a QuickTime and

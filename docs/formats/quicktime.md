@@ -30,12 +30,35 @@ Counts are tracks in the English CD release (1,198 files).
 | Video | `mjpa` (Motion JPEG A) | One file in `XG/` | Interlaced: two JPEG fields per frame (see below). |
 | Audio | `ima4` (IMA ADPCM, Apple variant) | Most sound | 11025, 22050 or 44100 Hz; mono or stereo. |
 | Audio | `twos` (signed PCM, big-endian) | Some `.amv`, `.mus`, `.xmv` | 8-bit or 16-bit. |
-| Audio | `QDMC` (QDesign Music 1) | 18 `.xmv`, 4 `.mus`, 1 `.amv`, 1 `.dmv` | Music and a few scenes. Not QDesign Music 2 (`QDM2`). |
+| Audio | `QDMC` (QDesign Music 1) | 18 `.xmv`, 4 `.mus`, 1 `.amv`, 1 `.dmv` | Music and a few scenes: the credits music, the establishing shots, the songs on Willmore's stereo. Not QDesign Music 2 (`QDM2`). See below. |
 | Text | `text` | Most `XV/` scenes | Subtitles. A scene can have several text tracks. |
 
 Scenes in `XV/` have one video track, one sound track and one or more text
 tracks. The text tracks whose sample description has no codec name are
 also subtitle tracks.
+
+## QDesign Music 1 (`QDMC`)
+
+The sound sample description (version 1) ends with a `wave` atom: `frma`
+`QDMC`, then a `QDCA` atom of big-endian 32-bit fields:
+
+| Field | Example (`FOCredit.mus`) |
+|---|---|
+| Version | 1 |
+| Channels | 2 |
+| Sample rate | 44100 |
+| Bit rate | 48000 |
+| Block size | 8192 |
+| FFT size | 256 |
+| Packet size | 1114 bytes |
+
+A packet decodes to 8192 samples per channel at 32 kHz and above (4096
+from 16 kHz, 2048 below). It starts with `QMC\1` and a 16-bit sum of its
+bytes from offset 6, plus 226. The bits that follow, read least
+significant first, give noise levels per band and the tones of five
+groups; the decoder builds 32 sub-frames from them, each through an
+inverse FFT, overlapped by half. `src/media/qdmc.c` follows FFmpeg's
+decoder (see `README.md`).
 
 ## Navigation stills (`.nmv`)
 
