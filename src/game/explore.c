@@ -2593,6 +2593,24 @@ static int nav_key(explorer *e, const plat_event *ev)
     return 0;
 }
 
+/* A click put the focus on a text field: where there is no keyboard
+ * (the Vita), the system's on-screen one opens, its text replacing the
+ * field's. */
+static void ask_text(explorer *e, u32 clicked)
+{
+    game *g = e->g;
+    char buf[64];
+    const char *text;
+    int secret;
+    if (!clicked || clicked != g->focus_item || !g->iface_count)
+        return;
+    secret = game_item_secret(g, clicked);
+    text = g->slot_mode == 'S' ? g->slot_names[g->slot] : game_item_text(g, clicked, buf, sizeof(buf));
+    if (!text)
+        text = "";
+    plat_text_input("The X-Files", secret ? "" : text, secret, (int)strlen(text));
+}
+
 /* One input event: from the platform, or from a script. Mouse positions
  * are in the pixels of the frame shown last. */
 static void handle_event(explorer *e, plat_event ev)
@@ -2723,8 +2741,12 @@ static void handle_event(explorer *e, plat_event ev)
          * the dialogue box, the inventory, then the view. */
         int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
         int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
-        if (game_iface_item_at(e->g, ev.x, ev.y))
+        const game_iface_item *it = game_iface_item_at(e->g, ev.x, ev.y);
+        if (it) {
+            u32 clicked = it->id;
             game_click(e->g, ev.x, ev.y);
+            ask_text(e, clicked);
+        }
         else if (e->g->talking && click_dialog(e, ev.x, ev.y))
             ;
         else if (inv >= e->inv_items) {

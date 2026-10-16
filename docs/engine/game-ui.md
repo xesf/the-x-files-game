@@ -210,7 +210,7 @@ the key as the event value.
 | Function | Address | Use |
 |---|---|---|
 | `LoginInit(kind)` | 0x47D090 | `'C'`: clears the fields of Willmore's computer; `'P'`: Scully's PowerBook (0x4F2C30) |
-| `LoginClick` | 0x4B7250 | Moves the focus to the clicked field |
+| `LoginClick` | 0x4B7250 | Moves the focus to the clicked field. Where there is no keyboard (the Vita), our engine then opens the system keyboard (`plat_text_input`); its text replaces the field's |
 | `LoginKeyPress(field, key)` | 0x46A000 | Adds the key to the field; backspace removes one. Fields 1 and 2 are the computer's, 3 and 4 the PowerBook's; both logins share one name and one password |
 | `PswdConnect(result)` | 0x4598B0 | Checks the computer's login (0x459AB0) |
 | `PwbkOK(result)` | 0x4F3070 | Checks the PowerBook's login |

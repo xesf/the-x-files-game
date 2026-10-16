@@ -281,6 +281,8 @@ int game_key(game *g, int key);
 /* Text typed in a layout item, for drawing: the login name, or the
  * password as stars. NULL when the item shows no typed text. */
 const char *game_item_text(game *g, u32 item, char *buf, size_t size);
+/* Whether a text field shows stars for what is typed (a password). */
+int game_item_secret(game *g, u32 item);
 
 /* The text of a media reference: a string of xfilest.dll (type 6), or
  * the reference's own text (kind 4, for example a password). Returns

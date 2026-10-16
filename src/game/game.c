@@ -1050,6 +1050,33 @@ int game_click_inventory(game *g, u32 id)
     return 1;
 }
 
+/* Whether a text field hides what is typed: the password fields of the
+ * logins (LoginKeyPress fields 2 and 4). */
+int game_item_secret(game *g, u32 item)
+{
+    const game_iface_item *it = find_item(g, item);
+    u32 ids[64];
+    int n, i;
+    if (!it)
+        return 0;
+    n = vc_read_list(&g->db, it->item.triggers, ids, 64);
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        u32 acts[8];
+        int m, j;
+        if (xf_neo_object(&g->db, ids[i], &r, NULL, NULL) != 0)
+            continue;
+        m = vc_read_list(&g->db, xf_neo_u32(&r), acts, 8);
+        for (j = 0; j < m; j++) {
+            vc_action a;
+            if (vc_read_action(&g->db, acts[j], &a) == 0 && a.valid && a.type == VC_ACT_FUNCTION &&
+                strcmp(a.u.function.name, "LoginKeyPress") == 0 && a.u.function.argc == 2)
+                return ((int)a.u.function.args[0].value - 1) % 2 == 1;
+        }
+    }
+    return 0;
+}
+
 const char *game_item_text(game *g, u32 item, char *buf, size_t size)
 {
     const game_iface_item *it = find_item(g, item);
