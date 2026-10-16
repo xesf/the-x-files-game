@@ -2301,7 +2301,10 @@ void game_prefs_apply(game *g)
 }
 
 /* Our own settings share the file, under numbers no GAM variable has. */
-#define PREF_SCREEN_WIDE 0xFFFF0001u
+/* The wide layout, off by default: the original 4:3 screen fits the
+ * game's interface best. 0xFFFF0001 held it when the Vita defaulted to
+ * wide; that value is no longer read. */
+#define PREF_SCREEN_WIDE 0xFFFF0002u
 
 const char *game_credit(const game *g)
 {
@@ -2351,11 +2354,7 @@ void game_prefs_load(game *g)
      * says 0, but the story needs it (Cook takes the case files only with
      * it on, on Disc 1). */
     g->prefs[pref_index(873)] = 1;
-#ifdef __vita__
-    g->screen_wide = 1; /* the handheld's 960x544 screen */
-#else
     g->screen_wide = 0;
-#endif
     snprintf(path, sizeof(path), "%s/prefs", g->save_dir);
     if (g->save_dir[0] && (f = fopen(path, "r"))) {
         while (fscanf(f, "%u %d", &var, &value) == 2)

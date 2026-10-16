@@ -4,10 +4,10 @@ The original draws a 640x480 screen. Our engine draws the same screen,
 then shows it in one of two layouts:
 
 - **Original**: the 640x480 screen, scaled to fit the window with bars at
-  the sides. This is the default, and the only layout of the DOS and
-  Windows 9x builds.
+  the sides. This is the default everywhere, the Vita included: the
+  game's interface is drawn for it.
 - **Wide**: the scene fills a wide screen, and the interface goes around
-  it. This is the default on the Vita.
+  it. An option on desktop systems.
 
 Ctrl+Shift+W switches between the two. The setting is kept in the `prefs`
 file with the Options screen's settings. `XF_SCREEN=wide` or
