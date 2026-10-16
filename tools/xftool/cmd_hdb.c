@@ -276,12 +276,20 @@ static int cmd_actions(int argc, char **argv)
         }
         for (k = 0; k < 8; k++)
             printf("type %d: %u plain, %u with condition\n", k, types[k][0], types[k][1]);
+        if (getenv("XF_ACTIONS")) /* every action as text, to search */
+            for (i = 0; i < db.count; i++) {
+                vc_action a;
+                if (db.entries[i].class_id == VC_ACTION && vc_read_action(&db, db.entries[i].id, &a) == 0) {
+                    vc_action_text(&a, line, sizeof(line));
+                    printf("#%u %s\n", db.entries[i].id, line);
+                }
+            }
         if (getenv("XF_FUNCTIONS"))
             for (i = 0; i < db.count; i++) {
                 vc_action a;
                 if (db.entries[i].class_id == VC_ACTION && vc_read_action(&db, db.entries[i].id, &a) == 0 &&
                     a.type == VC_ACT_FUNCTION && a.valid)
-                    printf("function %s %d\n", a.u.function.name, a.u.function.argc);
+                    printf("function %s %d #%u\n", a.u.function.name, a.u.function.argc, db.entries[i].id);
             }
         printf("%u actions with an unexpected size\n", bad);
     }
