@@ -555,3 +555,8 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x518C80 Binoculars_closeup  the binoculars show the close-up of the view
 0x5192B0 View_swap_picture  swaps a view's picture on enable
 0x5E4EE0 Var_text_compare  string variables compare their text
+0x43A820 Font_set_size  sets the size (+0x1C) and rebuilds the font
+0x404AF0 Font_copy_ctor  copies a font object
+0x42FF60 Font_assign  assigns one font object to another
+0x482D00 DialogBox_init  loads the dialogue folder; its question lists in Courier New 12
+0x48F870 App_init_screen  start-up: display list, the rollover text object (0x6BD2F8) in Courier New 14

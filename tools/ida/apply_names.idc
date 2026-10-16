@@ -555,5 +555,10 @@ static main()
     set_name(0x518C80, "Binoculars_closeup", SN_NOWARN);
     set_name(0x5192B0, "View_swap_picture", SN_NOWARN);
     set_name(0x5E4EE0, "Var_text_compare", SN_NOWARN);
+    set_name(0x43A820, "Font_set_size", SN_NOWARN);
+    set_name(0x404AF0, "Font_copy_ctor", SN_NOWARN);
+    set_name(0x42FF60, "Font_assign", SN_NOWARN);
+    set_name(0x482D00, "DialogBox_init", SN_NOWARN);
+    set_name(0x48F870, "App_init_screen", SN_NOWARN);
     msg("names applied\n");
 }

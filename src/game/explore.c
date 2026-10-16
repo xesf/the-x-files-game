@@ -101,7 +101,16 @@ static const xf_video *anim_video(const view_anim *an) { return an->use_player ?
 #define MAX_INV 32
 #define MAX_CURSORS 24
 #define MAX_CURSOR_FRAMES 12
-#define CARD_PX 16 /* 12 point at 96 dots per inch */
+/* Sizes from the exe, in pixels: Font_select (0x53C520) passes them to
+ * Font_create, which makes lfHeight -size. Font 4 is Courier New. */
+#define CARD_PX 12      /* VideoText_start (0x483A30): Courier New 12 */
+#define ROLLOVER_PX 14  /* the rollover text object (0x48F870): Courier New 14 */
+#define FIELD_PX 14     /* typed text, FBI login and ING (0x468660, 0x407990): Courier New 14 */
+#define PWBK_FIELD_PX 12 /* the PowerBook login (0x4F2C30): Courier New 12 */
+/* Captions are the clips' own text tracks: a 600x20 strip under the
+ * picture, Geneva 12 white on black, centred (QuickTime for Windows
+ * draws Geneva with Arial). */
+#define CAPTION_PX 12
 #define CROSS_SIZE 16
 
 /* A VCCursor: its hot point and pictures (several for animated ones). */
@@ -154,6 +163,8 @@ typedef struct {
     int have_font;
     xf_font card_font;    /* Courier New: location cards */
     int have_card_font;
+    xf_font caption_font; /* Arial for the captions' Geneva */
+    int have_caption_font;
     xf_font hcd_font;     /* Hcd.ttr: computer screens */
     int have_hcd_font;
     xf_font phn_font;     /* Phn.ttr: the cell phone's display */
@@ -237,6 +248,10 @@ static xf_surface screen_surface(explorer *e)
 
 static void stop_media(explorer *e);
 static void stop_sound(explorer *e);
+
+/* Courier New where the exe draws it, else the dialogue font. */
+static const xf_font *courier(const explorer *e) { return e->have_card_font ? &e->card_font : &e->font; }
+static const xf_font *caption_font(const explorer *e) { return e->have_caption_font ? &e->caption_font : &e->font; }
 
 /* Finds a media file in the chosen language (voices for clips and
  * sounds, text for the rest), the game folder, then the extra media
@@ -768,7 +783,12 @@ static void draw_iface_layer(explorer *e, int k)
         if (it->id == e->g->focus_item && (plat_ticks_ms() / 500) % 2)
             strcat(buf, "|");
         sf = screen_surface(e);
-        xf_text_draw(&sf, &e->font, 15, r->left + 8, (r->top + r->bottom) / 2 + 5, text, strlen(text), 0x000000);
+        {
+            /* the PowerBook's fields (50749, 50750) are smaller */
+            float px = it->id == 50749 || it->id == 50750 ? PWBK_FIELD_PX : FIELD_PX;
+            xf_text_draw(&sf, courier(e), px, r->left + 8, (r->top + r->bottom) / 2 + (int)px / 3, text, strlen(text),
+                         0x000000);
+        }
     }
 }
 
@@ -1034,7 +1054,7 @@ static void stop_sound(explorer *e)
 #define DLG_TEXT_TOP 32
 #define DLG_TEXT_BOTTOM 114
 #define DLG_LINE 15
-#define DLG_PX 13
+#define DLG_PX 12 /* 0x482D00: the question lists in Courier New 12 */
 #define KEY_BLUE 0x0000FF
 
 /* Emotion and action icons: 80x60 animated clips below the video, each
@@ -1102,11 +1122,6 @@ static void blit_keyed(explorer *e, const xf_image *img, int x0, int y0)
     }
 }
 
-static int text_px(explorer *e, const char *text, float px)
-{
-    return e->have_font ? xf_text_width(&e->font, px, text, strlen(text)) : (int)strlen(text) * 7;
-}
-
 /* Text with a one-pixel black outline, readable over any picture. */
 static void draw_outlined(explorer *e, const xf_font *f, float px, int x, int y, const char *text, size_t len,
                           u32 color)
@@ -1128,36 +1143,6 @@ static int wrap_lines_font(const xf_font *f, const char *text, float px, int w, 
     while (pos < len && n < max) {
         int end = pos, last_space = -1;
         while (end < len && xf_text_width(f, px, text + pos, (size_t)(end + 1 - pos)) <= w) {
-            if (text[end] == ' ')
-                last_space = end;
-            end++;
-        }
-        if (end < len && last_space > pos)
-            end = last_space;
-        if (end == pos)
-            end = pos + 1;
-        starts[n] = pos;
-        lens[n] = end - pos;
-        n++;
-        pos = end;
-        while (pos < len && text[pos] == ' ')
-            pos++;
-    }
-    return n;
-}
-
-static int wrap_lines(explorer *e, const char *text, float px, int w, int *starts, int *lens, int max)
-{
-    int n = 0, pos = 0, len = (int)strlen(text);
-    while (pos < len && n < max) {
-        int end = pos, last_space = -1;
-        while (end < len) {
-            char tmp[256];
-            int k = XF_MIN(end + 1 - pos, (int)sizeof(tmp) - 1);
-            memcpy(tmp, text + pos, (size_t)k);
-            tmp[k] = '\0';
-            if (text_px(e, tmp, px) > w)
-                break;
             if (text[end] == ' ')
                 last_space = end;
             end++;
@@ -1208,7 +1193,7 @@ static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
         char q[256] = "";
         int starts[8], lens[8], lines;
         game_question_text(e->g, ids[i], q, sizeof(q));
-        lines = wrap_lines(e, q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
+        lines = wrap_lines_font(courier(e), q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
         if (y + (lines - 1) * DLG_LINE > DLG_Y + DLG_TEXT_BOTTOM) {
             *more = 1;
             break;
@@ -1325,9 +1310,9 @@ static void draw_dialog(explorer *e, int mx, int my)
                    my < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4;
         u32 color = over ? 0xFFFFFF : 0xD8D8D8;
         game_question_text(e->g, ent[i].id, q, sizeof(q));
-        lines = wrap_lines(e, q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
+        lines = wrap_lines_font(courier(e), q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
         for (l = 0; l < lines; l++)
-            xf_text_draw(&s, &e->font, DLG_PX, x0 + DLG_TEXT_X, ent[i].y + l * DLG_LINE, q + starts[l],
+            xf_text_draw(&s, courier(e), DLG_PX, x0 + DLG_TEXT_X, ent[i].y + l * DLG_LINE, q + starts[l],
                          (size_t)lens[l], color);
     }
     if (e->talk_scroll > 0)
@@ -1452,9 +1437,9 @@ static void draw_icons(explorer *e, int mx, int my)
         char name[128];
         game_object_label(e->g, e->icon_ids[hover], name, sizeof(name));
         {
-            int cx = icon_x(e, hover) + ICON_W / 2, w = text_px(e, name, 14);
+            int cx = icon_x(e, hover) + ICON_W / 2, w = xf_text_width(courier(e), ROLLOVER_PX, name, strlen(name));
             int x = XF_CLAMP(cx - w / 2, 4, SCREEN_W - 4 - w);
-            draw_outlined(e, &e->font, 14, x, ICON_Y + ICON_H + 16, name, strlen(name), 0xFFFFFF);
+            draw_outlined(e, courier(e), ROLLOVER_PX, x, ICON_Y + ICON_H + 16, name, strlen(name), 0xFFFFFF);
         }
     }
 }
@@ -1569,7 +1554,7 @@ static void draw_inventory(explorer *e, int mx, int my)
         char name[96];
         game_object_label(e->g, e->inv_ids[hover], name, sizeof(name));
         inv_pos(e, e->inv_items < e->inv_count ? e->inv_items : 0, &x, &y);
-        xf_text_draw(&s, &e->font, 14, 10, y - 6, name, strlen(name), 0xFFFFFF);
+        xf_text_draw(&s, courier(e), ROLLOVER_PX, 10, y - 6, name, strlen(name), 0xFFFFFF);
     }
 }
 
@@ -2020,7 +2005,8 @@ static void draw(explorer *e, int mx, int my)
             /* Captions under the picture; under the emotion icons when
              * they are up, so both show. */
             int top = e->icon_count ? ICON_Y + ICON_H + 4 : PICTURE_Y + PICTURE_H + 4;
-            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, top + 22, SCREEN_W - 40, sub, 0xFFFFFF, 0x000000);
+            xf_text_draw_wrapped(&s, caption_font(e), CAPTION_PX, SCREEN_W / 2, top + 12, PICTURE_W - 4, sub, 0xFFFFFF,
+                                 0x000000);
             ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BELOW);
         }
         draw_ai_icon(e, mx, my);
@@ -2086,7 +2072,8 @@ static void draw(explorer *e, int mx, int my)
                 sub = xf_player_subtitle(&e->anims[i].player);
         if (sub && e->have_font) {
             int top = e->icon_count ? ICON_Y + ICON_H + 4 : PICTURE_Y + PICTURE_H + 4;
-            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, top + 22, SCREEN_W - 40, sub, 0xFFFFFF, 0x000000);
+            xf_text_draw_wrapped(&s, caption_font(e), CAPTION_PX, SCREEN_W / 2, top + 12, PICTURE_W - 4, sub, 0xFFFFFF,
+                                 0x000000);
             ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BELOW);
         }
     }
@@ -3245,6 +3232,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     load_game_fonts(e);
     if (plat_font_path("Courier New", path, sizeof(path)) == 0)
         e->have_card_font = xf_font_load(&e->card_font, path) == 0;
+    if (plat_font_path("Arial", path, sizeof(path)) == 0 || plat_font_path("arial", path, sizeof(path)) == 0)
+        e->have_caption_font = xf_font_load(&e->caption_font, path) == 0;
     if (!e->have_card_font)
         xf_warn("explore: no Courier New; location cards use the dialogue font");
     e->debug = getenv("XF_DEBUG_OVERLAY") != NULL;

@@ -13,7 +13,7 @@ clip (see [scene-graph.md](scene-graph.md#location-card) for the text).
 
 | Property | Value |
 |---|---|
-| Font | Courier New, 12 point (font number 4 of `Font_select`, 0x53C520) |
+| Font | Courier New, 12 pixels (font number 4 of `Font_select`, 0x53C520) |
 | Position | Lower left of the clip, 15 pixels from its left and bottom edges |
 | Typing | One character every 50 ms |
 
@@ -21,6 +21,26 @@ clip (see [scene-graph.md](scene-graph.md#location-card) for the text).
 Roman, 3 Arial, 4 Courier New. The game's own fonts (`Dlg.ttr`,
 `Jrn.ttr`, `Phn.ttr`, `Hcd.ttr`) are installed at start-up. The explorer
 loads Courier New from the system fonts.
+
+### Text sizes
+
+`Font_select` passes its size to `Font_create` (0x53D560), which sets
+`lfHeight` to minus the size: every size is in pixels. The texts drawn in
+code, with no size in the game data:
+
+| Text | Font, size | Where |
+|---|---|---|
+| Location card | Courier New 12 | `VideoText_start` (0x483A30) |
+| Dialogue questions (TALK and HISTORY) | Courier New 12 | `DialogBox_init` (0x482D00) |
+| Rollover names (icons, inventory, evidence) | Courier New 14 | `App_init_screen` (0x48F870), text object 0x6BD2F8 |
+| Typed text, FBI login and ING search | Courier New 14 | 0x468660, `ING_clear_search` (0x407990) |
+| Typed text, the PowerBook's login | Courier New 12 | `Login_powerbook_reset` (0x4F2C30) |
+| Save and Load slot names | Courier New 18 | `SaveSlots_layout` (0x4CBDB0) |
+| ING result line | Courier New 16 | `ING_cook_prints` (0x514BB0), `ING_plate_search` (0x514DE0) |
+| Captions | Geneva 12, white on black | The clips' own text tracks: a 600x20 strip under the picture, centred |
+
+QuickTime for Windows draws the captions' Geneva with Arial; the
+explorer loads Arial from the system fonts, else uses `Dlg.ttr`.
 
 ## Dialogue box
 

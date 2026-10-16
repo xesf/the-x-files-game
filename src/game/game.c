@@ -40,6 +40,13 @@ static void note_missing(game *g, const char *name)
     xf_info("function %s (not implemented)", name);
 }
 
+static void set_item_size(game *g, u32 item, int size)
+{
+    game_item_label *l = (game_item_label *)game_item_label_of(g, item);
+    if (l)
+        l->size = size;
+}
+
 /* --- Hotspots -------------------------------------------------------- */
 
 static void add_spots(game *g, u32 list, int kind)
@@ -2790,7 +2797,7 @@ static void slot_show(game *g)
         set_item_text(g, item, g->slot_names[i]);
         if ((l = (game_item_label *)game_item_label_of(g, item))) {
             l->color = 'b'; /* white, on the dark slots */
-            l->size = 14;
+            l->size = 18; /* SaveSlots_layout (0x4CBDB0): Courier New 18 */
             l->bold = 'y';
         }
     }
@@ -3418,6 +3425,7 @@ static int ing_plate(game *g, char db, const char *typed)
     ing_key(game_text(g, 88648, t, sizeof(t)), have, sizeof(have));
     if (db == 'G' && strcmp(want, have) == 0) {
         set_item_text(g, 58344, game_text(g, 58350, t, sizeof(t)));
+        set_item_size(g, 58344, 16); /* 0x514BB0, 0x514DE0: Courier New 16 */
         g->ing_notes = 0;
         /* Variable 4713 (IFL_bINGHaveSearchedForNSACar) is set the first
          * time; the original also adds 2 to a score then. */
@@ -3442,6 +3450,7 @@ static void ing_display_cook(game *g)
     char t[160];
     if (vc_get_var(&g->interp, 5095)) {
         set_item_text(g, 58344, game_text(g, 58350, t, sizeof(t)));
+        set_item_size(g, 58344, 16); /* 0x514BB0, 0x514DE0: Courier New 16 */
         return;
     }
     ing_show_record(g, 3);
