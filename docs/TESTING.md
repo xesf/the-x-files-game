@@ -193,7 +193,12 @@ again (`bomb-death.txt`), the kiss (`kiss.txt`), lying to Scully
 `rauch-gunfight.txt`), a death in the woods (`woods-death.txt`), Cook in
 the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
 (`suicide.txt`), the phone (`phone.txt`), the logins' other answers and Scully's
-PowerBook (`passwords.txt`), the Options screen
+PowerBook (`passwords.txt`), the endings: a death at Smolnikoff's
+(`smolnikoff-death.txt`), the bomb's timer (`bomb-timer.txt`), the gun
+drawn on Dr. McIntyre (`shoot-doctor.txt`), the bum's guessing game
+lost (`bum-guesses.txt`), the woods after telling Cook the truth
+(`woods-truth.txt`), the base's corridor and blast door
+(`base-corridor.txt`, `base-deaths.txt`), the Options screen
 (`options.txt`) and saving (`save.txt`).
 
 Scripts in `tests/window` need the window: `menu.txt` opens the main

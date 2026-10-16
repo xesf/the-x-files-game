@@ -4,6 +4,7 @@ All notable changes to this project.
 
 ## Unreleased
 
+- Play scripts for eight more game endings; `xftool hdb-up` shows what leads to any object.
 - Scully's PowerBook login works, and a refused computer login shows its message, including the four hidden ones.
 - Layout text uses the original pixel sizes: messages and mails fit their boxes.
 - The DVD edition's `.vob` clips play: an MPEG-2 video decoder, the DVD's LPCM sound, and its opening titles.
