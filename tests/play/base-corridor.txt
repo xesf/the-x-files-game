@@ -1,6 +1,7 @@
 # The corridor off the secret base's entrance (view 93960, Secret Base
-# 2A): the guards there kill Willmore. EndGame 93974, with no Try again
-# (variable 2581 is 0 there).
+# 2A): the guards there kill Willmore. The view's clip (12.9 s) ends
+# before its 14 s timer, so the clip's end trigger ends the game
+# (EndGame 45943), with no Try again (variable 2581 is 0 there).
 include disc6.txt
 
 # Node 8: Rauch's house. Rauch upstairs, Mulder in the attic.
@@ -38,7 +39,6 @@ expect var 1219 10              # node 10: the secret base, with Scully
 
 walk 13735
 walk 93960
-skip
-wait 20000
-skip
+wait 12900
+clipend                         # Secret Base 2A ends
 expect over 1

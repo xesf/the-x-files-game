@@ -4,7 +4,8 @@
 # scripts lie to Cook, so the variable is cleared here instead of
 # replaying the story with the other answer. A second death after Try
 # again goes to EndGame at once (GetPlayBones plays the long clip once a
-# session).
+# session), with the clip of the spot: Sc114I off the path (56022),
+# Sc114G at the clearing (56025), Sc114H further in (56019).
 include disc6.txt
 set 1676 0                      # Cook was told the truth
 
@@ -38,5 +39,18 @@ answer yes
 expect over 0
 walk 36583
 wait 15000                      # no shot again
+skip
+expect over 1
+answer yes
+expect over 0
+expect view 36569
+walk 36570
+wait 15000                      # by the clearing
+skip
+expect over 1
+answer yes
+expect over 0
+walk 36591
+wait 15000
 skip
 expect over 1

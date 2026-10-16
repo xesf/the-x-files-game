@@ -2,7 +2,10 @@
 # cover gets Willmore shot (SC83F). The first death of a session plays
 # the full FBI-shot scene (sc026&035B, GetPlayFBIShot) before EndGame
 # (action 40977); after Try again the same death goes to EndGame at once
-# (89709).
+# (89709). Later deaths in the warehouse: the gunman on the stairs and
+# the mobster at the barricade (SC85D, 56014), and Smolnikoff before the
+# barricade is clear (SC85P, 90052). Each Try again goes back to the
+# first floor.
 include disc4.txt
 
 inv 17451
@@ -31,5 +34,65 @@ answer yes
 expect over 0
 expect view 26186               # the checkpoint
 click 47113                     # in alone again
+skip
+expect over 1
+answer yes
+expect over 0
+
+# The first floor cleared, then the gunman on the stairs left alone.
+click 47779
+wait 8000
+click 47113
+hold Gun
+shoot
+skip
+shoot
+skip
+shoot
+skip
+expect view 5208
+hold none
+walk 5274
+click 73512
+click 57372
+walk 5380
+click 57449
+wait 5000
+walk 5487
+wait 20000                      # the gunman fires
+skip
+expect over 1
+answer yes
+expect over 0
+expect view 5208                # the checkpoint on the first floor
+
+# The gunman shot, the mobster at the barricade left alone.
+walk 5380
+click 57449
+wait 5000
+walk 5487
+hold Gun
+shoot
+skip
+hold none
+walk 5480
+click 57453
+wait 60000                      # his shots (SmGoonShoots): one hits
+skip
+expect over 1
+answer yes
+expect over 0
+
+# Past the barricade without clearing it: Smolnikoff.
+walk 5380
+click 57449
+wait 5000
+walk 5487
+hold Gun
+shoot
+skip
+hold none
+walk 5678
+click 43637
 skip
 expect over 1

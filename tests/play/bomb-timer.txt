@@ -1,8 +1,9 @@
 # The bomb at Gordon's Hauling left to its timer (two minutes, Standard
 # difficulty). The first explosion of a session plays the long version
 # (GetPlayCancer, EndGame 68551). After Try again Willmore is back in the
-# office with the bomb; the next explosion is one of four random clips
-# (RandGen 0-3, here clip 4A and EndGame 68579).
+# office with the bomb; each later explosion is one of four random clips
+# (RandGen 0-3): Rauch A, 2A, 3A and 4A, EndGame 68557, 68563, 68569 and
+# 68579. The random numbers go on across Try again, as in the original.
 include disc3.txt
 
 walk 3872
@@ -85,6 +86,21 @@ expect message 39               # Try again?
 answer yes
 expect over 0
 expect view 6977                # the office, the bomb ticking again
+wait 200000
+skip
+expect over 1
+answer yes
+expect over 0
+wait 200000
+skip
+expect over 1
+answer yes
+expect over 0
+wait 200000
+skip
+expect over 1
+answer yes
+expect over 0
 wait 200000
 skip
 expect over 1
