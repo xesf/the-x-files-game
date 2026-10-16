@@ -459,7 +459,9 @@ int game_media_start(game *g, game_media *m)
             continue;
         g->current = *m;
         g->played[g->played_count++ % GAME_PLAYED] = m->asset;
+        g->clip_starting = 1;
         vc_run_triggers(&g->interp, a.triggers, 8);
+        g->clip_starting = 0;
         return 1;
     }
     return 0;
@@ -585,7 +587,7 @@ static void host_play_media(void *user, u32 list, u8 selector)
     if (strncmp(a.logical, "Sounds/", 7) == 0) {
         /* The credits music (FOCredit.mus, after RollHdCredits) waits for
          * the first card. */
-        if (g->credits_rolling && selector == 1 && g->now - g->credits_start < CREDIT_PERIOD) {
+        if (g->credits_pending && selector == 1) {
             g->credits_sound = asset;
             return;
         }
@@ -632,18 +634,27 @@ static void host_timer(void *user, u8 id, u32 ms, u8 control)
 
 /* Runs the timer triggers of everything on screen for each timer that
  * fired: the view and the places around it, and the media playing. */
+/* The first card and the credits music start together. */
+static void start_credits(game *g)
+{
+    g->credits_pending = 0;
+    g->credits_rolling = 1;
+    g->credits_start = g->now - CREDIT_PERIOD;
+    if (g->credits_sound) {
+        start_sound(g, g->credits_sound, 0);
+        g->credits_sound = 0;
+    }
+}
+
 void game_tick(game *g, u32 now_ms)
 {
     int i;
     g->now = now_ms;
+    if (g->credits_pending && !g->current.asset && !game_media_pending(g))
+        start_credits(g); /* the clips queued with RollHdCredits have played */
     if (g->credits_rolling) {
         /* the cards end at the first missing string */
         u32 n = (g->now - g->credits_start) / CREDIT_PERIOD;
-        if (n && g->credits_sound) {
-            start_sound(g, g->credits_sound, 0);
-            g->credits_sound = 0;
-            after_triggers(g);
-        }
         if (n && !xf_strings_get(&g->credit_strings, (u32)g->credits_first + n - 1))
             g->credits_rolling = 0;
     }
@@ -3518,8 +3529,13 @@ static int host_call_function(void *user, const vc_action *a)
      * first is string 4 when the intro played (1-3 belong to it), else 1
      * (0x44E720). */
     if (strcmp(name, "RollHdCredits") == 0) {
-        g->credits_rolling = 1;
-        g->credits_start = g->now;
+        /* From a clip's start triggers (Cook leaving, after the answer to
+         * Cook) the cards start with that clip; from an action list they
+         * wait for the clips queued with it. */
+        if (g->clip_starting && !g->credits_rolling)
+            start_credits(g);
+        else if (!g->credits_rolling)
+            g->credits_pending = 1;
         g->credits_first = game_pref(g, 994) ? 1 : 4; /* Pref_bSkipIntro */
         return 1;
     }

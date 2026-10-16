@@ -222,6 +222,8 @@ typedef struct {
     int screen_wide;      /* the wide layout (docs/engine/screen.md); saved with the preferences */
     int pda_card;         /* the PDA address book's card shown (0x6B6540) */
     int credits_rolling;  /* RollHdCredits */
+    int credits_pending;  /* RollHdCredits ran: the cards wait for the clips to end */
+    int clip_starting;    /* a clip's start triggers are running */
     u32 credits_start;    /* game clock when they started */
     int credits_first;    /* the first card's string: 4 after the intro, else 1 */
     u32 credits_sound;    /* the credits music, waiting for the first card */

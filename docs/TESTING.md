@@ -145,7 +145,7 @@ A script has one command per line; `#` starts a comment.
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
 | `expect window menu\|paused\|playing\|credit 0\|1` | Window scripts: the main menu is up, the game's media hold, a clip plays, an opening credit card shows |
-| `expect window sound <asset>` | Window scripts: the sound playing beside the clips (0 for none) |
+| `expect window sound <asset>` / `clip <asset>` | Window scripts: the sound playing beside the clips, or the clip playing (0 for none); a failed check prints the value |
 | `expect disc <n>` | Fails unless the game is on disc `n` |
 | `expect var <id> <value>` | Fails unless the GAM variable has the value |
 | `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |

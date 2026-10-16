@@ -2537,6 +2537,8 @@ static int script_window(void *user, const char *what)
         return game_credit(e->g) != NULL;
     if (strcmp(what, "sound") == 0)
         return (int)e->g->sound;
+    if (strcmp(what, "clip") == 0)
+        return (int)e->g->current.asset;
     return -1;
 }
 

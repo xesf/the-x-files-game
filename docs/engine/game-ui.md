@@ -68,6 +68,10 @@ Cook with the "Funny" emotion icon (18172) runs `RollHdCredits` and plays
   break between the role and the name ("Also Starring" / "JORDAN LEE
   WILLIAMS").
 - A card comes every 4500 ms and shows for 3000 ms (`0x401EE0`).
+- The cards start with the clip of Cook leaving, right after the answer
+  clip: that clip's start triggers call `RollHdCredits` again. The call
+  from the answer's action list only arms them; our engine starts them
+  then if no clip does it first, once the queued clips have played.
 - The first card is string 4 when the intro played (strings 1 to 3 name
   the stars and the creator), and string 1 when Skip Introduction is on.
 - The cards end at the first missing string. String 22 is missing, so the
@@ -77,7 +81,7 @@ Cook with the "Funny" emotion icon (18172) runs `RollHdCredits` and plays
   scene strip, 5 pixels in (rectangle `0x6C4988`).
 - The credits music starts with the first card. The action that plays
   `FOCredit.mus` comes right after `RollHdCredits`; our engine holds the
-  sound until the first card appears.
+  sound until the cards start.
 
 We draw the cards in white with a black outline, over the scene, so they
 scale with it in the wide layout. They follow the game clock, so they wait

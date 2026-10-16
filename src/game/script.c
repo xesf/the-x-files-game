@@ -1031,7 +1031,10 @@ int script_run(script *s, const char *path, int quiet)
             if (ok)
                 s->host.input(s->host.user, 0, (int)a, (int)b);
         } else if (strcmp(cmd, "expect") == 0 && sscanf(line, "%*s window %31s %ld", what, &a) == 2) {
-            ok = s->host.window && s->host.window(s->host.user, what) == a;
+            int got = s->host.window ? s->host.window(s->host.user, what) : -1;
+            ok = got == a;
+            if (!ok)
+                printf("  window %s is %d\n", what, got);
         } else if (strcmp(cmd, "expect") == 0 && (n = sscanf(line, "%*s %31s %ld %ld", what, &a, &b)) >= 2) {
             ok = expect(g, what, a, b, n == 3);
         } else {
