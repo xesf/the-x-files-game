@@ -2,24 +2,36 @@
 
 All notable changes to this project.
 
-## Unreleased
+## 0.2.0 - 2026-10-16
 
-- Wide screens: the scene sits higher (smaller on very wide screens) so the emotion icons never cover it.
-- Every game ending the data can reach has a play script: 26 of 28 (one is orphaned data, one needs a missing clip).
+### Media
+
+- The DVD edition's `.vob` clips play: an MPEG-2 video decoder, the DVD's LPCM sound and its opening titles.
+- A `media` folder in the game folder for clips the install lacks, such as the CD clips a DVD install leaves on the disc.
 - View clips that play once have their sound and captions, and run their end triggers when they end.
+
+### Gameplay
+
+- Every game ending the data can reach plays: 26 of 28 (one is orphaned data, one needs a missing clip), each with a play script.
+- Scully's PowerBook login works, and a refused computer login shows its message, including the four hidden ones.
+- The computer's login connects with Enter, and Tab moves to the password.
 - Random chances differ from run to run and across Try again, as in the original.
 - Smolnikoff's barricade: a goon who misses no longer kills Willmore.
-- Play scripts for eight more game endings; `xftool hdb-up` shows what leads to any object.
-- Scully's PowerBook login works, and a refused computer login shows its message, including the four hidden ones.
-- Layout text uses the original pixel sizes: messages and mails fit their boxes.
-- The DVD edition's `.vob` clips play: an MPEG-2 video decoder, the DVD's LPCM sound, and its opening titles.
-- Keyboard and d-pad navigation: arrows, Tab, Enter and I; on the Vita, the d-pad, R, L, Square and Triangle.
-- A `media` folder in the game folder for the CD's clips, for installs that only have the DVD's `.vob` files.
-- The computer's login connects with Enter, and Tab moves to the password.
 - The phone stops ringing once a call is answered.
 - The opening credits and their music start together, when Cook leaves after the answer clip.
+
+### Interface
+
+- Keyboard and d-pad navigation: arrows, Tab, Enter and I; on the Vita, the d-pad, R, L, Square and Triangle.
+- Wide screens: the scene sits higher, smaller on very wide screens, so the emotion icons never cover it.
+- Layout text uses the original pixel sizes: messages and mails fit their boxes.
 - Captions show under the emotion icons, not behind them.
 - Close-up pictures are no longer cut at the bottom.
+
+### Tools and tests
+
+- `xftool vob`, `vob-yuv` and `vob-audio`; `hdb-up` shows what leads to any object; `hdb-viewclips` lists the view clips with end triggers.
+- Play scripts for the endings and the logins; the `clipend` script command.
 
 ## 0.1.0 - 2026-10-16
 
