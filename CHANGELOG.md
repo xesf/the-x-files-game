@@ -7,6 +7,8 @@ All notable changes to this project.
 - Languages: a game folder can hold several releases in folders named by language (`en`, `de`, `fr`, ...); the Options screen chooses the voices and the text apart (`XF_VOICES`, `XF_TEXT`). Captions for dubbed clips come from the English clips.
 - Translations: a folder of text files (string tables, documents, SRT captions) adds a text language; `xftool lang-export` and `lang-check` help make one.
 - Documents and mail headers draw their accents and curly quotes; the mail list reads translated header names.
+- Search words match without accents, and in both the translation and the release's own words.
+- Vita: a padded code segment, so the build no longer fails at random in vita-elf-create.
 - Vita: three display buffers and a single vertical-blank wait instead of the 30 fps cap, which held up clips and made the pointer jerky.
 
 ## 0.2.2 - 2026-10-16
