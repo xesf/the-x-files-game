@@ -21,6 +21,7 @@ typedef struct {
     u8 *buf;
     size_t buf_size;
     xf_qdmc *qdmc;
+    u32 max_chunk;      /* the largest chunk, in frames */
 } xf_audio_stream;
 
 int xf_audio_supported(const xf_mov_track *t);

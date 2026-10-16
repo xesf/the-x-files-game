@@ -101,9 +101,12 @@ static size_t chunk_bytes(const xf_audio_stream *s, u32 frames)
 
 u32 xf_audio_max_chunk_frames(const xf_audio_stream *s)
 {
-    u32 i, m = 0;
+    u32 i, m = s->max_chunk;
+    if (m)
+        return m;
     for (i = 0; i < s->track->chunk_count; i++)
         m = XF_MAX(m, s->track->chunk_samples[i]);
+    ((xf_audio_stream *)s)->max_chunk = m; /* worked out once */
     return m;
 }
 
