@@ -144,7 +144,7 @@ A script has one command per line; `#` starts a comment.
 | `solve <depth> var <id> <value>` / `solve <depth> view <id>` | Searches for moves (clicks with or without an item, questions, icons, shots, waits) that reach the goal, and prints the first sequence found |
 | `reach` | Lists the views reachable through the moves enabled now, with their objects and characters |
 | `expect view <id>` | Fails unless the current view is `<id>` |
-| `expect window menu\|paused\|playing 0\|1` | Window scripts: the main menu is up, the game's media hold, a clip plays |
+| `expect window menu\|paused\|playing\|credit 0\|1` | Window scripts: the main menu is up, the game's media hold, a clip plays, an opening credit card shows |
 | `expect disc <n>` | Fails unless the game is on disc `n` |
 | `expect var <id> <value>` | Fails unless the GAM variable has the value |
 | `expect enabled <id> 0\|1` | Checks the enabled state of an HDB object |

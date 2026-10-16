@@ -466,5 +466,17 @@ static main()
     set_name(0x6C4010, "g_menu_rect_help", SN_NOWARN);
     set_name(0x6C40A8, "g_menu_rect_quit", SN_NOWARN);
     set_name(0x6C3F38, "g_menu_rect_top", SN_NOWARN);
+    set_name(0x45A290, "credits_roll", SN_NOWARN);
+    set_name(0x45B640, "credits_set_running", SN_NOWARN);
+    set_name(0x401EE0, "text_sequence_step", SN_NOWARN);
+    set_name(0x486E20, "Credits_ctor", SN_NOWARN);
+    set_name(0x4835C0, "TextSequence_ctor", SN_NOWARN);
+    set_name(0x418E70, "Credits_dll_name", SN_NOWARN);
+    set_name(0x45BAA0, "Credits_card_period", SN_NOWARN);
+    set_name(0x45B9C0, "Credits_card_shown", SN_NOWARN);
+    set_name(0x44E720, "Credits_first_card", SN_NOWARN);
+    set_name(0x458AA0, "Credits_show_card", SN_NOWARN);
+    set_name(0x6C4988, "g_rect_strip", SN_NOWARN);
+    set_name(0x6C4958, "g_rect_screen", SN_NOWARN);
     msg("names applied\n");
 }

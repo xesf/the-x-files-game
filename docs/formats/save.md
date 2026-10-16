@@ -157,7 +157,7 @@ then the size of its data.
 | `REGS` | Count, then (16-byte name, count, variables) for each engine registration |
 | `PHOT`, `NOTE`, `KITI`, `EVID` | Count, then IDs: photos, PDA notes, evidence kit icons, the lab's evidence bar |
 | `PEND` | Count, then the replies on the way (`EmailFlushMess` delivers them) |
-| `MISC` | Count, then other engine state: the random seed, the Artificial Intuition hint, the shootout counters, the flashlight, the ambient sound, the PDA notes page, the photos downloaded |
+| `MISC` | Count, then other engine state: the random seed, the Artificial Intuition hint, the shootout counters, the flashlight, the ambient sound, the PDA notes page, the photos downloaded, the opening credits (time since they started, and the first card) |
 
 Variables and enable states are stored by GAM id. A save therefore loads
 into a GAM that has gained or lost entries.

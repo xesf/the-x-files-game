@@ -57,6 +57,31 @@ the number of a string in `xfilest.dll`. That DLL holds 1015 strings in
 `RegDlgAss` names six dialogue assets in the data, but this build of
 the engine ignores the call.
 
+## Opening credits
+
+The first scene in the Field Office rolls the opening credits. Answering
+Cook with the "Funny" emotion icon (18172) runs `RollHdCredits` and plays
+`FOCredit.mus`; two views run it on entry too. `RollHdCredits`
+(`0x459960` -> `0x45B640`) starts the credits object at app + 0x104:
+
+- Its cards are the strings of `xfilesc.dll`, one per card, with a line
+  break between the role and the name ("Also Starring" / "JORDAN LEE
+  WILLIAMS").
+- A card comes every 4500 ms and shows for 3000 ms (`0x401EE0`).
+- The first card is string 4 when the intro played (strings 1 to 3 name
+  the stars and the creator), and string 1 when Skip Introduction is on.
+- The cards end at the first missing string. String 22 is missing, so the
+  opening shows strings 4 to 21. Strings 23 to 28 (the producers, the
+  writers and the director) are not shown.
+- The text is Typist (`Hcd.ttr`) 12 point, right-aligned
+  (`DT_RIGHT | DT_WORDBREAK`), at the bottom of the scene strip, 5 pixels
+  in (rectangle `0x6C4988`).
+
+We draw the cards in white with a black outline, over the scene, so they
+scale with it in the wide layout. They follow the game clock, so they wait
+behind the main menu. Where the original puts the right edge is read from
+its placement code, not yet compared with the running game.
+
 ## Emotion and action icons
 
 Some scenes let the player answer with an emotion, or act, by clicking

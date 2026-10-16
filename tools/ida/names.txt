@@ -465,3 +465,15 @@ data 0x6C4040 g_menu_rect_options  (472, 275)-(638, 311)
 data 0x6C4010 g_menu_rect_help  (472, 330)-(638, 366)
 data 0x6C40A8 g_menu_rect_quit  (472, 385)-(638, 421)
 data 0x6C3F38 g_menu_rect_top  (57, 0)-(409, 60), TOPro.mov
+0x45A290 credits_roll  RollHdCredits: starts the opening credits object (app + 0x104)
+0x45B640 credits_set_running  starts or stops a text sequence: loads its strings, starts the card timer (slot 4) and the hide timer (slot 5)
+0x401EE0 text_sequence_step  hides the card when the hide timer fired (slot 8), shows the next string when the card timer fired (slot 9); ends at the first missing string
+0x486E20 Credits_ctor  0xAC-byte credits object, vtable 0x65DEB0: font Typist 12, DT_RIGHT | DT_WORDBREAK
+0x4835C0 TextSequence_ctor  base of the credits object, vtable 0x65D5C0: timers at +0x18 and +0x3C, flags +0x60 and +0x64, index +0x14
+0x418E70 Credits_dll_name  slot 3: "XFilesC.dll"
+0x45BAA0 Credits_card_period  slot 4: 4500 ms between cards
+0x45B9C0 Credits_card_shown  slot 5: a card shows for 3000 ms
+0x44E720 Credits_first_card  slot 6: string 4 after the intro, 1 when it was skipped or cards already showed
+0x458AA0 Credits_show_card  slot 9: a text item at the bottom right of the strip (0x6C4988, bottom - 5)
+data 0x6C4988 g_rect_strip  (20, 90)-(620, 330), the scene strip
+data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
