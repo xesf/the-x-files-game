@@ -362,6 +362,10 @@ typedef struct {
 } game_icon;
 
 int game_icons(game *g, u32 *ids, int max);
+/* The name shown when the pointer rolls over an emotion or action icon,
+ * an inventory item or a piece of evidence, in the text language: the
+ * string its fifth field refers to, else the end of its VCName. */
+const char *game_object_label(game *g, u32 id, char *buf, size_t size);
 int game_read_icon(game *g, u32 id, game_icon *icon);
 int game_click_icon(game *g, u32 id);
 

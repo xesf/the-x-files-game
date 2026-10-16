@@ -21,6 +21,7 @@ typedef struct {
     int game;        /* XFILES.HDB: a whole release */
     int voices;      /* clips (XV) */
     int text;        /* string tables, documents or captions */
+    char values[12][80]; /* lang.txt's other "key=value" lines */
 } xf_lang;
 
 typedef struct {
@@ -56,6 +57,9 @@ int xf_langs_resolve_in(const xf_langs *l, int lang, const char *rel, char *out,
  * it is another file than `clip_path`. Returns 0 and the path, or -1:
  * the clip's own captions. */
 int xf_langs_captions(const xf_langs *l, const char *rel, const char *clip_path, char *out, size_t size);
+/* A lang.txt value ("talk=FALAR": the words a translation draws over
+ * pictures it has no copy of), or NULL. */
+const char *xf_lang_value(const xf_lang *g, const char *key);
 /* Packs a code for the preferences file, and back. */
 i32 xf_lang_pack(const char *code);
 void xf_lang_unpack(i32 v, char code[8]);

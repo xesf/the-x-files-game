@@ -66,7 +66,7 @@ from its fallback language (English unless `lang.txt` says otherwise).
 
 | File | Content |
 |---|---|
-| `lang.txt` | `name=Português` (shown on the Options screen), `fallback=en` |
+| `lang.txt` | `name=Português` (shown on the Options screen), `fallback=en`, and the words drawn over pictures the translation has no copy of: `talk=FALAR`, `history=HISTÓRICO` (the dialogue folder's tabs) |
 | `xfilest.txt`, `xfilese.txt`, `xfilesc.txt` | One string a line: `id<TAB>text`, UTF-8, `\n` for a line break |
 | `xt/<id>.xtx` | Documents, UTF-8 |
 | `xv/<id>.srt` | Captions of the clip `XV/<id>.xmv`, SRT, UTF-8 |
@@ -96,6 +96,15 @@ To start a translation:
    It reports strings whose `%` placeholders changed, documents whose
    header lines changed in number, and captions whose number of lines or
    times changed.
+
+Text the game builds from strings follows the text language too:
+
+- The location card takes its place name from a string, and writes the
+  date and time the way the language does ("Terça-feira, 2 de abril de
+  1996", 24-hour time). The original took them from the Windows locale.
+- The names shown when the pointer rolls over an emotion or action icon,
+  an inventory item or a piece of evidence are strings (the object's
+  fifth field refers to them), not the writers' object names.
 
 Some strings are words the player searches for in the ING and the media
 search. A search matches the translated word and the release's own

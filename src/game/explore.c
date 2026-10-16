@@ -836,6 +836,9 @@ static void lang_row_click(explorer *e, int row)
     if (row) {
         load_game_fonts(e);
         e->g->iface_serial++; /* the layouts' pictures, in the new language */
+        free(e->dlg_talk.pixels); /* the dialogue folder's tabs too */
+        free(e->dlg_history.pixels);
+        e->dlg_talk.pixels = e->dlg_history.pixels = NULL;
     }
 }
 
@@ -1219,6 +1222,83 @@ static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
     return k;
 }
 
+/* A translation without pictures of its own: the tab words of the
+ * dialogue folder erased and drawn again from lang.txt ("talk=",
+ * "history="), in the colours of the words they replace. `active` is the
+ * tab drawn in front (0 TALK, 1 HISTORY). */
+static void relabel_tabs(explorer *e, xf_image *img, int active)
+{
+    const xf_langs *l = &e->g->langs;
+    const char *word[2];
+    char path[1024];
+    int t;
+    if (!img->pixels || l->text < 0 || !e->have_font ||
+        xf_langs_resolve_in(l, l->text, "X.PFF", path, sizeof(path)) == 0)
+        return; /* the language's own pictures */
+    word[0] = xf_lang_value(&l->langs[l->text], "talk");
+    word[1] = xf_lang_value(&l->langs[l->text], "history");
+    if (!word[0] || !word[1])
+        return;
+    for (t = 0; t < 2; t++) {
+        /* tab t spans x 100t .. 100t + 100, its word in rows 1..12: the
+         * word's box from its bright pixels, the tab's colour the most
+         * common one around it */
+        u32 ink = t == active ? 0xFFFFFF : 0x4F8FCF, ground = 0, seen[16];
+        int counts[16], kinds = 0, x, y, k, x0 = 1000, x1 = -1, best = -1, w, avail;
+        float px = 11;
+        xf_surface sf;
+        for (y = 1; y < 13 && y < img->height; y++)
+            for (x = 100 * t; x < 100 * t + 100 && x < img->width; x++) {
+                u32 c = img->pixels[(size_t)y * img->width + x];
+                int hi = (int)XF_MAX((c >> 16) & 0xFF, XF_MAX((c >> 8) & 0xFF, c & 0xFF));
+                if (c == KEY_BLUE)
+                    continue;
+                if (hi >= 110) {
+                    x0 = XF_MIN(x0, x);
+                    x1 = XF_MAX(x1, x);
+                    if (hi > best) {
+                        best = hi;
+                        ink = c;
+                    }
+                } else {
+                    for (k = 0; k < kinds && seen[k] != c; k++)
+                        ;
+                    if (k == kinds && kinds < 16) {
+                        seen[kinds] = c;
+                        counts[kinds++] = 0;
+                    }
+                    if (k < kinds)
+                        counts[k]++;
+                }
+            }
+        if (x1 < 0)
+            continue;
+        for (k = 1, ground = seen[0]; k < kinds; k++)
+            if (counts[k] > counts[0]) {
+                counts[0] = counts[k];
+                ground = seen[k];
+            }
+        for (y = 1; y < 13 && y < img->height; y++)
+            for (x = x0 - 1; x <= x1 + 1 && x < img->width; x++) {
+                u32 *c = &img->pixels[(size_t)y * img->width + x];
+                int d = abs((int)((*c >> 16) & 0xFF) - (int)((ground >> 16) & 0xFF)) +
+                        abs((int)((*c >> 8) & 0xFF) - (int)((ground >> 8) & 0xFF)) +
+                        abs((int)(*c & 0xFF) - (int)(ground & 0xFF));
+                if (*c != KEY_BLUE && d > 24)
+                    *c = ground;
+            }
+        avail = x1 - x0 + 1 + 16; /* a little wider than the word it replaces */
+        while (px > 8 && xf_text_width(&e->font, px, word[t], strlen(word[t])) > avail)
+            px -= 0.5f;
+        sf.pixels = img->pixels;
+        sf.width = img->width;
+        sf.height = img->height;
+        sf.pitch = img->width;
+        w = xf_text_width(&e->font, px, word[t], strlen(word[t]));
+        xf_text_draw(&sf, &e->font, px, (x0 + x1) / 2 - w / 2, 11, word[t], strlen(word[t]), ink);
+    }
+}
+
 static void draw_dialog(explorer *e, int mx, int my)
 {
     xf_surface s = screen_surface(e);
@@ -1227,6 +1307,8 @@ static void draw_dialog(explorer *e, int mx, int my)
     if (!e->dlg_talk.pixels) {
         load_asset_image(e, DLG_TALK, &e->dlg_talk);
         load_asset_image(e, DLG_HISTORY, &e->dlg_history);
+        relabel_tabs(e, &e->dlg_talk, 0);
+        relabel_tabs(e, &e->dlg_history, 1);
     }
     if (!e->dlg_up.pixels) {
         load_asset_image(e, DLG_UP, &e->dlg_up);
@@ -1367,13 +1449,8 @@ static void draw_icons(explorer *e, int mx, int my)
     }
     /* Rolling over an icon shows what it does (Pref_bRolloverText). */
     if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
-        game_icon ic;
-        char name[128] = "", *dash;
-        if (game_read_icon(e->g, e->icon_ids[hover], &ic) == 0)
-            vc_read_name(&e->g->db, ic.name, name, sizeof(name));
-        dash = strrchr(name, '-'); /* "Field Office N1A Cook - Funny" */
-        if (dash && dash[1] == ' ')
-            memmove(name, dash + 2, strlen(dash + 2) + 1);
+        char name[128];
+        game_object_label(e->g, e->icon_ids[hover], name, sizeof(name));
         {
             int cx = icon_x(e, hover) + ICON_W / 2, w = text_px(e, name, 14);
             int x = XF_CLAMP(cx - w / 2, 4, SCREEN_W - 4 - w);
@@ -1489,10 +1566,8 @@ static void draw_inventory(explorer *e, int mx, int my)
         blit_keyed(e, img, x, y);
     }
     if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
-        char name[96] = "";
-        xf_neo_reader r;
-        if (xf_neo_object(&e->g->db, e->inv_ids[hover], &r, NULL, NULL) == 0)
-            vc_read_name(&e->g->db, xf_neo_u32(&r), name, sizeof(name));
+        char name[96];
+        game_object_label(e->g, e->inv_ids[hover], name, sizeof(name));
         inv_pos(e, e->inv_items < e->inv_count ? e->inv_items : 0, &x, &y);
         xf_text_draw(&s, &e->font, 14, 10, y - 6, name, strlen(name), 0xFFFFFF);
     }

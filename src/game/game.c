@@ -944,6 +944,32 @@ int game_icons(game *g, u32 *ids, int max)
     return k;
 }
 
+const char *game_object_label(game *g, u32 id, char *buf, size_t size)
+{
+    xf_neo_reader r;
+    u32 list = 0, ids[4];
+    int c = vc_class(&g->db, id), i;
+    buf[0] = '\0';
+    if ((c != VC_EMOTION_ICON && c != VC_ACTION_ICON && c != VC_INVENTORY && c != VC_EVIDENCE_ICON) ||
+        xf_neo_object(&g->db, id, &r, NULL, NULL) != 0)
+        return buf;
+    for (i = 0; i < 5; i++)
+        list = xf_neo_u32(&r);
+    /* the fifth field: the label's media reference, a string of the text
+     * language ("Funny", "Badge") */
+    if (!r.error && vc_read_list(&g->db, list, ids, 4) > 0)
+        game_text(g, ids[0], buf, size);
+    if (!buf[0] && xf_neo_object(&g->db, id, &r, NULL, NULL) == 0) {
+        /* the writers' name, "Field Office N1A Cook - Funny": its last part */
+        char *dash;
+        vc_read_name(&g->db, xf_neo_u32(&r), buf, size);
+        dash = strrchr(buf, '-');
+        if (dash && dash[1] == ' ')
+            memmove(buf, dash + 2, strlen(dash + 2) + 1);
+    }
+    return buf;
+}
+
 int game_read_icon(game *g, u32 id, game_icon *icon)
 {
     xf_neo_reader r;
@@ -3456,34 +3482,99 @@ static int weekday(int y, int m, int d)
     return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
 }
 
+/* Dates and times as each text language writes them; the original took
+ * them from the Windows locale. */
+typedef struct {
+    const char *code;
+    const char *wd[7], *mon[13];
+    const char *date; /* weekday, day, month, year: %1$s %2$d %3$s */
+    int clock24;
+    char sep;         /* between hours and minutes */
+} card_locale;
+
+static const card_locale g_card_locales[] = {
+    { "en",
+      { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" },
+      { "", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+        "November", "December" },
+      "WMD", 0, ':' },
+    { "de",
+      { "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag" },
+      { "", "Januar", "Februar", "M\xC3\xA4rz", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
+        "November", "Dezember" },
+      "WD.M", 1, ':' },
+    { "fr",
+      { "dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi" },
+      { "", "janvier", "f\xC3\xA9vrier", "mars", "avril", "mai", "juin", "juillet", "ao\xC3\xBBt", "septembre",
+        "octobre", "novembre", "d\xC3\xA9" "cembre" },
+      "wDM", 1, ':' },
+    { "it",
+      { "domenica", "luned\xC3\xAC", "marted\xC3\xAC", "mercoled\xC3\xAC", "gioved\xC3\xAC", "venerd\xC3\xAC",
+        "sabato" },
+      { "", "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre",
+        "novembre", "dicembre" },
+      "wDM", 1, '.' },
+    { "es",
+      { "domingo", "lunes", "martes", "mi\xC3\xA9rcoles", "jueves", "viernes", "s\xC3\xA1" "bado" },
+      { "", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+        "noviembre", "diciembre" },
+      "WDdeM", 1, ':' },
+    { "pt",
+      { "Domingo", "Segunda-feira", "Ter\xC3\xA7" "a-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira",
+        "S\xC3\xA1" "bado" },
+      { "", "janeiro", "fevereiro", "mar\xC3\xA7o", "abril", "maio", "junho", "julho", "agosto", "setembro",
+        "outubro", "novembro", "dezembro" },
+      "WDdeM", 1, ':' },
+};
+
+static const card_locale *card_locale_of(const game *g)
+{
+    size_t i;
+    if (g->langs.text >= 0)
+        for (i = 0; i < XF_COUNT(g_card_locales); i++)
+            if (strcmp(g_card_locales[i].code, g->langs.langs[g->langs.text].code) == 0)
+                return &g_card_locales[i];
+    return &g_card_locales[0];
+}
+
 /* 0x4DB580: location label, then the date from iDayNight, then the time
- * from iCurrTime (HHMM) when `with_time` is set. The original formats the
- * date and time with the Windows locale; this is the US English form. */
+ * from iCurrTime (HHMM) when `with_time` is set. The label is a string of
+ * the text language (falling back to the reference's name). */
 static void format_location_card(game *g, u32 label_ref, i32 day_night, i32 hhmm, int with_time)
 {
     static const int days[8] = { 29, 2, 3, 4, 5, 6, 7, 8 }; /* 0x659C80 */
-    static const char *const wd[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
-                                       "Friday", "Saturday" };
-    static const char *const mon[13] = { "", "January", "February", "March", "April", "May", "June",
-                                         "July", "August", "September", "October", "November",
-                                         "December" };
+    const card_locale *lc = card_locale_of(g);
     char label[128] = "";
+    const char *wd, *mon;
     int idx = day_night > 10 ? day_night - 10 : day_night, month, day, n;
     xf_neo_reader r;
 
     idx = XF_CLAMP(idx, 0, 7);
     month = idx == 0 ? 3 : 4;
     day = days[idx];
-    if (vc_class(&g->db, label_ref) == VC_ASSET_REF && xf_neo_object(&g->db, label_ref, &r, NULL, NULL) == 0) {
+    game_text(g, label_ref, label, sizeof(label));
+    if (!label[0] && vc_class(&g->db, label_ref) == VC_ASSET_REF &&
+        xf_neo_object(&g->db, label_ref, &r, NULL, NULL) == 0) {
         xf_neo_blob(&g->db, &r);
         vc_read_name(&g->db, xf_neo_u32(&r), label, sizeof(label));
     }
-    n = snprintf(g->card, sizeof(g->card), "%s\n%s, %s %d, 1996", label, wd[weekday(1996, month, day)],
-                 mon[month], day);
+    wd = lc->wd[weekday(1996, month, day)];
+    mon = lc->mon[month];
+    if (strcmp(lc->date, "WMD") == 0) /* Tuesday, April 2, 1996 */
+        n = snprintf(g->card, sizeof(g->card), "%s\n%s, %s %d, 1996", label, wd, mon, day);
+    else if (strcmp(lc->date, "WD.M") == 0) /* Dienstag, 2. April 1996 */
+        n = snprintf(g->card, sizeof(g->card), "%s\n%s, %d. %s 1996", label, wd, day, mon);
+    else if (strcmp(lc->date, "WDdeM") == 0) /* Terça-feira, 2 de abril de 1996 */
+        n = snprintf(g->card, sizeof(g->card), "%s\n%s, %d de %s de 1996", label, wd, day, mon);
+    else /* mardi 2 avril 1996 */
+        n = snprintf(g->card, sizeof(g->card), "%s\n%s %d %s 1996", label, wd, day, mon);
     if (with_time && n > 0 && (size_t)n < sizeof(g->card)) {
         int h = hhmm / 100, m = hhmm % 100;
-        snprintf(g->card + n, sizeof(g->card) - (size_t)n, "\n%d:%02d %s", h % 12 ? h % 12 : 12, m,
-                 h < 12 ? "AM" : "PM");
+        if (lc->clock24)
+            snprintf(g->card + n, sizeof(g->card) - (size_t)n, "\n%d%c%02d", h, lc->sep, m);
+        else
+            snprintf(g->card + n, sizeof(g->card) - (size_t)n, "\n%d%c%02d %s", h % 12 ? h % 12 : 12, lc->sep, m,
+                     h < 12 ? "AM" : "PM");
     }
 }
 
@@ -3510,7 +3601,7 @@ static int host_call_function(void *user, const vc_action *a)
                              arg_value(g, &args[3]) != 0);
         if (game_media_pending(g))
             g->queue[(g->queue_tail + GAME_MEDIA_QUEUE - 1) % GAME_MEDIA_QUEUE].card = 1;
-        xf_info("location card: %s", g->card);
+        xf_info("location card (label %u): %s", args[0].value, g->card);
         return 1;
     }
     /* 0x486030 fn_SetStartView: node, location, viewpoint, view */

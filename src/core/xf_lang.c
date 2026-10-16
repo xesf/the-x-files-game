@@ -18,7 +18,7 @@ static const struct {
     const char *code, *name;
 } g_names[] = {
     { "en", "English" }, { "de", "Deutsch" },  { "fr", "Fran\xC3\xA7" "ais" }, { "it", "Italiano" },
-    { "es", "Espa\xC3\xB1ol" }, { "jp", "Nihongo" }, { "ja", "Nihongo" }, { "pt", "Portugu\xC3\xAAs" },
+    { "es", "Espa\xC3\xB1ol" }, { "jp", "Japanese" }, { "ja", "Japanese" }, { "pt", "Portugu\xC3\xAAs" },
 };
 
 static int has(const char *dir, const char *rel)
@@ -32,6 +32,7 @@ static void read_lang_txt(xf_lang *g)
 {
     char path[1024], line[128];
     FILE *f;
+    int n = 0;
     if (xf_path_resolve(g->dir, "lang.txt", path, sizeof(path)) != 0 || !(f = fopen(path, "r")))
         return;
     while (fgets(line, sizeof(line), f)) {
@@ -40,6 +41,8 @@ static void read_lang_txt(xf_lang *g)
             snprintf(g->name, sizeof(g->name), "%s", line + 5);
         else if (strncmp(line, "fallback=", 9) == 0)
             snprintf(g->fallback, sizeof(g->fallback), "%s", line + 9);
+        else if (strchr(line, '=') && n < (int)XF_COUNT(g->values))
+            snprintf(g->values[n++], sizeof(g->values[0]), "%s", line);
     }
     fclose(f);
 }
@@ -216,6 +219,16 @@ int xf_langs_captions(const xf_langs *l, const char *rel, const char *clip_path,
             return strcmp(out, clip_path) == 0 ? -1 : 0;
     }
     return -1;
+}
+
+const char *xf_lang_value(const xf_lang *g, const char *key)
+{
+    size_t k = strlen(key);
+    int i;
+    for (i = 0; i < (int)XF_COUNT(g->values); i++)
+        if (strncmp(g->values[i], key, k) == 0 && g->values[i][k] == '=')
+            return g->values[i] + k + 1;
+    return NULL;
 }
 
 i32 xf_lang_pack(const char *code)
