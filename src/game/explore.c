@@ -772,6 +772,91 @@ static void draw_iface_layer(explorer *e, int k)
     }
 }
 
+/* Our own rows on the Options screen (layout 49738), when the game
+ * folder holds language folders: the voice and the text language. A
+ * click moves to the next language that has them. */
+#define OPTIONS_MAIN 49738
+#define LANG_ROW_X 40
+#define LANG_ROW_W 260
+#define LANG_ROW_Y 300 /* the first row's top; rows 34 pixels apart */
+#define LANG_ROW_H 26
+
+static int lang_rows_shown(const explorer *e)
+{
+    const game *g = e->g;
+    return g->langs.count > 1 && g->iface_count && g->ifaces[g->iface_count - 1].layout == OPTIONS_MAIN &&
+           e->have_font && !g->ask;
+}
+
+/* The row under a point: 0 voices, 1 text, or -1. */
+static int lang_row_at(const explorer *e, int x, int y)
+{
+    int k;
+    if (!lang_rows_shown(e) || x < LANG_ROW_X || x >= LANG_ROW_X + LANG_ROW_W)
+        return -1;
+    for (k = 0; k < 2; k++)
+        if (y >= LANG_ROW_Y + 34 * k && y < LANG_ROW_Y + 34 * k + LANG_ROW_H)
+            return k;
+    return -1;
+}
+
+/* The row names in the text language. */
+static const char *lang_row_name(const explorer *e, int row)
+{
+    static const struct {
+        const char *code, *voices, *text;
+    } names[] = {
+        { "de", "Stimmen", "Text" }, { "fr", "Voix", "Texte" },  { "it", "Voci", "Testo" },
+        { "es", "Voces", "Texto" },  { "pt", "Vozes", "Texto" },
+    };
+    const xf_langs *l = &e->g->langs;
+    size_t i;
+    for (i = 0; l->text >= 0 && i < XF_COUNT(names); i++)
+        if (strcmp(names[i].code, l->langs[l->text].code) == 0)
+            return row ? names[i].text : names[i].voices;
+    return row ? "Text" : "Voices";
+}
+
+static void load_game_fonts(explorer *e);
+
+/* The next language with voices (row 0) or text (row 1). */
+static void lang_row_click(explorer *e, int row)
+{
+    const xf_langs *l = &e->g->langs;
+    int cur = row ? l->text : l->voices, k, next = -1;
+    for (k = 1; k <= l->count && next < 0; k++) {
+        int i = (cur + k) % l->count;
+        if (row ? l->langs[i].text : l->langs[i].voices)
+            next = i;
+    }
+    if (next < 0 || next == cur)
+        return;
+    game_set_languages(e->g, row ? -1 : next, row ? next : -1);
+    xf_info("options: %s %s", row ? "text" : "voices", l->langs[next].code);
+    if (row) {
+        load_game_fonts(e);
+        e->g->iface_serial++; /* the layouts' pictures, in the new language */
+    }
+}
+
+static void draw_lang_rows(explorer *e)
+{
+    const xf_langs *l = &e->g->langs;
+    xf_surface sf;
+    int k;
+    if (!lang_rows_shown(e))
+        return;
+    sf = screen_surface(e);
+    for (k = 0; k < 2; k++) {
+        int idx = k ? l->text : l->voices, y = LANG_ROW_Y + 34 * k + 18;
+        u32 color = lang_row_at(e, e->mx, e->my) == k ? 0xFFFFFF : 0x4F94CD;
+        char value[48];
+        snprintf(value, sizeof(value), "< %s >", idx >= 0 ? l->langs[idx].name : "-");
+        xf_text_draw(&sf, &e->font, 17, LANG_ROW_X, y, lang_row_name(e, k), strlen(lang_row_name(e, k)), color);
+        xf_text_draw(&sf, &e->font, 17, LANG_ROW_X + 110, y, value, strlen(value), color);
+    }
+}
+
 static void draw_ifaces(explorer *e)
 {
     int k;
@@ -780,6 +865,7 @@ static void draw_ifaces(explorer *e)
     for (k = 0; k < e->g->iface_count; k++)
         draw_iface_layer(e, k);
     draw_caption_option(e);
+    draw_lang_rows(e);
     draw_photos(e);
 }
 
@@ -2496,6 +2582,9 @@ static int nav_targets(explorer *e, nav_point *t, int max)
                 (r->right - r->left < SCREEN_W || r->bottom - r->top < SCREEN_H))
                 NAV_ADD((r->left + r->right) / 2, (r->top + r->bottom) / 2);
         }
+        if (lang_rows_shown(e))
+            for (i = 0; i < 2; i++)
+                NAV_ADD(LANG_ROW_X + 60, LANG_ROW_Y + 34 * i + LANG_ROW_H / 2);
         return n;
     }
     if (g->talking) {
@@ -2785,7 +2874,9 @@ static void handle_event(explorer *e, plat_event ev)
         int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
         int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
         const game_iface_item *it = game_iface_item_at(e->g, ev.x, ev.y);
-        if (it) {
+        if (lang_row_at(e, ev.x, ev.y) >= 0) {
+            lang_row_click(e, lang_row_at(e, ev.x, ev.y));
+        } else if (it) {
             u32 clicked = it->id;
             game_click(e->g, ev.x, ev.y);
             ask_text(e, clicked);
