@@ -170,6 +170,9 @@ typedef struct {
     u32 inv_ids[MAX_INV];
     int inv_count;
     int inv_items;        /* inv_ids: the inventory, then the lab's evidence */
+    int ai_ready;         /* the Artificial Intuition icon is up, top right */
+    xf_image ai_img[8];   /* AI.pff: it spins while a hint is close */
+    int ai_frames;
     u32 *fb;              /* where drawing goes: scene_fb, or ui_fb in the wide layout */
     u32 scene_fb[SCREEN_W * SCREEN_H];
     u32 ui_fb[SCREEN_W * SCREEN_H]; /* the interface, SCR_CLEAR where the scene shows */
@@ -1179,11 +1182,44 @@ static void free_inventory(explorer *e)
 /* VCInventory and VCEvidenceIcon: name, icon, rollover icon, 0, cursor,
  * triggers. In a lab the collected evidence makes a second row above the
  * inventory; a click hands it to the technician. */
+static int load_pff_image(explorer *e, const char *path, u32 index, xf_image *img);
+
 static void refresh_inventory(explorer *e)
 {
     u32 ids[MAX_INV];
-    int items = game_inventory(e->g, ids, MAX_INV), i;
-    int n = items + game_evidence(e->g, ids + items, MAX_INV - items);
+    int items = game_inventory(e->g, ids, MAX_INV), i, k;
+    int n;
+    /* The Artificial Intuition icon is not in the bar: it sits in the
+     * top-right corner, under the menu icon, as the Help screen shows. */
+    e->ai_ready = 0;
+    for (i = k = 0; i < items; i++)
+        if (ids[i] == GAME_AI_ICON)
+            e->ai_ready = 1;
+        else
+            ids[k++] = ids[i];
+    items = k;
+    if (e->ai_ready && !e->ai_frames) {
+        /* VCEvidenceIcon 56185 has no still picture; its rollover list
+         * names AI.pff (56700), eight frames of the spin. */
+        xf_neo_reader r;
+        u32 ids[4];
+        vc_asset_ref a;
+        char path[1024];
+        if (xf_neo_object(&e->g->db, GAME_AI_ICON, &r, NULL, NULL) == 0) {
+            xf_neo_u32(&r);
+            xf_neo_u32(&r);
+            if (vc_read_list(&e->g->db, xf_neo_u32(&r), ids, 4) > 0 && vc_read_asset_ref(&e->g->db, ids[0], &a) == 0 &&
+                a.entry_count && resolve_media(e, a.entries[0].path, path, sizeof(path)) == 0) {
+                u32 f;
+                for (f = a.entries[0].start; f <= a.entries[0].end && e->ai_frames < 8; f++)
+                    if (load_pff_image(e, path, f, &e->ai_img[e->ai_frames]) == 0)
+                        e->ai_frames++;
+            }
+        }
+        if (!e->ai_frames)
+            e->ai_frames = -1; /* not found: do not try again */
+    }
+    n = items + game_evidence(e->g, ids + items, MAX_INV - items);
     if (n == e->inv_count && items == e->inv_items && memcmp(ids, e->inv_ids, (size_t)n * sizeof(u32)) == 0)
         return;
     free_inventory(e);
@@ -1233,9 +1269,7 @@ static void draw_inventory(explorer *e, int mx, int my)
     xf_surface s = screen_surface(e);
     int i, x, y, hover = inv_at(e, mx, my);
     for (i = 0; i < e->inv_count; i++) {
-        /* The Artificial Intuition icon blinks while a hint is ready. */
-        int glow = e->inv_ids[i] == GAME_AI_ICON && game_ai_glowing(e->g) && (plat_ticks_ms() / 500) % 2;
-        const xf_image *img = &e->inv_img[i][(i == hover || glow) && e->inv_img[i][1].pixels ? 1 : 0];
+        const xf_image *img = &e->inv_img[i][i == hover && e->inv_img[i][1].pixels ? 1 : 0];
         inv_pos(e, i, &x, &y);
         blit_keyed(e, img, x, y);
     }
@@ -1561,8 +1595,8 @@ static void ui_piece(explorer *e, int x, int y, int w, int h, int anchor)
 }
 
 /* RollHdCredits: the opening credit cards in Typist (Hcd.ttr) 12 point,
- * right-aligned (0x12: DT_RIGHT | DT_WORDBREAK) at the bottom of the
- * scene strip, 5 pixels in (rectangle 0x6C4988, 0x458AA0). */
+ * centred at the bottom of the scene strip, 5 pixels in (rectangle
+ * 0x6C4988, 0x458AA0). */
 static void draw_credit(explorer *e)
 {
     const char *text = game_credit(e->g), *line;
@@ -1578,7 +1612,7 @@ static void draw_credit(explorer *e)
         const char *nl = strchr(line, '\n');
         size_t len = nl ? (size_t)(nl - line) : strlen(line);
         int w = xf_text_width(f, px, line, len);
-        draw_outlined(e, f, px, PICTURE_X + PICTURE_W - 5 - w, y, line, len, 0xFFFFFF);
+        draw_outlined(e, f, px, PICTURE_X + (PICTURE_W - w) / 2, y, line, len, 0xFFFFFF);
         line = nl ? nl + 1 : NULL;
     }
 }
@@ -1595,6 +1629,39 @@ static int menu_icon_at(const explorer *e, int x, int y)
     return menu_icon_shown(e, x, y) && x >= MENU_ICON_X - 22 && x < MENU_ICON_X + 22 && y < MENU_ICON_Y + 22;
 }
 
+#define AI_ICON_X 567
+#define AI_ICON_Y 68
+
+static int ai_icon_shown(const explorer *e)
+{
+    const game *g = e->g;
+    return e->ai_ready && e->ai_frames > 0 && e->in_menu == 0 && g->view && !g->iface_count && !g->slot_mode;
+}
+
+static int ai_icon_at(const explorer *e, int x, int y)
+{
+    const xf_image *im = &e->ai_img[0];
+    return ai_icon_shown(e) && x >= AI_ICON_X - im->width / 2 && x < AI_ICON_X + (im->width + 1) / 2 &&
+           y >= AI_ICON_Y - im->height / 2 && y < AI_ICON_Y + (im->height + 1) / 2;
+}
+
+/* The Artificial Intuition icon, top right: it spins while a hint is
+ * close (SetAIGlow), and a click shows the hint. */
+static void draw_ai_icon(explorer *e, int mx, int my)
+{
+    int glow;
+    const xf_image *img;
+    refresh_inventory(e); /* it says whether a hint list is set */
+    if (!ai_icon_shown(e))
+        return;
+    glow = game_ai_glowing(e->g);
+    (void)mx;
+    (void)my;
+    img = &e->ai_img[glow ? (plat_ticks_ms() / 100) % (u32)e->ai_frames : 0];
+    blit_keyed(e, img, AI_ICON_X - img->width / 2, AI_ICON_Y - img->height / 2);
+    ui_piece(e, AI_ICON_X - 40, AI_ICON_Y - 30, SCREEN_W - (AI_ICON_X - 40), 60, SCR_ANCHOR_TOP_RIGHT);
+}
+
 static void draw_menu_icon(explorer *e, int mx, int my)
 {
     const cursor_art *c;
@@ -1603,7 +1670,7 @@ static void draw_menu_icon(explorer *e, int mx, int my)
         return;
     f = &c->frames[(plat_ticks_ms() / 100) % (u32)c->count];
     blit_keyed(e, f, MENU_ICON_X - f->width / 2, MENU_ICON_Y - f->height / 2);
-    ui_piece(e, MENU_ICON_X - 40, 0, SCREEN_W - (MENU_ICON_X - 40), MENU_ICON_Y + 30, SCR_ANCHOR_TOP_RIGHT);
+    ui_piece(e, MENU_ICON_X - 40, 0, SCREEN_W - (MENU_ICON_X - 40), MENU_ICON_Y + 9, SCR_ANCHOR_TOP_RIGHT);
 }
 
 static void draw(explorer *e, int mx, int my)
@@ -1657,6 +1724,7 @@ static void draw(explorer *e, int mx, int my)
         draw_icons(e, mx, my);
         if (e->icon_count)
             ui_piece(e, 0, ICON_Y, SCREEN_W, ICON_H, SCR_ANCHOR_BELOW);
+        draw_ai_icon(e, mx, my);
         draw_menu_icon(e, mx, my);
         if (!wide)
             draw_cursor(e, mx, my);
@@ -1721,6 +1789,7 @@ static void draw(explorer *e, int mx, int my)
                  SCR_ANCHOR_BOTTOM_LEFT);
     }
     draw_ifaces(e);
+    draw_ai_icon(e, mx, my);
     draw_menu_icon(e, mx, my);
     draw_message(e, mx, my);
     if (g->ask)
@@ -2215,6 +2284,8 @@ static void handle_event(explorer *e, plat_event ev)
         } else if (item == 6) { /* Quit */
             e->running = 0;
         }
+    } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && !e->playing && ai_icon_at(e, ev.x, ev.y)) {
+        game_click_inventory(e->g, GAME_AI_ICON); /* the hint */
     } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT && menu_icon_at(e, ev.x, ev.y)) {
         menu_enter(e); /* the menu icon, a clip included: it waits */
     } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
@@ -2426,6 +2497,8 @@ static int script_window(void *user, const char *what)
         return e->playing;
     if (strcmp(what, "credit") == 0)
         return game_credit(e->g) != NULL;
+    if (strcmp(what, "sound") == 0)
+        return (int)e->g->sound;
     return -1;
 }
 
@@ -2553,6 +2626,11 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     plat_show_cursor(1);
     free(e->dlg_talk.pixels);
     free(e->return_img.pixels);
+    {
+        int f;
+        for (f = 0; f < e->ai_frames; f++)
+            free(e->ai_img[f].pixels);
+    }
     free(e->dlg_history.pixels);
     free(e->dlg_up.pixels);
     free(e->dlg_down.pixels);

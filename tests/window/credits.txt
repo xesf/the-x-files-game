@@ -1,8 +1,12 @@
 # The opening credits: the "Funny" answer to Cook runs RollHdCredits,
-# with FOCredit.mus; a card every 4.5 s, shown for 3 s, from XFilesC.dll.
+# with FOCredit.mus (80788); a card every 4.5 s, shown for 3 s, from
+# XFilesC.dll. The music waits for the first card.
 clips on
 new
 icon 18172
+play 3000
 expect window credit 0
-play 10000
+expect window sound 30399         # still the Field Office ambience
+play 3000
 expect window credit 1
+expect window sound 80788         # the credits music, with the first card

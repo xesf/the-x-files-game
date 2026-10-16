@@ -73,14 +73,15 @@ Cook with the "Funny" emotion icon (18172) runs `RollHdCredits` and plays
 - The cards end at the first missing string. String 22 is missing, so the
   opening shows strings 4 to 21. Strings 23 to 28 (the producers, the
   writers and the director) are not shown.
-- The text is Typist (`Hcd.ttr`) 12 point, right-aligned
-  (`DT_RIGHT | DT_WORDBREAK`), at the bottom of the scene strip, 5 pixels
-  in (rectangle `0x6C4988`).
+- The text is Typist (`Hcd.ttr`) 12 point, centred at the bottom of the
+  scene strip, 5 pixels in (rectangle `0x6C4988`).
+- The credits music starts with the first card. The action that plays
+  `FOCredit.mus` comes right after `RollHdCredits`; our engine holds the
+  sound until the first card appears.
 
 We draw the cards in white with a black outline, over the scene, so they
 scale with it in the wide layout. They follow the game clock, so they wait
-behind the main menu. Where the original puts the right edge is read from
-its placement code, not yet compared with the running game.
+behind the main menu.
 
 ## Emotion and action icons
 
@@ -458,8 +459,11 @@ clip, or at the clip's first rectangle.
 
 ## Artificial Intuition
 
-The AI icon (evidence icon 56185) sits in the inventory row while a hint
-is set. `SetAIList(trigger, list)` (0x460170) sets the hint: a click on
+The AI icon (evidence icon 56185) sits in the top-right corner, under
+the main menu icon, while a hint is set; the Help screen shows it there.
+It has no still picture: its rollover list names `AI.pff` (56700), eight
+frames of a spinning disc. It shows the first frame, and spins while the
+hint is close. `SetAIList(trigger, list)` (0x460170) sets the hint: a click on
 the icon runs the action list with the trigger's parameters, which often
 shows an action icon ("climb the railroad pole"). The engine makes the
 icon glow while one of the list's conditions holds (0x4FE820).

@@ -530,6 +530,24 @@ static u32 first_enabled(game *g, u32 list)
     return 0;
 }
 
+static void start_sound(game *g, u32 asset, int looped)
+{
+    vc_asset_ref a;
+    if (vc_read_asset_ref(&g->db, asset, &a) != 0)
+        return;
+    g->sound = asset;
+    g->sound_looped = looped;
+    g->sound_serial++;
+    g->played[g->played_count++ % GAME_PLAYED] = asset;
+    vc_run_triggers(&g->interp, a.triggers, 8);
+}
+
+/* A card every 4500 ms (0x45BAA0), shown for 3000 ms (0x45B9C0); the
+ * cards end at the first missing string (0x401EE0): 4 to 21 after the
+ * intro. */
+#define CREDIT_PERIOD 4500
+#define CREDIT_SHOWN 3000
+
 /* Media actions name a media list. Sounds (paths under Sounds/) play
  * beside the clips instead of in the queue. */
 /* 0x479BA0 act_media: selector 1 plays the list's first enabled media,
@@ -565,11 +583,13 @@ static void host_play_media(void *user, u32 list, u8 selector)
         return;
     }
     if (strncmp(a.logical, "Sounds/", 7) == 0) {
-        g->sound = asset;
-        g->sound_looped = selector == 2;
-        g->sound_serial++;
-        g->played[g->played_count++ % GAME_PLAYED] = asset;
-        vc_run_triggers(&g->interp, a.triggers, 8);
+        /* The credits music (FOCredit.mus, after RollHdCredits) waits for
+         * the first card. */
+        if (g->credits_rolling && selector == 1 && g->now - g->credits_start < CREDIT_PERIOD) {
+            g->credits_sound = asset;
+            return;
+        }
+        start_sound(g, asset, selector == 2);
         return;
     }
     game_queue_media(g, asset);
@@ -612,12 +632,6 @@ static void host_timer(void *user, u8 id, u32 ms, u8 control)
 
 /* Runs the timer triggers of everything on screen for each timer that
  * fired: the view and the places around it, and the media playing. */
-/* A card every 4500 ms (0x45BAA0), shown for 3000 ms (0x45B9C0); the
- * cards end at the first missing string (0x401EE0): 4 to 21 after the
- * intro. */
-#define CREDIT_PERIOD 4500
-#define CREDIT_SHOWN 3000
-
 void game_tick(game *g, u32 now_ms)
 {
     int i;
@@ -625,6 +639,11 @@ void game_tick(game *g, u32 now_ms)
     if (g->credits_rolling) {
         /* the cards end at the first missing string */
         u32 n = (g->now - g->credits_start) / CREDIT_PERIOD;
+        if (n && g->credits_sound) {
+            start_sound(g, g->credits_sound, 0);
+            g->credits_sound = 0;
+            after_triggers(g);
+        }
         if (n && !xf_strings_get(&g->credit_strings, (u32)g->credits_first + n - 1))
             g->credits_rolling = 0;
     }

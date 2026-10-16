@@ -224,6 +224,7 @@ typedef struct {
     int credits_rolling;  /* RollHdCredits */
     u32 credits_start;    /* game clock when they started */
     int credits_first;    /* the first card's string: 4 after the intro, else 1 */
+    u32 credits_sound;    /* the credits music, waiting for the first card */
     xf_strings credit_strings; /* xfilesc.dll: the credit cards */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;

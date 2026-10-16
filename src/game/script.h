@@ -25,7 +25,8 @@ typedef struct {
     void (*input)(void *user, int key, int x, int y);
     /* The window's own state: "menu" (1 while the main menu is up),
      * "paused" (1 while the game's clips and sounds hold), "playing" (1
-     * while a clip plays), "credit" (1 while an opening credit card shows).
+     * while a clip plays), "credit" (1 while an opening credit card shows),
+     * "sound" (the sound asset playing beside the clips, or 0).
      * Returns -1 for an unknown name. */
     int (*window)(void *user, const char *what);
 } script_host;
