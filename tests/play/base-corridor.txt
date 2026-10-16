@@ -1,0 +1,44 @@
+# The corridor off the secret base's entrance (view 93960, Secret Base
+# 2A): the guards there kill Willmore. EndGame 93974, with no Try again
+# (variable 2581 is 0 there).
+include disc6.txt
+
+# Node 8: Rauch's house. Rauch upstairs, Mulder in the attic.
+walk 8055
+click 88339                     # Rauch's face
+skip
+click 68941                     # up the ladder
+skip
+walk 7978
+askall 23803                    # Mulder
+skip
+expect var 2022 1
+inv 17455                       # the phone rings: answer it
+skip
+wait 5000
+walk 8210
+click 93020                     # out on the porch: the NSA
+skip
+wait 3000
+expect view 8138
+icon 24577                      # over the rail and into the woods
+skip
+wait 5000
+
+# The woods: two NSA agents give chase.
+walk 36583
+hold Gun
+shoot 111                       # the first agent
+skip
+shoot 112                       # the second: Sc114L, on to the secret base
+skip
+hold none
+wait 3000
+expect var 1219 10              # node 10: the secret base, with Scully
+
+walk 13735
+walk 93960
+skip
+wait 20000
+skip
+expect over 1

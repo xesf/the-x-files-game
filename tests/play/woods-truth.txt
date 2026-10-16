@@ -1,0 +1,42 @@
+# The woods death when Willmore told Cook the truth on disc 4 (question
+# 39940 not asked, variable 1676 still 0): the death plays the long end
+# clip Sc112A (a DVD clip, vob/19650.vob) and EndGame 38424. The other
+# scripts lie to Cook, so the variable is cleared here instead of
+# replaying the story with the other answer. A second death after Try
+# again goes to EndGame at once (GetPlayBones plays the long clip once a
+# session).
+include disc6.txt
+set 1676 0                      # Cook was told the truth
+
+walk 8055
+click 88339                     # Rauch's face
+skip
+click 68941                     # up the ladder
+skip
+walk 7978
+askall 23803                    # Mulder
+skip
+expect var 2022 1
+inv 17455                       # the phone rings: answer it
+skip
+wait 5000
+walk 8210
+click 93020                     # out on the porch: the NSA
+skip
+wait 3000
+expect view 8138
+icon 24577                      # over the rail and into the woods
+skip
+wait 5000
+
+walk 36583
+wait 15000                      # no shot: the agents fire
+skip
+expect over 1
+expect message 39
+answer yes
+expect over 0
+walk 36583
+wait 15000                      # no shot again
+skip
+expect over 1
