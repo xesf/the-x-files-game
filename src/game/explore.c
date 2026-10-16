@@ -510,7 +510,7 @@ static void draw_scroll_box(explorer *e)
         return;
     f = sb->font == 'H' && e->have_hcd_font ? &e->hcd_font
       : sb->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
-    px = (float)(sb->size ? sb->size : 12) * 96.0f / 72.0f;
+    px = (float)(sb->size ? sb->size : 12); /* pixels: 0x53D560 makes lfHeight -size */
     lh = (int)(px * 1.2f);
     y = it->item.region.top + (int)px;
     len = (int)strlen(sb->text);
@@ -631,92 +631,97 @@ static void draw_caption_option(explorer *e)
     }
 }
 
+/* SetIItemText labels: font 'H' is Hcd.ttr, 'c' Courier New; the size is
+ * the character height in pixels (0x53D560 makes lfHeight -size). */
+static void draw_label(explorer *e, const game_iface_item *it, const game_item_label *l)
+{
+    const vc_region *r = &it->item.region;
+    xf_surface sf = screen_surface(e);
+    const xf_font *f = l->font == 'H' && e->have_hcd_font ? &e->hcd_font
+                     : l->font == 'P' && e->have_phn_font ? &e->phn_font
+                     : l->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
+    float px = (float)l->size;
+    if (l->align == 'w') {
+        /* a page of text: wrapped to the item, from its top */
+        const char *t = l->text;
+        int y = r->top + (int)px, lh = (int)(px * 1.2f);
+        while (*t && y <= r->bottom) {
+            int starts[64], lens[64], nl, j;
+            size_t plen = strcspn(t, "\n");
+            char para[1024];
+            snprintf(para, sizeof(para), "%.*s", (int)plen, t);
+            nl = para[0] ? wrap_lines_font(f, para, px, r->right - r->left, starts, lens, 64) : 1;
+            if (!para[0])
+                lens[0] = starts[0] = 0;
+            for (j = 0; j < nl && y <= r->bottom; j++, y += lh)
+                xf_text_draw(&sf, f, px, r->left, y, para + starts[j], (size_t)lens[j], 0x000000);
+            t += plen + (t[plen] == '\n');
+        }
+    } else {
+        /* One line per newline, the block centred in the item. */
+        const char *line = l->text, *c;
+        int lines = 1, lh = (int)(px * 1.2f), y;
+        for (c = l->text; *c; c++)
+            lines += *c == '\n';
+        y = r->bottom - (r->bottom - r->top - (int)px) / 2 - 3 - (lines - 1) * lh / 2;
+        while (line) {
+            const char *nl = strchr(line, '\n');
+            size_t len = nl ? (size_t)(nl - line) : strlen(line);
+            int w = xf_text_width(f, px, line, len), x;
+            while (len && w > r->right - r->left) /* cut at the item's edge */
+                w = xf_text_width(f, px, line, --len);
+            x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
+            xf_text_draw(&sf, f, px, x, y, line, len, l->color == 'b' ? 0xFFFFFF : 0x000000);
+            y += lh;
+            line = nl ? nl + 1 : NULL;
+        }
+    }
+}
+
+/* One layout: its pictures back to front, its labels, its scrolling
+ * text, then the typed text of its fields with a caret in the one that
+ * has focus. */
+static void draw_iface_layer(explorer *e, int k)
+{
+    const game_iface *d = &e->g->ifaces[k];
+    const game_scroll *sb = game_scroll_box(e->g);
+    int i, order;
+    char buf[64];
+    for (order = 255; order >= 0; order--) /* a low order is in front */
+        for (i = 0; i < d->count; i++)
+            if ((d->items[i].item.flags & 0xFF) == order && vc_is_enabled(&e->g->interp, d->items[i].id))
+                blit_keyed(e, &e->iface_img[k][i], d->items[i].item.region.left, d->items[i].item.region.top);
+    for (i = 0; i < d->count; i++) {
+        const game_item_label *l = game_item_label_of(e->g, d->items[i].id);
+        if (l && l->text[0] && vc_is_enabled(&e->g->interp, d->items[i].id))
+            draw_label(e, &d->items[i], l);
+    }
+    for (i = 0; sb && i < d->count; i++)
+        if (d->items[i].id == sb->item)
+            draw_scroll_box(e);
+    for (i = 0; e->have_font && i < d->count; i++) {
+        const game_iface_item *it = &d->items[i];
+        const vc_region *r = &it->item.region;
+        const char *text;
+        xf_surface sf;
+        if (!vc_is_enabled(&e->g->interp, it->id) || !(text = game_item_text(e->g, it->id, buf, sizeof(buf) - 1)))
+            continue;
+        if (it->id == e->g->focus_item && (plat_ticks_ms() / 500) % 2)
+            strcat(buf, "|");
+        sf = screen_surface(e);
+        xf_text_draw(&sf, &e->font, 15, r->left + 8, (r->top + r->bottom) / 2 + 5, text, strlen(text), 0x000000);
+    }
+}
+
 static void draw_ifaces(explorer *e)
 {
-    int k, i, order;
-    char buf[64];
+    int k;
+    /* Layer by layer, so a message box covers the text of the layout
+     * under it. */
     for (k = 0; k < e->g->iface_count; k++)
-        for (order = 255; order >= 0; order--) /* back to front: a low order is in front */
-            for (i = 0; i < e->g->ifaces[k].count; i++) {
-                const game_iface_item *it = &e->g->ifaces[k].items[i];
-                if ((it->item.flags & 0xFF) == order && vc_is_enabled(&e->g->interp, it->id))
-                    blit_keyed(e, &e->iface_img[k][i], it->item.region.left, it->item.region.top);
-            }
+        draw_iface_layer(e, k);
     draw_caption_option(e);
-    /* SetIItemText labels: font 'H' is Hcd.ttr, 'c' Courier New; size in
-     * points (96 dots per inch). */
-    for (k = 0; k < e->g->iface_count; k++)
-        for (i = 0; i < e->g->ifaces[k].count; i++) {
-            const game_iface_item *it = &e->g->ifaces[k].items[i];
-            const game_item_label *l = game_item_label_of(e->g, it->id);
-            const xf_font *f;
-            const vc_region *r = &it->item.region;
-            float px;
-            int w, x;
-            xf_surface sf = screen_surface(e);
-            if (!l || !l->text[0] || !vc_is_enabled(&e->g->interp, it->id))
-                continue;
-            f = l->font == 'H' && e->have_hcd_font ? &e->hcd_font
-              : l->font == 'P' && e->have_phn_font ? &e->phn_font
-              : l->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
-            px = (float)l->size * 96.0f / 72.0f;
-            if (l->align == 'w') {
-                /* a page of text: wrapped to the item, from its top */
-                const char *t = l->text;
-                int y = r->top + (int)px, lh = (int)(px * 1.2f);
-                while (*t && y <= r->bottom) {
-                    int starts[64], lens[64], nl, k;
-                    size_t plen = strcspn(t, "\n");
-                    char para[1024];
-                    snprintf(para, sizeof(para), "%.*s", (int)plen, t);
-                    nl = para[0] ? wrap_lines_font(f, para, px, r->right - r->left, starts, lens, 64) : 1;
-                    if (!para[0])
-                        lens[0] = starts[0] = 0;
-                    for (k = 0; k < nl && y <= r->bottom; k++, y += lh)
-                        xf_text_draw(&sf, f, px, r->left, y, para + starts[k], (size_t)lens[k], 0x000000);
-                    t += plen + (t[plen] == '\n');
-                }
-                continue;
-            }
-            {
-                /* One line per newline, the block centred in the item. */
-                const char *line = l->text;
-                int lines = 1, lh = (int)(px * 1.2f), y;
-                const char *c;
-                for (c = l->text; *c; c++)
-                    lines += *c == '\n';
-                y = r->bottom - (r->bottom - r->top - (int)px) / 2 - 3 - (lines - 1) * lh / 2;
-                while (line) {
-                    const char *nl = strchr(line, '\n');
-                    size_t len = nl ? (size_t)(nl - line) : strlen(line);
-                    w = xf_text_width(f, px, line, len);
-                    while (len && w > r->right - r->left) /* cut at the item's edge */
-                        w = xf_text_width(f, px, line, --len);
-                    x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
-                    xf_text_draw(&sf, f, px, x, y, line, len, l->color == 'b' ? 0xFFFFFF : 0x000000);
-                    y += lh;
-                    line = nl ? nl + 1 : NULL;
-                }
-            }
-        }
-    draw_scroll_box(e);
     draw_photos(e);
-    /* Typed text in text fields, with a caret in the one that has focus. */
-    for (k = 0; k < e->g->iface_count && e->have_font; k++)
-        for (i = 0; i < e->g->ifaces[k].count; i++) {
-            const game_iface_item *it = &e->g->ifaces[k].items[i];
-            const char *text = game_item_text(e->g, it->id, buf, sizeof(buf) - 1);
-            const vc_region *r = &it->item.region;
-            if (!text)
-                continue;
-            if (it->id == e->g->focus_item && (plat_ticks_ms() / 500) % 2)
-                strcat(buf, "|");
-            {
-                xf_surface sf = screen_surface(e);
-                xf_text_draw(&sf, &e->font, 15, r->left + 8, (r->top + r->bottom) / 2 + 5, text, strlen(text),
-                             0x000000);
-            }
-        }
 }
 
 /* --- Clips and sounds ------------------------------------------------ */
@@ -1940,7 +1945,7 @@ static void place_slot_cursor(explorer *e)
         return;
     l = game_item_label_of(e->g, names[e->g->slot]);
     if (l && e->have_card_font)
-        w = xf_text_width(&e->card_font, (float)l->size * 96.0f / 72.0f, l->text, strlen(l->text));
+        w = xf_text_width(&e->card_font, (float)l->size, l->text, strlen(l->text));
     c->item.region.left = (i16)(200 + w + 2);
     c->item.region.right = (i16)(c->item.region.left + 3);
     c->item.region.top = (i16)(164 + 58 * e->g->slot);
