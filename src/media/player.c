@@ -212,6 +212,34 @@ int xf_player_update(xf_player *p, u32 now_ticks)
 
 const u32 *xf_player_frame(const xf_player *p) { return p->has_video ? p->video.frame : NULL; }
 
+int xf_player_captions(xf_player *p, const char *path)
+{
+    xf_subtitles subs;
+    size_t n = strlen(path);
+    if (p->vob)
+        return -1;
+    if (n > 4 && (strcmp(path + n - 4, ".srt") == 0 || strcmp(path + n - 4, ".SRT") == 0)) {
+        if (xf_subtitles_load_srt(path, &subs) != 0)
+            return -1;
+    } else {
+        xf_mov other;
+        if (xf_mov_open(&other, path) != 0)
+            return -1;
+        if (xf_subtitles_load(&other, &subs) != 0) {
+            xf_mov_close(&other);
+            return -1;
+        }
+        /* another release's copy of the clip: its lines stretched to this one */
+        if (other.timescale && p->mov.timescale)
+            xf_subtitles_stretch(&subs, (u32)((u64)other.duration * 1000 / other.timescale),
+                                 (u32)((u64)p->mov.duration * 1000 / p->mov.timescale));
+        xf_mov_close(&other);
+    }
+    xf_subtitles_free(&p->subs);
+    p->subs = subs;
+    return 0;
+}
+
 const char *xf_player_subtitle(const xf_player *p)
 {
     const xf_subtitle *s = xf_subtitles_at(&p->subs, p->base_ms + p->now_ms);

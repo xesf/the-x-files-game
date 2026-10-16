@@ -24,4 +24,13 @@ void xf_subtitles_free(xf_subtitles *subs);
 /* Returns the first cue visible at `ms`, or NULL. */
 const xf_subtitle *xf_subtitles_at(const xf_subtitles *subs, u32 ms);
 
+/* Reads an SRT file (UTF-8): the captions of a translation. */
+int xf_subtitles_load_srt(const char *path, xf_subtitles *subs);
+/* Scales the times of the lines from a clip `from_ms` long to one
+ * `to_ms` long: a dubbed clip runs a little shorter or longer. */
+void xf_subtitles_stretch(xf_subtitles *subs, u32 from_ms, u32 to_ms);
+/* The lines as the player shows them: one at a time (the first visible,
+ * xf_subtitles_at), the same line across tracks merged. */
+int xf_subtitles_shown(const xf_subtitles *in, xf_subtitles *out);
+
 #endif

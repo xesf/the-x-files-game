@@ -47,6 +47,9 @@ int xf_player_update(xf_player *p, u32 now_ticks);
 void xf_player_pause(xf_player *p, int paused, u32 now_ticks);
 /* Current picture, or NULL for a movie without video. */
 const u32 *xf_player_frame(const xf_player *p);
+/* Takes the captions from elsewhere: an SRT file, or another release's
+ * copy of the clip (its text tracks, stretched to this clip's length). */
+int xf_player_captions(xf_player *p, const char *path);
 /* Subtitle line to show now, or NULL. */
 const char *xf_player_subtitle(const xf_player *p);
 
