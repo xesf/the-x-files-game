@@ -1,0 +1,90 @@
+# The bomb at Gordon's Hauling left to its timer (two minutes, Standard
+# difficulty). The first explosion of a session plays the long version
+# (GetPlayCancer, EndGame 68551). After Try again Willmore is back in the
+# office with the bomb; the next explosion is one of four random clips
+# (RandGen 0-3, here clip 4A and EndGame 68579).
+include disc3.txt
+
+walk 3872
+click 38627                     # the computer
+click 50747
+type Craig Willmore
+click 50748
+type shiloh
+click 39474                     # connect
+click 36306                     # E-MAIL
+click 55011                     # Amis's mail (fourth row)
+expect var 2711 61775
+click 72722                     # the attachment: TARAKAN.DAT
+click 73068                     # the FBI database
+click 73306                     # search
+wait 3000
+expect var 1711 1               # the prints are Cook's
+click 15142                     # quit
+wait 9000                       # a knock at the door
+
+walk 3842
+click 75410                     # open the door
+icon 27739                      # stay calm
+click 24272
+ask 39924                       # "You may be right"
+click 24272
+ask 39940                       # lie to him
+click 24272
+askall 24272                    # his prints on the Tarakan
+expect var 2049 1               # node 4's last conversation is done
+
+inv 17451
+click 58726
+click 59712
+expect var 1219 12              # node 4 is complete: link 2
+walk 43016
+click 43062                     # into the cab, driver's side
+click 43157                     # the visors
+click 27407                     # the glove box
+click 57626
+click 57632                     # the paper: RR# 1121 & 82434
+click 43133                     # put it away; the driver is coming
+walk 3008
+click 43102                     # out by the passenger door
+wait 10000
+expect var 2575 1
+
+inv 17451
+click 58726
+click 59694
+walk 3974
+click 87437
+wait 10000
+expect var 2055 1
+expect var 1219 5               # node 5: Astadourian wakes Willmore
+
+askall 24285
+askall 77893
+click 45535                     # play the tape
+askall 41195
+hold FaxLeadSphere              # show her Amis's fax: her idea counter
+click 41195                     # reaches 6, "Okay cowboy, let's go"
+hold none
+wait 5000
+
+inv 17451
+click 58726
+click 35343                     # the map's second page
+click 58766                     # zoom in
+click 58982                     # Gordon's Hauling
+walk 6875
+askall 90162
+walk 6963
+walk 7026
+click 41081                     # the manifest; Rauch jumps Willmore
+wait 200000                     # the timer runs out
+skip
+expect over 1
+expect message 39               # Try again?
+answer yes
+expect over 0
+expect view 6977                # the office, the bomb ticking again
+wait 200000
+skip
+expect over 1

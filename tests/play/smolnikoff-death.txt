@@ -1,0 +1,35 @@
+# Deaths at Smolnikoff's warehouse. Going back in without asking Cook for
+# cover gets Willmore shot (SC83F). The first death of a session plays
+# the full FBI-shot scene (sc026&035B, GetPlayFBIShot) before EndGame
+# (action 40977); after Try again the same death goes to EndGame at once
+# (89709).
+include disc4.txt
+
+inv 17451
+click 58726
+click 59118                     # FBI Field Office
+wait 3000
+walk 1022
+click 78394                     # Cook walks Willmore to the meeting room
+askall 44971
+wait 30000
+click 1226
+inv 17451
+click 58726
+click 59681                     # Smolnikoff's warehouse
+click 47779                     # "Cover me"
+wait 8000
+click 47113                     # in through the door
+wait 20000                      # the raid starts; Cook pulls back
+skip
+expect view 26186               # outside again, Cook's cover over
+click 47113                     # in alone
+skip
+expect over 1
+expect message 39               # Try again?
+answer yes
+expect over 0
+expect view 26186               # the checkpoint
+click 47113                     # in alone again
+skip
+expect over 1

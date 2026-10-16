@@ -1,0 +1,88 @@
+# The bum's guessing game at the rail yard, guessed wrong: every wrong
+# guess counts (variable 4661), and once there are more than 16 the bum's
+# timer plays his last clip and the game ends (EndGame 66687).
+include disc5.txt
+
+# Link 4: X at Hangar 4, Sand Point Naval Station.
+inv 17451
+click 58726
+click 59758                     # Hangar 4
+wait 5000
+walk 6711
+askall 27274                    # X: the stiletto
+skip
+click 29693                     # leave: Astadourian is waiting
+skip
+askall 93595
+skip
+
+# Node 7: Presbyterian Hospital, Gold Bar. Scully.
+inv 17451
+click 58754                     # the map of the state
+click 59010                     # Presbyterian Hospital
+wait 5000
+expect var 1219 7
+askall 23855                    # the receptionist
+skip
+hold Badge
+click 23855
+hold none
+skip
+askall 23855
+skip
+walk 23834
+askall 23857                    # Scully: "We can't tell you."
+skip
+wait 3000
+inv 25579                       # she draws on Willmore: show X's stiletto
+skip
+expect view 73885
+askall 73888
+
+# The rail yard at Rural Route 1121.
+inv 17451
+click 79708
+wait 5000
+expect view 8568
+inv 56185                       # Artificial Intuition: climb the pole
+skip
+icon 24546
+skip
+inv 21821                       # binoculars: car 82434 down the line
+expect view 9215
+hold none
+walk 8700
+click 29957                     # into the burned boxcar
+skip
+walk 31437
+click 88872
+skip
+walk 32225
+click 88884
+skip
+walk 31436
+click 32264                     # "Hey! I didn't do nothing..."
+skip
+askall 23967                    # his questions, and the first guesses
+skip
+ask 30097
+skip
+ask 30100
+skip
+ask 30103
+skip
+ask 30106
+skip
+ask 30109
+skip
+ask 30112
+skip
+ask 30115
+skip
+ask 30118
+skip
+ask 30124
+skip
+wait 10000                      # his timer: two seconds a tick
+skip
+expect over 1

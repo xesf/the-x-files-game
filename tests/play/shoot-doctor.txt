@@ -1,0 +1,24 @@
+# Drawing the gun on someone who is no threat ends the game: at the
+# hospital, Willmore shoots Dr. McIntyre (the guide's joke) and is
+# arrested (sc017_18F, then EndGame with no Try again).
+include disc5.txt
+
+inv 17451
+click 58726
+click 59758                     # Hangar 4
+wait 5000
+walk 6711
+askall 27274                    # X: the stiletto
+skip
+click 29693
+skip
+askall 93595
+skip
+inv 17451
+click 58754
+click 59010                     # Presbyterian Hospital
+wait 5000
+hold Gun
+click 23855                     # Dr. McIntyre
+skip
+expect over 1
