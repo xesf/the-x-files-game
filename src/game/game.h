@@ -222,6 +222,9 @@ typedef struct {
     int screen_wide;      /* the wide layout (docs/engine/screen.md); saved with the preferences */
     int pda_card;         /* the PDA address book's card shown (0x6B6540) */
     int credits_rolling;  /* RollHdCredits */
+    u32 credits_start;    /* game clock when they started */
+    int credits_first;    /* the first card's string: 4 after the intro, else 1 */
+    xf_strings credit_strings; /* xfilesc.dll: the credit cards */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;
     u8 *checkpoint;          /* SaveGameState: the state to go back to after a death */
@@ -377,6 +380,8 @@ int game_ai_glowing(game *g);
 /* Preferences: read from the save folder's "prefs" file (after
  * save_dir is set), written back on each change; game_pref gives one by
  * its GAM variable. */
+/* The credit card on screen now (RollHdCredits), or NULL. */
+const char *game_credit(const game *g);
 void game_prefs_load(game *g);
 /* Turns the wide layout on or off, and saves the preferences. */
 void game_set_screen_wide(game *g, int on);

@@ -612,10 +612,22 @@ static void host_timer(void *user, u8 id, u32 ms, u8 control)
 
 /* Runs the timer triggers of everything on screen for each timer that
  * fired: the view and the places around it, and the media playing. */
+/* A card every 4500 ms (0x45BAA0), shown for 3000 ms (0x45B9C0); the
+ * cards end at the first missing string (0x401EE0): 4 to 21 after the
+ * intro. */
+#define CREDIT_PERIOD 4500
+#define CREDIT_SHOWN 3000
+
 void game_tick(game *g, u32 now_ms)
 {
     int i;
     g->now = now_ms;
+    if (g->credits_rolling) {
+        /* the cards end at the first missing string */
+        u32 n = (g->now - g->credits_start) / CREDIT_PERIOD;
+        if (n && !xf_strings_get(&g->credit_strings, (u32)g->credits_first + n - 1))
+            g->credits_rolling = 0;
+    }
     if (g->game_over)
         return; /* the game has ended: nothing runs on */
     for (i = 0; i < g->timer_count; i++) {
@@ -2200,6 +2212,20 @@ void game_prefs_apply(game *g)
 /* Our own settings share the file, under numbers no GAM variable has. */
 #define PREF_SCREEN_WIDE 0xFFFF0001u
 
+const char *game_credit(const game *g)
+{
+    u32 t, n;
+    const char *s;
+    if (!g->credits_rolling)
+        return NULL;
+    t = g->now - g->credits_start;
+    n = t / CREDIT_PERIOD;
+    if (n == 0 || t - n * CREDIT_PERIOD >= CREDIT_SHOWN)
+        return NULL;
+    s = xf_strings_get(&g->credit_strings, (u32)g->credits_first + n - 1);
+    return s && *s ? s : NULL;
+}
+
 static void prefs_save(game *g)
 {
     char path[1024];
@@ -3467,10 +3493,15 @@ static int host_call_function(void *user, const vc_action *a)
         }
         return 1;
     }
-    /* 0x459960 fn_RollHdCredits: 0x45A290 opens the scrolling credits
-     * window. */
+    /* 0x459960 fn_RollHdCredits -> 0x45A290 -> 0x45B640: the opening
+     * credits over the first scene. The credits object (app + 0x104,
+     * vtable 0x65DEB0) reads its cards from XFilesC.dll (0x418E70); the
+     * first is string 4 when the intro played (1-3 belong to it), else 1
+     * (0x44E720). */
     if (strcmp(name, "RollHdCredits") == 0) {
         g->credits_rolling = 1;
+        g->credits_start = g->now;
+        g->credits_first = game_pref(g, 994) ? 1 : 4; /* Pref_bSkipIntro */
         return 1;
     }
     /* 0x4B6850 fn_IsoChamberStat(door A, door B, power, out x8): the
@@ -4226,6 +4257,9 @@ int game_open(game *g, const char *data_dir)
         xf_warn("game: no xfilest.dll, interface texts are missing");
     if (xf_path_resolve(data_dir, "XFILESE.DLL", path, sizeof(path)) != 0 || xf_strings_load(&g->engine_strings, path) != 0)
         memset(&g->engine_strings, 0, sizeof(g->engine_strings)); /* English fallbacks */
+    if (xf_path_resolve(data_dir, "XFILESC.DLL", path, sizeof(path)) != 0 ||
+        xf_strings_load(&g->credit_strings, path) != 0)
+        memset(&g->credit_strings, 0, sizeof(g->credit_strings));
     vc_place_map_build(&g->db, &g->places);
     xf_info("%u views placed in the hierarchy", g->places.count);
     game_prefs_load(g); /* the shipped values until save_dir is known */
@@ -4238,6 +4272,7 @@ void game_close(game *g)
     g->checkpoint = NULL;
     xf_strings_free(&g->strings);
     xf_strings_free(&g->engine_strings);
+    xf_strings_free(&g->credit_strings);
     vc_place_map_free(&g->places);
     vc_interp_free(&g->interp);
     xf_neo_close(&g->gam);
