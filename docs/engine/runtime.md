@@ -91,9 +91,11 @@ click (see below):
 | 3 | 19668 | `Video:Game:Teaser.mov` (`XV/19668.xmv`) |
 | 4 | 56001 | `Video:Game:xtitle.mov` (`XV/56001.xmv`) |
 
-On the DVD release, after the two logos the engine checks for the DVD
-title `ddigital1`; when it exists, it plays the DVD titles `teaser` and
-`intro` (`dvd_play_title`, `0x4E5E30`) instead of steps 3 and 4.
+On the DVD release, after the two logos the engine plays the DVD title
+`ddigital1`; when it plays, the DVD titles `teaser` and `intro` follow
+(`dvd_play_title`, `0x4E5E30`) instead of steps 3 and 4. Our engine does
+the same when `vob/ddigital1.vob` exists (see
+[formats/vob.md](../formats/vob.md)).
 
 Each media file is looked up in the install folder first and on the CD
 second (`0x461680`, `0x4616F0`).

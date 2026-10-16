@@ -259,8 +259,9 @@ The engine runs any release from its data:
 - **QDMC audio** (QDesign Music 1, not QDM2): done, following FFmpeg's
   decoder (LGPL-2.1-or-later, credited in `README.md` and in the file).
   Our output matches ffmpeg's within one step on every file.
-- **MPEG-2 for DVD `.vob`:** this is a large job. Ship CD assets first and
-  treat DVD video as optional.
+- **MPEG-2 for DVD `.vob`:** done (`src/media/mpeg2.c`, see
+  [formats/vob.md](formats/vob.md)). Speed on the Vita is not yet
+  measured.
 - **HDB semantics:** the bytes are decoded, but what the fields mean comes
   from the engine. Each VC class's load method in IDA is the authority.
 - **The reference builds are not the shipped version:** class layouts may

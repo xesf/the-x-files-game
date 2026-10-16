@@ -11,5 +11,6 @@ the layout as found in the shipped game data, and the matching reader in
 | HOT | `XV/*.hot` | [hot.md](hot.md) |
 | Saved games | `*.x` (original), `*.xfs` (ours) | [save.md](save.md) |
 | QuickTime | `.xmv`, `.nmv`, `.mus`, `.amv`, `.dmv` | [quicktime.md](quicktime.md) |
+| DVD video | `vob/*.vob` (DVD edition) | [vob.md](vob.md) |
 | XTX text | `XT/*.xtx` | [text-and-fonts.md](text-and-fonts.md) |
 | TTR fonts | `*.TTR` | [text-and-fonts.md](text-and-fonts.md) |

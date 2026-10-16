@@ -22,10 +22,8 @@ and Steam Machine), Windows, Windows 9x, DOS and the PlayStation Vita.
    `XF_GAME_DIR` to your game folder. If your install keeps its video
    clips in another folder (the DVD edition), set `XF_MEDIA_DIR` to that
    folder too, or copy those clips into a folder named `media` inside the
-   game folder. On the Vita, copy the game files to `ux0:data/xfiles`. If
-   they come from the DVD edition, its scene clips are DVD video, which the
-   engine does not play yet: copy the `XV` folder of the CD edition into
-   `ux0:data/xfiles/media`.
+   game folder. On the Vita, copy the game files to `ux0:data/xfiles`. The
+   DVD edition's `vob` folder plays too: keep it inside the game folder.
    Under DOS, pass the folder: `XFILES --explore C:\XFILES 0 1`.
 3. Start the program. The macOS app is not signed: the first time, open
    it with Control-click > Open.
@@ -74,7 +72,10 @@ licenses allow this use, and their notices are kept here:
   references. https://github.com/scummvm/scummvm
 - **FFmpeg** (LGPL-2.1-or-later): the QDesign Music 1 (`QDMC`) decoder in
   `src/media/qdmc.c` follows FFmpeg's `libavcodec/qdmc.c`, Copyright (c)
-  2017 Paul B Mahol; its tables come from there. https://ffmpeg.org
+  2017 Paul B Mahol; its tables come from there. The MPEG-2 decoder in
+  `src/media/mpeg2.c` takes its code tables from FFmpeg's
+  `libavcodec/mpeg12data.c`, Copyright (c) 2000, 2001 Fabrice Bellard
+  and (c) 2002-2004 Michael Niedermayer. https://ffmpeg.org
 - **mthcore/x-files-game** (MIT): NeoPersist HDB/GAM format research.
   https://github.com/mthcore/x-files-game
 - **Zeffuro/x-files-pc-enhancement-patch** (MIT): a QuickTime and

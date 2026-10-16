@@ -4,6 +4,7 @@ All notable changes to this project.
 
 ## Unreleased
 
+- The DVD edition's `.vob` clips play: an MPEG-2 video decoder, the DVD's LPCM sound, and its opening titles.
 - Keyboard and d-pad navigation: arrows, Tab, Enter and I; on the Vita, the d-pad, R, L, Square and Triangle.
 - A `media` folder in the game folder for the CD's clips, for installs that only have the DVD's `.vob` files.
 - The computer's login connects with Enter, and Tab moves to the password.
