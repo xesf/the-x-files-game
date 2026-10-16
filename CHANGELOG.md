@@ -2,12 +2,18 @@
 
 All notable changes to this project.
 
-## Unreleased
+## 0.2.3 - 2026-10-17
 
 - Languages: a game folder can hold several releases in folders named by language (`en`, `de`, `fr`, ...); the Options screen chooses the voices and the text apart (`XF_VOICES`, `XF_TEXT`). Captions for dubbed clips come from the English clips.
 - Translations: a folder of text files (string tables, documents, SRT captions) adds a text language; `xftool lang-export` and `lang-check` help make one.
 - Documents and mail headers draw their accents and curly quotes; the mail list reads translated header names.
 - Search words match without accents, and in both the translation and the release's own words.
+- The location card, the rollover names of icons and items, and a translation's dialogue tabs follow the text language; the card writes the date and time the language's way.
+- Japanese text: Shift-JIS documents, a Japanese system font (or `font.ttf` in the language folder) under the game fonts, line breaks between Japanese characters.
+- Text sizes and fonts as the original draws them: Courier New for the location card, dialogue questions, rollover names and typed fields; captions in a 12-pixel sans-serif font under the picture.
+- Fonts: TrueType collections, and `.ttr` or `.ttf` names in each language folder.
+- `make run` uses `data/` when it holds language folders.
+- IDA: 73 more functions named.
 - Vita: a padded code segment, so the build no longer fails at random in vita-elf-create.
 - Vita: three display buffers and a single vertical-blank wait instead of the 30 fps cap, which held up clips and made the pointer jerky.
 
