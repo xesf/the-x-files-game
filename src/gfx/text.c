@@ -2,6 +2,8 @@
  * Copyright (C) 2026 xesf */
 #include "text.h"
 
+#include "xf_text.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,15 +44,25 @@ static const xf_glyph *get_glyph(const xf_font *f, int glyph, float px)
     return &e->g;
 }
 
-/* Decodes one UTF-8 code point and advances *p. */
+/* Decodes one code point and advances *p: UTF-8, or a Windows-1252
+ * byte where the bytes are not UTF-8 (the game's documents). */
 static u32 next_cp(const char **p, const char *end)
 {
     const u8 *s = (const u8 *)*p;
     u32 c = *s++;
-    int extra = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
+    int extra = c >= 0xF5 ? 0 : c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC2 ? 1 : 0, k;
+    if (c >= 0x80 && !extra) {
+        *p = (const char *)s;
+        return xf_cp1252_to_unicode((u8)c);
+    }
+    for (k = 0; k < extra; k++)
+        if ((const char *)s + k >= end || (s[k] & 0xC0) != 0x80) {
+            *p = (const char *)s;
+            return xf_cp1252_to_unicode((u8)c);
+        }
     if (extra)
         c &= 0x3F >> extra;
-    while (extra-- && (const char *)s < end)
+    while (extra--)
         c = c << 6 | (*s++ & 0x3F);
     *p = (const char *)s;
     return c;
