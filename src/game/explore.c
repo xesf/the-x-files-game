@@ -1723,14 +1723,16 @@ static void draw(explorer *e, int mx, int my)
         begin_ui(e);
         s = screen_surface(e);
         scr_reserve_bottom(&e->layout, inv_reveal(e)); /* icons stay put when the clip ends */
-        if (sub && e->have_font) {
-            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, PICTURE_Y + PICTURE_H + 30, SCREEN_W - 40,
-                                 sub, 0xFFFFFF, 0x000000);
-            ui_piece(e, 0, PICTURE_Y + PICTURE_H, SCREEN_W, SCREEN_H - PICTURE_Y - PICTURE_H, SCR_ANCHOR_BELOW);
-        }
         draw_icons(e, mx, my);
         if (e->icon_count)
             ui_piece(e, 0, ICON_Y, SCREEN_W, ICON_H, SCR_ANCHOR_BELOW);
+        if (sub && e->have_font) {
+            /* Captions under the picture; under the emotion icons when
+             * they are up, so both show. */
+            int top = e->icon_count ? ICON_Y + ICON_H + 4 : PICTURE_Y + PICTURE_H + 4;
+            xf_text_draw_wrapped(&s, &e->font, 20, SCREEN_W / 2, top + 22, SCREEN_W - 40, sub, 0xFFFFFF, 0x000000);
+            ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BELOW);
+        }
         draw_ai_icon(e, mx, my);
         draw_menu_icon(e, mx, my);
         if (!wide)
