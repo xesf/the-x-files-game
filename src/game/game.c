@@ -704,6 +704,50 @@ void game_tick(game *g, u32 now_ms)
 
 /* 0x44E760 act_interface: control 0 shows a VCIFaceLayout unless it is
  * already up, 1 closes it. */
+static void host_interface(void *user, u32 id, u8 control);
+
+/* 0x4A3FE0: a message in the message layout (60115), one of its items,
+ * which start hidden. */
+static void show_message_item(game *g, u32 item)
+{
+    const game_iface_item *it;
+    host_interface(g, 60115, 0);
+    vc_set_enabled(&g->interp, item, 1);
+    /* Every item set its text as the layout opened; the shown one again. */
+    if ((it = find_item(g, item)) != NULL) {
+        g->trigger_item = item;
+        vc_run_triggers(&g->interp, it->item.triggers, 8);
+        g->trigger_item = 0;
+    }
+}
+
+static int login_matches_name(game *g, u32 name)
+{
+    char want[64];
+    return strcasecmp(g->login[0], game_text(g, name, want, sizeof(want))) == 0;
+}
+
+static int login_matches(game *g, u32 name, u32 pass)
+{
+    char want[64];
+    return login_matches_name(g, name) && strcasecmp(g->login[1], game_text(g, pass, want, sizeof(want))) == 0;
+}
+
+/* 0x4F2C30: the PowerBook's login shows Scully's name and an empty
+ * password; after four tries both fields are locked. */
+static void powerbook_reset(game *g)
+{
+    game_text(g, 68913, g->login[0], sizeof(g->login[0]));
+    g->login[1][0] = '\0';
+    g->focus_item = 50749;
+    if (vc_get_var(&g->interp, 5326) >= 4) {
+        vc_set_enabled(&g->interp, 50749, 0);
+        vc_set_enabled(&g->interp, 50750, 0);
+        g->focus_item = 0;
+    }
+    g->iface_serial++;
+}
+
 static void host_interface(void *user, u32 id, u8 control)
 {
     game *g = user;
@@ -1027,8 +1071,9 @@ const char *game_item_text(game *g, u32 item, char *buf, size_t size)
                 strcmp(a.u.function.name, "LoginKeyPress") == 0 && a.u.function.argc == 2) {
                 int field = (int)a.u.function.args[0].value - 1;
                 size_t len;
-                if (field < 0 || field > 1)
+                if (field < 0 || field > 3)
                     return NULL;
+                field &= 1; /* fields 3 and 4, the PowerBook's, share the buffers */
                 len = strlen(g->login[field]);
                 if (field == 0) {
                     snprintf(buf, size, "%s", g->login[0]);
@@ -4012,30 +4057,40 @@ static int host_call_function(void *user, const vc_action *a)
         return 1;
     }
     /* 0x47D090 fn_LoginInit, 0x4B7250 fn_LoginClick, 0x46A000
-     * fn_LoginKeyPress(field, key), 0x4598B0 fn_PswdConnect(result var):
-     * the FBI computer's login. Field 1 is the name, 2 the password. */
+     * fn_LoginKeyPress(field, key), 0x4598B0 fn_PswdConnect(result var),
+     * fn_PwbkOK(result var): the FBI computer's login (fields 1 and 2,
+     * LoginInit('C')) and Scully's PowerBook (fields 3 and 4,
+     * LoginInit('P')). Both share the name and password buffers. */
     if (strcmp(name, "LoginInit") == 0) {
         memset(g->login, 0, sizeof(g->login));
+        if (argc == 1 && arg_value(g, &args[0]) == 'P')
+            powerbook_reset(g);
         return 1;
     }
     if (strcmp(name, "LoginClick") == 0)
         return 1; /* the clicked field takes the focus (click_iface_item) */
     if (strcmp(name, "LoginKeyPress") == 0 && argc == 2) {
-        int field = arg_value(g, &args[0]) - 1;
+        int field = arg_value(g, &args[0]) - 1, pb;
         i32 key = arg_value(g, &args[1]);
         size_t n;
-        if (field < 0 || field > 1)
+        if (field < 0 || field > 3)
             return 1;
+        pb = field >> 1;
+        field &= 1;
         n = strlen(g->login[field]);
-        /* 0x4F3500: Return runs the Connect button's list (trigger 39475,
-         * list 39477); Tab moves between the name (item 50747) and the
-         * password (50748). */
+        /* 0x4F3500: Return runs the Connect button's list (FBI: trigger
+         * 39475, list 39477; PowerBook: 39584, 39586); Tab moves between
+         * the name and the password (FBI: items 50747 and 50748;
+         * PowerBook: 50749 and 50750). */
         if (key == 13) {
-            vc_run_trigger_list(&g->interp, 39475, 39477);
+            if (pb)
+                vc_run_trigger_list(&g->interp, 39584, 39586);
+            else
+                vc_run_trigger_list(&g->interp, 39475, 39477);
             return 1;
         }
         if (key == 9) {
-            g->focus_item = field == 0 ? 50748 : 50747;
+            g->focus_item = (pb ? 50749 : 50747) + (field == 0);
             return 1;
         }
         if (key == 8 && n)
@@ -4048,21 +4103,45 @@ static int host_call_function(void *user, const vc_action *a)
     }
     if (strcmp(name, "PswdConnect") == 0 && argc == 1) {
         /* 0x459AB0 compares, ignoring case, with the texts of media
-         * 57905 and 68915. */
-        char want_name[64], want_pass[64];
-        int ok;
-        game_text(g, 57905, want_name, sizeof(want_name)); /* "craig willmore" */
-        game_text(g, 68915, want_pass, sizeof(want_pass)); /* "shiloh" */
-        ok = strcasecmp(g->login[0], want_name) == 0 && strcasecmp(g->login[1], want_pass) == 0;
+         * 57905 and 68915. A refused login shows a message (layout
+         * 60115): one of four hidden name and password pairs, else
+         * "wrong password" (67487), or after three tries with the right
+         * name, 67500. Then the fields clear (0x468660). */
+        static const u32 eggs[4][3] = {
+            { 92074, 92076, 92089 }, /* dwight, xyzzy */
+            { 92078, 92087, 92097 }, /* nickolai, jason */
+            { 92083, 92087, 92105 }, /* angelina, jason */
+            { 92085, 92087, 92113 }, /* twila, jason */
+        };
+        int ok = login_matches(g, 57905, 68915), k; /* "craig willmore", "shiloh" */
         xf_info("login %s / %s: %s", g->login[0], "******", ok ? "accepted" : "refused");
         if (args[0].kind == VC_OPND_VARIABLE)
             vc_set_var(&g->interp, args[0].value, ok);
         if (ok) {
             vc_set_var(&g->interp, 5327, 0); /* iFBIPasswordCount */
             vc_set_var(&g->interp, 4946, 1); /* IFL_bHasLoggedInToFBIComputer */
-        } else {
-            vc_set_var(&g->interp, 5327, vc_get_var(&g->interp, 5327) + 1);
+            return 1;
         }
+        if (login_matches_name(g, 57905))
+            vc_set_var(&g->interp, 5327, vc_get_var(&g->interp, 5327) + 1);
+        for (k = 0; k < 4 && !login_matches(g, eggs[k][0], eggs[k][1]); k++)
+            ;
+        show_message_item(g, k < 4 ? eggs[k][2] : vc_get_var(&g->interp, 5327) < 3 ? 67487 : 67500);
+        memset(g->login, 0, sizeof(g->login));
+        return 1;
+    }
+    if (strcmp(name, "PwbkOK") == 0 && argc == 1) {
+        /* 0x4F3070: "Dana Scully" (68913) and the text of 68910 open the
+         * PowerBook (the result variable becomes 1). Every try counts
+         * (var 5326) and shows a message: 67487, or 89627 from the
+         * fourth try on. Then the fields reset (0x4F2C30). */
+        int ok = login_matches(g, 68913, 68910);
+        if (ok && args[0].kind == VC_OPND_VARIABLE)
+            vc_set_var(&g->interp, args[0].value, 1);
+        vc_set_var(&g->interp, 5326, vc_get_var(&g->interp, 5326) + 1);
+        xf_info("PowerBook login %s: %s", g->login[0], ok ? "accepted" : "refused");
+        show_message_item(g, vc_get_var(&g->interp, 5326) < 4 ? 67487 : 89627);
+        powerbook_reset(g);
         return 1;
     }
     /* SetIItemText(item, text, color, font, size, bold, align): puts a
@@ -4208,8 +4287,18 @@ static int host_call_function(void *user, const vc_action *a)
      * fills them from the player's settings (game_prefs_apply). */
     if (strcmp(name, "RegPreferences") == 0)
         game_prefs_apply(g);
-    if (strncmp(name, "Reg", 3) == 0 && g->reg_count < (int)XF_COUNT(g->regs)) {
-        game_registration *r = &g->regs[g->reg_count++];
+    if (strncmp(name, "Reg", 3) == 0) {
+        /* A new game registers again: the same name replaces its entry. */
+        game_registration *r = NULL;
+        for (i = 0; i < g->reg_count && !r; i++)
+            if (strncmp(g->regs[i].name, name, sizeof(g->regs[i].name)) == 0)
+                r = &g->regs[i];
+        if (!r && g->reg_count < (int)XF_COUNT(g->regs))
+            r = &g->regs[g->reg_count++];
+        if (!r) {
+            note_missing(g, name);
+            return 1;
+        }
         memcpy(r->name, name, sizeof(r->name));
         r->argc = argc;
         for (i = 0; i < argc; i++)
