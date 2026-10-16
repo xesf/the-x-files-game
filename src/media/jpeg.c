@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "xf_endian.h"
+#include "xf_jobs.h"
 
 #define MAX_COMP 3
 
@@ -23,17 +24,22 @@ typedef struct {
 typedef struct {
     int id, h, v, tq;
     int td, ta;
-    int pred;
     int bw, bh;   /* size of the component buffer in blocks */
     u8 *pixels;   /* bw*8 x bh*8 */
 } component;
 
+/* Reads one entropy-coded segment: the part of a scan between restart
+ * markers. Segments reset their predictors, so they decode apart. */
 typedef struct {
     const u8 *p, *end;
     u32 bits;
     int nbits;
     int marker_hit;
+    int pred[MAX_COMP];
+} reader;
 
+typedef struct {
+    const u8 *p, *end;  /* the data, while the markers are read */
     u16 qt[4][64];
     huff_table dc[4], ac[4];
     int width, height, ncomp;
@@ -119,7 +125,7 @@ static void huff_set(huff_table *t, const u8 *bits, const u8 *vals, int nvals)
     huff_build(t);
 }
 
-static void fill_bits(jpeg_dec *d)
+static void fill_bits(reader *d)
 {
     while (d->nbits <= 24) {
         u32 b = 0;
@@ -141,7 +147,7 @@ static void fill_bits(jpeg_dec *d)
     }
 }
 
-static int get_bit(jpeg_dec *d)
+static int get_bit(reader *d)
 {
     int b;
     fill_bits(d);
@@ -151,7 +157,7 @@ static int get_bit(jpeg_dec *d)
     return b;
 }
 
-static int get_bits(jpeg_dec *d, int n)
+static int get_bits(reader *d, int n)
 {
     u32 v;
     if (n == 0)
@@ -165,7 +171,7 @@ static int get_bits(jpeg_dec *d, int n)
 
 static int extend(int v, int n) { return v < (1 << (n - 1)) ? v - (1 << n) + 1 : v; }
 
-static int huff_decode(jpeg_dec *d, const huff_table *t)
+static int huff_decode(reader *d, const huff_table *t)
 {
     int len, code;
     fill_bits(d);
@@ -256,20 +262,23 @@ static void idct_block(const int *in, u8 *out, int stride)
     }
 }
 
-static int decode_block(jpeg_dec *d, component *c, u8 *out, int stride)
+/* Decodes one block, and either transforms it into `out` or, with
+ * `store`, keeps its coefficients there for later (idct_part). */
+static int decode_block(const jpeg_dec *d, reader *rd, int ci, u8 *out, int stride, int *store)
 {
+    const component *c = &d->comp[ci];
     int coef[64], k, s, r, t;
     const u16 *q = d->qt[c->tq];
 
     memset(coef, 0, sizeof(coef));
-    t = huff_decode(d, &d->dc[c->td]);
+    t = huff_decode(rd, &d->dc[c->td]);
     if (t < 0 || t > 11)
         return -1;
-    s = t ? extend(get_bits(d, t), t) : 0;
-    c->pred += s;
-    coef[0] = c->pred * q[0];
+    s = t ? extend(get_bits(rd, t), t) : 0;
+    rd->pred[ci] += s;
+    coef[0] = rd->pred[ci] * q[0];
     for (k = 1; k < 64;) {
-        int rs = huff_decode(d, &d->ac[c->ta]);
+        int rs = huff_decode(rd, &d->ac[c->ta]);
         if (rs < 0)
             return -1;
         r = rs >> 4;
@@ -283,10 +292,13 @@ static int decode_block(jpeg_dec *d, component *c, u8 *out, int stride)
         k += r;
         if (k > 63)
             return -1;
-        coef[g_zigzag[k]] = extend(get_bits(d, s), s) * q[k];
+        coef[g_zigzag[k]] = extend(get_bits(rd, s), s) * q[k];
         k++;
     }
-    idct_block(coef, out, stride);
+    if (store)
+        memcpy(store, coef, sizeof(coef));
+    else
+        idct_block(coef, out, stride);
     return 0;
 }
 
@@ -361,64 +373,200 @@ static int read_sof(jpeg_dec *d, const u8 *p, int len)
     return 0;
 }
 
-static int handle_restart(jpeg_dec *d)
-{
-    int i;
-    d->bits = 0;
-    d->nbits = 0;
-    d->marker_hit = 0;
-    if (d->p + 1 < d->end && d->p[0] == 0xFF && d->p[1] >= 0xD0 && d->p[1] <= 0xD7)
-        d->p += 2;
-    for (i = 0; i < d->ncomp; i++)
-        d->comp[i].pred = 0;
-    return 0;
-}
+typedef struct {
+    const jpeg_dec *d;
+    int order[MAX_COMP], ns;
+    const u8 *starts[256]; /* where each segment's data starts */
+    int segments, per_segment, failed;
+    const u8 *end;
+    int *coefs[MAX_COMP]; /* coefficients kept for idct_part, or NULL */
+} scan_job;
 
-static int read_scan(jpeg_dec *d, const u8 *p, int len)
+/* Segments part, part + parts, ...: their MCUs, from their own data. */
+static void scan_part(void *ctx, int part, int parts)
 {
-    int ns = p[0], i, mx, my, n = 0, order[MAX_COMP];
-    if (ns != d->ncomp || len < 1 + ns * 2 + 3)
-        return -1; /* only interleaved baseline scans */
-    for (i = 0; i < ns; i++) {
-        int j, id = p[1 + i * 2];
-        for (j = 0; j < d->ncomp && d->comp[j].id != id; j++)
-            ;
-        if (j == d->ncomp)
-            return -1;
-        order[i] = j;
-        d->comp[j].td = p[2 + i * 2] >> 4 & 3;
-        d->comp[j].ta = p[2 + i * 2] & 3;
-        d->comp[j].pred = 0;
-    }
-    d->p = p + len;
-    d->bits = 0;
-    d->nbits = 0;
-    d->marker_hit = 0;
-    for (my = 0; my < d->mcuy; my++)
-        for (mx = 0; mx < d->mcux; mx++) {
-            if (d->restart_interval && n && n % d->restart_interval == 0)
-                handle_restart(d);
-            n++;
-            for (i = 0; i < ns; i++) {
-                component *c = &d->comp[order[i]];
+    scan_job *j = ctx;
+    const jpeg_dec *d = j->d;
+    int seg, total = d->mcux * d->mcuy;
+    for (seg = part; seg < j->segments; seg += parts) {
+        reader rd;
+        int n, last = XF_MIN(total, (seg + 1) * j->per_segment), i;
+        memset(&rd, 0, sizeof(rd));
+        rd.p = j->starts[seg];
+        rd.end = j->end;
+        for (n = seg * j->per_segment; n < last; n++) {
+            int mx = n % d->mcux, my = n / d->mcux;
+            for (i = 0; i < j->ns; i++) {
+                const component *c = &d->comp[j->order[i]];
                 int bx, by, stride = c->bw * 8;
                 for (by = 0; by < c->v; by++)
                     for (bx = 0; bx < c->h; bx++) {
                         u8 *out = c->pixels + ((my * c->v + by) * 8) * stride + (mx * c->h + bx) * 8;
-                        if (decode_block(d, c, out, stride) != 0)
-                            return -1;
+                        if (decode_block(d, &rd, j->order[i], out, stride, NULL) != 0) {
+                            j->failed = 1;
+                            return;
+                        }
                     }
             }
         }
-    return 0;
+    }
 }
 
-static void to_rgb(jpeg_dec *d, u32 *out, int out_w, int out_h, int pitch)
+/* The whole scan in one go, restarts handled where they come. With
+ * j->coefs the blocks are only read; idct_part transforms them on every
+ * core afterwards. */
+static void scan_whole(scan_job *j, int restart_interval)
 {
-    int x, y, w = XF_MIN(d->width, out_w), h = XF_MIN(d->height, out_h);
-    for (y = 0; y < h; y++) {
-        u32 *row = out + (size_t)y * pitch;
-        for (x = 0; x < w; x++) {
+    const jpeg_dec *d = j->d;
+    reader rd;
+    int n, total = d->mcux * d->mcuy, i;
+    memset(&rd, 0, sizeof(rd));
+    rd.p = j->starts[0];
+    rd.end = j->end;
+    for (n = 0; n < total; n++) {
+        int mx = n % d->mcux, my = n / d->mcux;
+        if (restart_interval && n && n % restart_interval == 0) {
+            rd.bits = 0;
+            rd.nbits = 0;
+            rd.marker_hit = 0;
+            if (rd.p + 1 < rd.end && rd.p[0] == 0xFF && rd.p[1] >= 0xD0 && rd.p[1] <= 0xD7)
+                rd.p += 2;
+            memset(rd.pred, 0, sizeof(rd.pred));
+        }
+        for (i = 0; i < j->ns; i++) {
+            const component *c = &d->comp[j->order[i]];
+            int bx, by, stride = c->bw * 8;
+            for (by = 0; by < c->v; by++)
+                for (bx = 0; bx < c->h; bx++) {
+                    u8 *out = c->pixels + ((my * c->v + by) * 8) * stride + (mx * c->h + bx) * 8;
+                    int *store = j->coefs[0] ? j->coefs[j->order[i]] +
+                                                ((size_t)(my * c->v + by) * c->bw + (size_t)(mx * c->h + bx)) * 64
+                                          : NULL;
+                    if (decode_block(d, &rd, j->order[i], out, stride, store) != 0) {
+                        j->failed = 1;
+                        return;
+                    }
+                }
+        }
+    }
+}
+
+/* Block rows part, part + parts, ... of every component: the inverse
+ * transform of the coefficients scan_whole kept. */
+static void idct_part(void *ctx, int part, int parts)
+{
+    const scan_job *j = ctx;
+    const jpeg_dec *d = j->d;
+    int ci, br, bx;
+    for (ci = 0; ci < d->ncomp; ci++) {
+        const component *c = &d->comp[ci];
+        int stride = c->bw * 8;
+        for (br = part; br < c->bh; br += parts)
+            for (bx = 0; bx < c->bw; bx++)
+                idct_block(j->coefs[ci] + ((size_t)br * c->bw + bx) * 64, c->pixels + (size_t)br * 8 * stride + bx * 8,
+                           stride);
+    }
+}
+
+/* Finds where each restart segment starts: after each RSTn marker.
+ * Returns the number found, or 0 when they do not add up. */
+static int find_segments(scan_job *j, const u8 *p, const u8 *end, int want)
+{
+    int n = 1;
+    j->starts[0] = p;
+    while (p + 1 < end && n < want) {
+        if (p[0] == 0xFF && p[1] >= 0xD0 && p[1] <= 0xD7) {
+            j->starts[n++] = p + 2;
+            p += 2;
+        } else if (p[0] == 0xFF && p[1] == 0xD9) {
+            break;
+        } else {
+            p++;
+        }
+    }
+    return n == want ? n : 0;
+}
+
+static int read_scan(jpeg_dec *d, const u8 *p, int len)
+{
+    scan_job *j = calloc(1, sizeof(*j));
+    int ns = p[0], i, total = d->mcux * d->mcuy, ok;
+    if (!j)
+        return -1;
+    if (ns != d->ncomp || len < 1 + ns * 2 + 3) {
+        free(j);
+        return -1; /* only interleaved baseline scans */
+    }
+    for (i = 0; i < ns; i++) {
+        int k, id = p[1 + i * 2];
+        for (k = 0; k < d->ncomp && d->comp[k].id != id; k++)
+            ;
+        if (k == d->ncomp) {
+            free(j);
+            return -1;
+        }
+        j->order[i] = k;
+        d->comp[k].td = p[2 + i * 2] >> 4 & 3;
+        d->comp[k].ta = p[2 + i * 2] & 3;
+    }
+    j->d = d;
+    j->ns = ns;
+    j->end = d->end;
+    /* With restart markers the segments decode on every core; without,
+     * the whole scan is one segment. */
+    j->segments = 1;
+    j->per_segment = total;
+    j->starts[0] = p + len;
+    if (d->restart_interval > 0) {
+        int want = (total + d->restart_interval - 1) / d->restart_interval;
+        if (want <= (int)XF_COUNT(j->starts) && find_segments(j, p + len, d->end, want) == want) {
+            j->segments = want;
+            j->per_segment = d->restart_interval;
+        } else {
+            /* markers missing: one segment, restarts read in place */
+            j->segments = 1;
+        }
+    }
+    if (j->segments > 1) {
+        xf_jobs_run(scan_part, j, XF_MIN(xf_jobs_count(), j->segments));
+    } else {
+        /* One segment: read it all, then transform on every core. */
+        if (xf_jobs_count() > 1) {
+            int *all;
+            size_t blocks = 0;
+            for (i = 0; i < d->ncomp; i++)
+                blocks += (size_t)d->comp[i].bw * d->comp[i].bh;
+            if ((all = malloc(blocks * 64 * sizeof(int))) != NULL)
+                for (i = 0, blocks = 0; i < d->ncomp; i++) {
+                    j->coefs[i] = all + blocks * 64;
+                    blocks += (size_t)d->comp[i].bw * d->comp[i].bh;
+                }
+        }
+        scan_whole(j, d->restart_interval);
+        if (j->coefs[0] && !j->failed)
+            xf_jobs_run(idct_part, j, xf_jobs_count());
+        free(j->coefs[0]);
+    }
+    ok = !j->failed;
+    free(j);
+    return ok ? 0 : -1;
+}
+
+typedef struct {
+    const jpeg_dec *d;
+    u32 *out;
+    int w, h, pitch;
+} rgb_job;
+
+/* Rows part, part + parts, ... from the component planes to RGB. */
+static void rgb_rows(void *ctx, int part, int parts)
+{
+    const rgb_job *j = ctx;
+    const jpeg_dec *d = j->d;
+    int x, y;
+    for (y = part; y < j->h; y += parts) {
+        u32 *row = j->out + (size_t)y * j->pitch;
+        for (x = 0; x < j->w; x++) {
             int c[3], i;
             for (i = 0; i < d->ncomp; i++) {
                 const component *k = &d->comp[i];
@@ -439,6 +587,17 @@ static void to_rgb(jpeg_dec *d, u32 *out, int out_w, int out_h, int pitch)
             }
         }
     }
+}
+
+static void to_rgb(jpeg_dec *d, u32 *out, int out_w, int out_h, int pitch)
+{
+    rgb_job j;
+    j.d = d;
+    j.out = out;
+    j.w = XF_MIN(d->width, out_w);
+    j.h = XF_MIN(d->height, out_h);
+    j.pitch = pitch;
+    xf_jobs_run(rgb_rows, &j, xf_jobs_count());
 }
 
 static void init_defaults(jpeg_dec *d)
