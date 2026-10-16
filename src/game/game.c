@@ -2018,25 +2018,46 @@ static size_t email_text(game *g, u32 asset, char *out, size_t size)
     return n;
 }
 
-/* A header field ("From", "Subject") of a mail. */
+/* A header field ("From", "Subject") of a mail. Translations name the
+ * fields in their language ("Von:", "Exp. :"), always in the order To,
+ * From, Subject: the field's line is used when its English name is not
+ * there. */
 static void email_field(game *g, u32 asset, const char *name, char *out, size_t size)
 {
+    static const char *const order[] = { "To", "From", "Subject" };
     char text[1024];
-    const char *p;
+    const char *p, *line[3] = { NULL, NULL, NULL };
     size_t k = strlen(name);
+    int i, n_lines = 0;
     out[0] = '\0';
     email_text(g, asset, text, sizeof(text));
     for (p = text; *p; p = strchr(p, '\n') ? strchr(p, '\n') + 1 : p + strlen(p)) {
+        const char *colon = strchr(p, ':'), *end = strchr(p, '\n');
         if (strncmp(p, name, k) == 0 && p[k] == ':') {
-            size_t n = strcspn(p + k + 1, "\n");
-            const char *v = p + k + 1;
-            while (*v == ' ' && n) {
-                v++;
-                n--;
-            }
-            snprintf(out, size, "%.*s", (int)n, v);
-            return;
+            line[0] = p + k;
+            n_lines = -1;
+            break;
         }
+        if (n_lines >= 0 && n_lines < 3 && colon && (!end || colon < end))
+            line[n_lines++] = colon;
+        else
+            n_lines = n_lines < 3 ? -2 : n_lines; /* the header ended */
+    }
+    if (n_lines == 3) {
+        for (i = 0; i < 3 && strcmp(order[i], name) != 0; i++)
+            ;
+        line[0] = i < 3 ? line[i] : NULL;
+    } else if (n_lines != -1) {
+        line[0] = NULL;
+    }
+    if (line[0]) {
+        const char *v = line[0] + 1;
+        size_t n = strcspn(v, "\n");
+        while (*v == ' ' && n) {
+            v++;
+            n--;
+        }
+        snprintf(out, size, "%.*s", (int)n, v);
     }
 }
 
@@ -2401,6 +2422,11 @@ void game_prefs_load(game *g)
         fclose(f);
     }
     game_prefs_apply(g);
+    /* XF_VOICES and XF_TEXT (language folder names) override the saved choice */
+    if (getenv("XF_VOICES"))
+        voices = xf_langs_find(&g->langs, getenv("XF_VOICES"));
+    if (getenv("XF_TEXT"))
+        text = xf_langs_find(&g->langs, getenv("XF_TEXT"));
     if (voices >= 0 && g->langs.langs[voices].voices)
         g->langs.voices = voices;
     if (text >= 0 && g->langs.langs[text].text && text != g->langs.text) {

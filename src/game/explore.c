@@ -3055,13 +3055,6 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
             e->wide_pref = strcmp(screen, "wide") == 0 || strcmp(screen, "fill") == 0;
     }
     e->disc = disc;
-    {
-        /* XF_VOICES and XF_TEXT (language folder names) override the saved choice */
-        const char *v = getenv("XF_VOICES"), *t = getenv("XF_TEXT");
-        if (v || t)
-            game_set_languages(e->g, v ? xf_langs_find(&e->g->langs, v) : -1,
-                               t ? xf_langs_find(&e->g->langs, t) : -1);
-    }
     load_game_fonts(e);
     if (plat_font_path("Courier New", path, sizeof(path)) == 0)
         e->have_card_font = xf_font_load(&e->card_font, path) == 0;
