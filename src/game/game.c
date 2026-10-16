@@ -176,12 +176,10 @@ static int in_list(const u32 *ids, int n, u32 id)
 
 static int collected_evidence(game *g, u32 *ids, int max)
 {
-    u32 i;
-    int k = 0;
-    for (i = 0; i < g->db.count && k < max; i++) {
-        u32 id = g->db.entries[i].id;
-        if (g->db.entries[i].class_id == VC_EVIDENCE_ICON && id != AI_ICON && vc_is_enabled(&g->interp, id) &&
-            !in_list(g->kit_icons, g->kit_count, id))
+    int i, k = 0;
+    for (i = 0; i < g->all_evidence_count && k < max; i++) {
+        u32 id = g->all_evidence[i];
+        if (id != AI_ICON && vc_is_enabled(&g->interp, id) && !in_list(g->kit_icons, g->kit_count, id))
             ids[k++] = id;
     }
     return k;
@@ -938,13 +936,10 @@ int game_hold(game *g, const char *item)
 
 int game_icons(game *g, u32 *ids, int max)
 {
-    u32 i;
-    int k = 0;
-    for (i = 0; i < g->db.count && k < max; i++) {
-        int c = g->db.entries[i].class_id;
-        if ((c == VC_EMOTION_ICON || c == VC_ACTION_ICON) && vc_is_enabled(&g->interp, g->db.entries[i].id))
-            ids[k++] = g->db.entries[i].id;
-    }
+    int i, k = 0;
+    for (i = 0; i < g->all_icon_count && k < max; i++)
+        if (vc_is_enabled(&g->interp, g->all_icons[i]))
+            ids[k++] = g->all_icons[i];
     return k;
 }
 
@@ -981,11 +976,10 @@ int game_click_icon(game *g, u32 id)
 
 int game_inventory(game *g, u32 *ids, int max)
 {
-    u32 i;
-    int k = 0;
-    for (i = 0; i < g->db.count && k < max; i++)
-        if (g->db.entries[i].class_id == VC_INVENTORY && vc_is_enabled(&g->interp, g->db.entries[i].id))
-            ids[k++] = g->db.entries[i].id;
+    int i, k = 0;
+    for (i = 0; i < g->all_inventory_count && k < max; i++)
+        if (vc_is_enabled(&g->interp, g->all_inventory[i]))
+            ids[k++] = g->all_inventory[i];
     if (g->ai_list && k < max && game_pref(g, 873)) /* Pref_bArtificialIntuition (0x4FEA20) */
         ids[k++] = AI_ICON; /* Artificial Intuition: a hint is ready */
     return k;
@@ -4397,6 +4391,19 @@ int game_open(game *g, const char *data_dir)
     if (xf_path_resolve(data_dir, "XFILES.HDB", path, sizeof(path)) != 0 || xf_neo_open(&g->db, path) != 0) {
         xf_error("game: cannot open XFILES.HDB in %s", data_dir);
         return -1;
+    }
+    {
+        u32 i;
+        for (i = 0; i < g->db.count; i++) {
+            int c = g->db.entries[i].class_id;
+            u32 id = g->db.entries[i].id;
+            if ((c == VC_EMOTION_ICON || c == VC_ACTION_ICON) && g->all_icon_count < (int)XF_COUNT(g->all_icons))
+                g->all_icons[g->all_icon_count++] = id;
+            else if (c == VC_INVENTORY && g->all_inventory_count < (int)XF_COUNT(g->all_inventory))
+                g->all_inventory[g->all_inventory_count++] = id;
+            else if (c == VC_EVIDENCE_ICON && g->all_evidence_count < (int)XF_COUNT(g->all_evidence))
+                g->all_evidence[g->all_evidence_count++] = id;
+        }
     }
     if (xf_path_resolve(data_dir, "XFILES.GAM", path, sizeof(path)) != 0 || xf_neo_open(&g->gam, path) != 0 ||
         vc_interp_init(&g->interp, &g->db, &g->gam, &host) != 0) {

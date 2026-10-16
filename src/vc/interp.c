@@ -163,10 +163,17 @@ u32 vc_find_var(const vc_interp *in, const char *name)
 
 void vc_set_enabled(vc_interp *in, u32 hdb_object, int on)
 {
-    u32 i;
-    for (i = 0; i < in->enable_count; i++)
-        if (in->enables[i].target == hdb_object)
-            in->enables[i].enabled = on != 0;
+    u32 lo = 0, hi = in->enable_count;
+    /* the first entry for the target, through the index by target */
+    while (lo < hi) {
+        u32 mid = (lo + hi) / 2;
+        if (in->enables[in->enable_by_target[mid]].target < hdb_object)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    for (; lo < in->enable_count && in->enables[in->enable_by_target[lo]].target == hdb_object; lo++)
+        in->enables[in->enable_by_target[lo]].enabled = on != 0;
 }
 
 int vc_is_enabled(const vc_interp *in, u32 hdb_object)

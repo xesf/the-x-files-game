@@ -169,6 +169,10 @@ typedef struct {
     u32 kit_icons[GAME_MAX_EVIDENCE]; /* EnableKitIcon: icons in the kit */
     int kit_count;
     u32 rand_seed;                    /* RandGen */
+    /* The objects of the classes looked at every frame, listed once when
+     * the database opens instead of scanning all 66,000 objects. */
+    u32 all_icons[128], all_inventory[128], all_evidence[128];
+    int all_icon_count, all_inventory_count, all_evidence_count;
     u32 fade_serial;                  /* changes on FadeToBlack */
     char data_dir[512];
     int ing_cook_shown;
