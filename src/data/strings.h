@@ -16,6 +16,10 @@ typedef struct {
 
 /* Loads every string of a PE file. Returns 0 on success. */
 int xf_strings_load(xf_strings *t, const char *path);
+/* Adds or replaces strings from a text file: one "id<TAB>text" line
+ * each, UTF-8, with \n, \t and \\ escapes; other lines are comments.
+ * Translations override a release's tables this way. */
+int xf_strings_load_text(xf_strings *t, const char *path);
 void xf_strings_free(xf_strings *t);
 /* The string with this ID, or NULL. */
 const char *xf_strings_get(const xf_strings *t, u32 id);

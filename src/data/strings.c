@@ -167,6 +167,68 @@ int xf_strings_load(xf_strings *t, const char *path)
     return 0;
 }
 
+/* Unescapes \n, \t and \\ in place. */
+static void unescape(char *s)
+{
+    char *o = s;
+    for (; *s; s++) {
+        if (*s == '\\' && s[1]) {
+            s++;
+            *o++ = *s == 'n' ? '\n' : *s == 't' ? '\t' : *s;
+        } else {
+            *o++ = *s;
+        }
+    }
+    *o = '\0';
+}
+
+int xf_strings_load_text(xf_strings *t, const char *path)
+{
+    size_t size, at = 0;
+    char *d = (char *)xf_load(path, &size);
+    u32 cap = t->count, sorted = t->count, added = 0;
+    if (!d)
+        return -1;
+    while (at < size) {
+        char *line = d + at, *tab, *end = memchr(line, '\n', size - at);
+        size_t len = end ? (size_t)(end - line) : size - at;
+        at += len + 1;
+        line[len] = '\0';
+        if (len && line[len - 1] == '\r')
+            line[len - 1] = '\0';
+        if (line == d && (u8)line[0] == 0xEF && (u8)line[1] == 0xBB && (u8)line[2] == 0xBF)
+            line += 3; /* a UTF-8 byte order mark */
+        if (line[0] < '0' || line[0] > '9' || !(tab = strchr(line, '\t')))
+            continue; /* comments and blank lines */
+        {
+            u32 id = (u32)strtoul(line, NULL, 10), lo = 0, hi = sorted;
+            char *text = malloc(strlen(tab + 1) + 1);
+            if (!text)
+                break;
+            strcpy(text, tab + 1);
+            unescape(text);
+            while (lo < hi) { /* the strings stay sorted: replace, or add and sort later */
+                u32 mid = (lo + hi) / 2;
+                if (t->ids[mid] < id)
+                    lo = mid + 1;
+                else
+                    hi = mid;
+            }
+            if (lo < sorted && t->ids[lo] == id) {
+                free(t->texts[lo]);
+                t->texts[lo] = text;
+            } else if (add(t, id, text, &cap) != 0) {
+                break;
+            }
+            added++;
+        }
+    }
+    free(d);
+    sort_strings(t);
+    xf_info("strings: %u from %s", added, path);
+    return 0;
+}
+
 void xf_strings_free(xf_strings *t)
 {
     u32 i;
