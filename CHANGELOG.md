@@ -4,6 +4,7 @@ All notable changes to this project.
 
 ## Unreleased
 
+- Wide screens: the scene sits higher (smaller on very wide screens) so the emotion icons never cover it.
 - Every game ending the data can reach has a play script: 26 of 28 (one is orphaned data, one needs a missing clip).
 - View clips that play once have their sound and captions, and run their end triggers when they end.
 - Random chances differ from run to run and across Try again, as in the original.

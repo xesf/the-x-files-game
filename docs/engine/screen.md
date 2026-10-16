@@ -46,8 +46,12 @@ layers:
    flashlight's darkness, fades, the location card, the hotspot outlines
    and a `PlayAssetAt` clip that lies on the strip. The strip of this
    layer is scaled to fill the output width, or its height on outputs
-   wider than 2.5:1. The space left is shared as in the original: 90
-   parts above the strip and 150 below.
+   wider than 2.5:1. Under it the strip always keeps the original's 150
+   parts (in interface scale), where the emotion icons and the
+   inventory's band go: the room above goes first, so on the Vita and
+   at 16:9 the strip is at the top, and on outputs too short for that
+   it is made smaller, with black at its sides. Any room left over is
+   shared as in the original: 90 parts above and 150 below.
 2. The **interface layer**, 640x480, transparent where nothing is drawn.
    Each element is cut out of it as a piece with an anchor:
 
@@ -62,9 +66,10 @@ layers:
 Pieces scale with the interface scale: the output height over 480 (the
 width over 640 on outputs narrower than 4:3). Pieces under the strip
 stay above the inventory's band at the bottom, so that the inventory can
-slide in without covering the dialogue box. On short outputs these
-pieces lie over the strip, as the dialogue box already does in the
-original. The cursor is drawn last, at the pointer's position on the
+slide in without covering the dialogue box. The top-right corner, where
+the menu's X icon shows, is always a piece while a game view is up, so
+that pointing there shows the icon even when the strip reaches the
+top. The cursor is drawn last, at the pointer's position on the
 output.
 
 Screens drawn for 640x480 as a whole use the original layout: interface

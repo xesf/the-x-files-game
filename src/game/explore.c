@@ -1763,8 +1763,15 @@ static void draw_menu_icon(explorer *e, int mx, int my)
 {
     const cursor_art *c;
     const xf_image *f;
-    if (!menu_icon_shown(e, mx, my) || !(c = get_cursor(e, MENU_ICON)))
+    const game *g = e->g;
+    if (!menu_icon_shown(e, mx, my) || !(c = get_cursor(e, MENU_ICON))) {
+        /* On wide screens the strip can reach the top: the corner stays
+         * the menu icon's (a clear piece), so pointing there shows it. */
+        if (e->in_menu == 0 && g->view && !g->iface_count && !g->slot_mode && !g->ask)
+            ui_piece(e, MENU_ICON_REVEAL_X, 0, SCREEN_W - MENU_ICON_REVEAL_X, MENU_ICON_Y + 22,
+                     SCR_ANCHOR_TOP_RIGHT);
         return;
+    }
     f = &c->frames[(plat_ticks_ms() / 100) % (u32)c->count];
     blit_keyed(e, f, MENU_ICON_X - f->width / 2, MENU_ICON_Y - f->height / 2);
     ui_piece(e, MENU_ICON_X - 40, 0, SCREEN_W - (MENU_ICON_X - 40), MENU_ICON_Y + 9, SCR_ANCHOR_TOP_RIGHT);

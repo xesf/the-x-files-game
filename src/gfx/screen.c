@@ -41,8 +41,21 @@ void scr_layout_begin(scr_layout *l, int out_w, int out_h, int wide)
         l->strip.h = l->out_h;
         l->strip.w = (int)((long long)l->out_h * SCR_STRIP_W / SCR_STRIP_H);
     }
+    {
+        /* Under the strip the emotion icons and the inventory's band need
+         * the 150 parts the original keeps there (scaled like the
+         * interface): the strip leaves that room, smaller if need be, so
+         * the icons stay off the picture. */
+        int room = ui(l, SCR_H - SCR_STRIP_Y - SCR_STRIP_H);
+        if (l->out_h - l->strip.h < room && l->out_h > room) {
+            l->strip.h = l->out_h - room;
+            l->strip.w = (int)((long long)l->strip.h * SCR_STRIP_W / SCR_STRIP_H);
+        }
+    }
     l->strip.x = (l->out_w - l->strip.w) / 2;
     l->strip.y = (l->out_h - l->strip.h) * SCR_STRIP_Y / (SCR_H - SCR_STRIP_H);
+    /* The room above shrinks first, so the 150 parts stay under it. */
+    l->strip.y = XF_MIN(l->strip.y, l->out_h - l->strip.h - ui(l, SCR_H - SCR_STRIP_Y - SCR_STRIP_H));
 }
 
 void scr_add_piece(scr_layout *l, scr_rect src, int anchor, const u32 *px)
