@@ -228,18 +228,26 @@ typedef struct {
 } present_job;
 
 /* One band of display rows: scaled by the column and row maps and
- * turned from 0x00RRGGBB into the display's 0xAABBGGRR. */
+ * turned from 0x00RRGGBB into the display's 0xAABBGGRR. The framebuffer
+ * is uncached CDRAM, slow to write a pixel at a time: each row is built
+ * in cached memory and copied out in one go, and a row that repeats the
+ * source row of the one above is only copied again. */
 static void present_band(void *ctx, int part, int parts)
 {
     const present_job *j = ctx;
-    int y, x, y0 = SCREEN_H * part / parts, y1 = SCREEN_H * (part + 1) / parts;
+    int y, x, y0 = SCREEN_H * part / parts, y1 = SCREEN_H * (part + 1) / parts, last = -1;
+    u32 line[SCREEN_W];
     for (y = y0; y < y1; y++) {
-        const u32 *src = j->pixels + (size_t)(y * j->height / SCREEN_H) * (size_t)j->pitch;
-        u32 *row = j->dst + (size_t)y * SCREEN_W + g_view_x;
-        for (x = 0; x < g_view_w; x++) {
-            u32 c = src[g_col_map[x]];
-            row[x] = 0xFF000000u | (c & 0x00FF00u) | (c >> 16 & 0xFFu) | (c & 0xFFu) << 16;
+        int sy = y * j->height / SCREEN_H;
+        if (sy != last) {
+            const u32 *src = j->pixels + (size_t)sy * (size_t)j->pitch;
+            for (x = 0; x < g_view_w; x++) {
+                u32 c = src[g_col_map[x]];
+                line[x] = 0xFF000000u | (c & 0x00FF00u) | (c >> 16 & 0xFFu) | (c & 0xFFu) << 16;
+            }
+            last = sy;
         }
+        memcpy(j->dst + (size_t)y * SCREEN_W + g_view_x, line, (size_t)g_view_w * 4);
     }
 }
 
