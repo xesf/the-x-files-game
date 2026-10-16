@@ -67,7 +67,7 @@ static int add_lang(xf_langs *l, const char *root, const char *name)
      * Japanese fonts: not drawn yet, so only its voices are offered. */
     if (strcmp(g->code, "jp") == 0 || strcmp(g->code, "ja") == 0)
         g->text = 0;
-    snprintf(g->name, sizeof(g->name), "%s", g->code);
+    memcpy(g->name, g->code, sizeof(g->code)); /* both zero-terminated, the name the larger */
     for (i = 0; i < XF_COUNT(g_names); i++)
         if (strcmp(g_names[i].code, g->code) == 0)
             snprintf(g->name, sizeof(g->name), "%s", g_names[i].name);

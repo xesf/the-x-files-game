@@ -10,7 +10,12 @@
 #include <dirent.h>
 #include <strings.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#define make_dir(p) _mkdir(p)
+#else
 #define make_dir(p) mkdir(p, 0755)
+#endif
 #endif
 #include <stdio.h>
 #include <stdlib.h>
