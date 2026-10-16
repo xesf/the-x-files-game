@@ -13,6 +13,10 @@
 
 #define SCREEN_W 960
 #define SCREEN_H 544
+/* Three display buffers: the game draws the next frame while one waits
+ * for the vertical blank and one is shown, so it never waits on the
+ * display. */
+#define BUFFERS 3
 #define ALIGN_UP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 
 /* libvita2d's texture_v.cg and texture_f.cg, compiled:
@@ -75,15 +79,15 @@ static SceGxmShaderPatcherId g_vid, g_fid;
 static SceGxmVertexProgram *g_vprog;
 static SceGxmFragmentProgram *g_fprog;
 static const SceGxmProgramParameter *g_wvp;
-static void *g_display[2];
-static SceGxmColorSurface g_surface[2];
-static SceGxmSyncObject *g_sync[2];
+static void *g_display[BUFFERS];
+static SceGxmColorSurface g_surface[BUFFERS];
+static SceGxmSyncObject *g_sync[BUFFERS];
 static SceGxmDepthStencilSurface g_depth;
-static int g_back, g_front = 1;
-static vertex *g_vertices[2];   /* the black quad and the picture quad, per texture */
+static int g_back, g_front = BUFFERS - 1;
+static vertex *g_vertices[BUFFERS];   /* the black quad and the picture quad, per texture */
 static u16 *g_indices;
-static SceGxmTexture g_tex[2], g_black;
-static void *g_tex_mem[2];
+static SceGxmTexture g_tex[BUFFERS], g_black;
+static void *g_tex_mem[BUFFERS];
 static int g_tex_w, g_tex_h, g_tex_stride, g_tex_next;
 static SceUID g_blocks[24];
 static int g_block_count;
@@ -147,10 +151,8 @@ static void display_callback(const void *data)
     fb.width = SCREEN_W;
     fb.height = SCREEN_H;
     sceDisplaySetFrameBuf(&fb, SCE_DISPLAY_SETBUF_NEXTFRAME);
-    /* Each frame stays two vertical blanks: a steady 30 frames a second.
-     * The game's clips run at 15 or fewer, and an even rate moves the
-     * pointer more smoothly than one that swings between 30 and 60. */
-    sceDisplayWaitVblankStartMulti(2);
+    /* shown from the next vertical blank: no tearing, at most 60 a second */
+    sceDisplayWaitVblankStart();
 }
 
 int vita_gpu_init(void)
@@ -168,7 +170,7 @@ int vita_gpu_init(void)
     int i;
 
     memset(&init, 0, sizeof(init));
-    init.displayQueueMaxPendingCount = 2;
+    init.displayQueueMaxPendingCount = BUFFERS - 1;
     init.displayQueueCallback = display_callback;
     init.displayQueueCallbackDataSize = sizeof(display_data);
     init.parameterBufferSize = SCE_GXM_DEFAULT_PARAMETER_BUFFER_SIZE;
@@ -209,7 +211,7 @@ int vita_gpu_init(void)
     if (sceGxmCreateRenderTarget(&rt, &g_target) < 0)
         return -1;
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < BUFFERS; i++) {
         g_display[i] = gpu_alloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, 4 * SCREEN_W * SCREEN_H,
                                  SCE_GXM_MEMORY_ATTRIB_READ | SCE_GXM_MEMORY_ATTRIB_WRITE);
         if (!g_display[i])
@@ -277,7 +279,7 @@ int vita_gpu_init(void)
         return -1;
     g_wvp = sceGxmProgramFindParameterByName((const SceGxmProgram *)g_texture_v, "wvp");
 
-    for (i = 0; i < 2; i++)
+    for (i = 0; i < BUFFERS; i++)
         if (!(g_vertices[i] = gpu_alloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, 8 * sizeof(vertex),
                                         SCE_GXM_MEMORY_ATTRIB_READ)))
             return -1;
@@ -315,7 +317,7 @@ void vita_gpu_shutdown(void)
         sceGxmShaderPatcherUnregisterProgram(g_patcher, g_fid);
         sceGxmShaderPatcherDestroy(g_patcher);
     }
-    for (i = 0; i < 2; i++)
+    for (i = 0; i < BUFFERS; i++)
         if (g_sync[i])
             sceGxmSyncObjectDestroy(g_sync[i]);
     if (g_target)
@@ -336,7 +338,7 @@ void vita_gpu_shutdown(void)
     g_target = NULL;
     g_vprog = NULL;
     g_fprog = NULL;
-    g_sync[0] = g_sync[1] = NULL;
+    memset(g_sync, 0, sizeof(g_sync));
     g_tex_mem[0] = g_tex_mem[1] = NULL;
     g_tex_w = g_tex_h = 0;
     g_initialized = 0;
@@ -355,7 +357,7 @@ static int make_textures(int width, int height)
         return -1;
     if (g_tex_w)
         sceGxmFinish(g_ctx); /* the old textures may be in use */
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < BUFFERS; i++) {
         if (!g_tex_mem[i] &&
             !(g_tex_mem[i] = gpu_alloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, SCREEN_W * SCREEN_H * 4,
                                        SCE_GXM_MEMORY_ATTRIB_READ | SCE_GXM_MEMORY_ATTRIB_WRITE)))
@@ -397,7 +399,7 @@ void vita_gpu_present(const u32 *pixels, int width, int height, int pitch, int x
     if (!g_ctx || make_textures(width, height) != 0)
         return;
     t = g_tex_next;
-    g_tex_next ^= 1;
+    g_tex_next = (g_tex_next + 1) % BUFFERS;
     /* the frame's rows, copied whole: the texture is in uncached CDRAM */
     dst = g_tex_mem[t];
     for (row = 0; row < height; row++)
@@ -439,5 +441,5 @@ void vita_gpu_present(const u32 *pixels, int width, int height, int pitch, int x
     dd.address = g_display[g_back];
     sceGxmDisplayQueueAddEntry(g_sync[g_front], g_sync[g_back], &dd);
     g_front = g_back;
-    g_back ^= 1;
+    g_back = (g_back + 1) % BUFFERS;
 }

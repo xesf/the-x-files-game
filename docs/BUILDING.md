@@ -70,7 +70,7 @@ This builds `build/vita/xfiles.vpk` with VitaSDK. Copy the game files to
 `ux0:data/xfiles`. The front touch panel is the pointer; either stick
 moves it, Cross and Circle are the mouse buttons and Start is Escape.
 Clicking a text field, such as a login, opens the system keyboard; its
-text replaces the field's. The Vita shows a steady 30 frames a second.
+text replaces the field's. The Vita waits for the vertical blank, so frames never tear.
 The Vita has no Courier New: copy `cour.ttf` into the game folder for
 the location captions.
 

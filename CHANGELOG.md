@@ -2,6 +2,10 @@
 
 All notable changes to this project.
 
+## Unreleased
+
+- Vita: three display buffers and a single vertical-blank wait instead of the 30 fps cap, which held up clips and made the pointer jerky.
+
 ## 0.2.2 - 2026-10-16
 
 - The Vita draws the frame with its GPU; the CPU path stays as the fallback.
