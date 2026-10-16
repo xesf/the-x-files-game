@@ -7,7 +7,9 @@
  *             640x480 one is scaled to 725x544 and centred.
  *   Input     The front touch panel points and clicks. The left stick moves
  *             the pointer, Cross clicks, Circle right-clicks, Start is
- *             Escape, the d-pad gives the arrow keys.
+ *             Escape. The d-pad moves between the things that take a
+ *             click; Square clicks too, Triangle shows the inventory, L and
+ *             R step to the previous and next one.
  *   Sound     One BGM port at the engine's rate, fed by a thread.
  *
  * The game files live in ux0:data/xfiles, outside the VPK. Based on the
@@ -46,6 +48,12 @@ static int g_ev_head, g_ev_tail;
 static u32 g_buttons;
 static int g_touching;
 static float g_px, g_py; /* pointer, in frame pixels */
+
+void plat_set_pointer(int x, int y)
+{
+    g_px = (float)x;
+    g_py = (float)y;
+}
 
 static void push_event(int type, int button, int key)
 {
@@ -129,7 +137,8 @@ static void pump_input(void)
         { SCE_CTRL_START, PLAT_KEY_ESCAPE }, { SCE_CTRL_SELECT, PLAT_KEY_F1 },
         { SCE_CTRL_LEFT, PLAT_KEY_LEFT },    { SCE_CTRL_RIGHT, PLAT_KEY_RIGHT },
         { SCE_CTRL_UP, PLAT_KEY_UP },        { SCE_CTRL_DOWN, PLAT_KEY_DOWN },
-        { SCE_CTRL_TRIANGLE, PLAT_KEY_RETURN } };
+        { SCE_CTRL_SQUARE, PLAT_KEY_RETURN }, { SCE_CTRL_TRIANGLE, 'i' },
+        { SCE_CTRL_RTRIGGER, 9 },            { SCE_CTRL_LTRIGGER, 9 } };
     SceCtrlData pad;
     SceTouchData touch;
     u32 pressed, released;
@@ -179,8 +188,11 @@ static void pump_input(void)
     if (released & SCE_CTRL_CIRCLE)
         push_event(PLAT_EV_MOUSE_UP, PLAT_MOUSE_RIGHT, 0);
     for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-        if (pressed & keys[i].bit)
+        if (pressed & keys[i].bit) {
             push_event(PLAT_EV_KEY_DOWN, 0, keys[i].key);
+            if (keys[i].bit == SCE_CTRL_LTRIGGER) /* L: Shift+Tab, the previous one */
+                g_events[(g_ev_head + EVENT_QUEUE_SIZE - 1) % EVENT_QUEUE_SIZE].mods = PLAT_MOD_SHIFT;
+        }
         if (released & keys[i].bit)
             push_event(PLAT_EV_KEY_UP, 0, keys[i].key);
     }

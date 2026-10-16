@@ -21,7 +21,11 @@ and Steam Machine), Windows, Windows 9x, DOS and the PlayStation Vita.
    beside the program (beside `X-Files.app` on macOS), or set
    `XF_GAME_DIR` to your game folder. If your install keeps its video
    clips in another folder (the DVD edition), set `XF_MEDIA_DIR` to that
-   folder too. On the Vita, copy the game files to `ux0:data/xfiles`.
+   folder too, or copy those clips into a folder named `media` inside the
+   game folder. On the Vita, copy the game files to `ux0:data/xfiles`. If
+   they come from the DVD edition, its scene clips are DVD video, which the
+   engine does not play yet: copy the `XV` folder of the CD edition into
+   `ux0:data/xfiles/media`.
    Under DOS, pass the folder: `XFILES --explore C:\XFILES 0 1`.
 3. Start the program. The macOS app is not signed: the first time, open
    it with Control-click > Open.
@@ -29,6 +33,18 @@ and Steam Machine), Windows, Windows 9x, DOS and the PlayStation Vita.
 On wide screens, Ctrl+Shift+W lets the scene fill the screen, with the
 interface around it (the default on the Vita). See
 [docs/engine/screen.md](docs/engine/screen.md).
+
+The game plays with the mouse or touch, and also with the keyboard or a
+d-pad:
+
+| Keyboard | Vita | What it does |
+|---|---|---|
+| Arrow keys | D-pad | Move to the nearest thing that takes a click in that direction |
+| Tab, Shift+Tab | R, L | The next or previous one |
+| Enter, Space | Cross, Square | Click |
+| I | Triangle | Show the inventory |
+| Backspace | Circle | Put the item in hand away, stop talking, or go back |
+| Escape | Start | The main menu; in it, Return goes back to the game |
 
 The DOS, Windows 9x and Vita builds are new and have only been tried in
 DOSBox-X, Wine and the VitaSDK build.

@@ -516,6 +516,18 @@ last scene. Nothing runs after it. When the variable is set (a death) and
 (engine string 39). Yes goes back to the checkpoint; otherwise the game
 returns to the main menu.
 
+## Keyboard and d-pad
+
+The original plays with the mouse only. Our engine adds keys that move
+the pointer: the arrow keys (the Vita's d-pad) go to the nearest thing
+that takes a click in that direction, Tab and Shift+Tab (R and L) to the
+next and previous one, and Enter or Space (Cross, Square) click. The
+targets are the menu rows, the message box buttons, the buttons of the
+layout on top, the dialogue box's questions, the emotion and action
+icons, the view's hotspots, the inventory once it shows (I or Triangle
+brings it up) and the AI icon. While a text field has the focus (the
+computer's login, the ING), Tab and Enter go to the field.
+
 ## The main menu during a game
 
 Two ways open the main menu during a game, also while a clip plays:

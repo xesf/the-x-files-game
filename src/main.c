@@ -190,10 +190,17 @@ int main(int argc, char **argv)
         if (dir) {
             /* XF_MEDIA_DIR adds a folder of clips, for installs that
              * keep them apart (the DVD build streams them from the disc). */
-            const char *media[3];
-            media[0] = dir;
-            media[1] = getenv("XF_MEDIA_DIR");
-            media[2] = NULL;
+            /* The CD's clips can also go in a folder named media inside
+             * the game folder: the Vita has no environment variables. */
+            const char *media[4];
+            static char extra[1024];
+            int n = 0;
+            snprintf(extra, sizeof(extra), "%s/media", dir);
+            media[n++] = dir;
+            if (getenv("XF_MEDIA_DIR"))
+                media[n++] = getenv("XF_MEDIA_DIR");
+            media[n++] = extra;
+            media[n] = NULL;
             r = xf_explore(dir, media, 0, 1, NULL);
         } else {
             if (argc <= 1)

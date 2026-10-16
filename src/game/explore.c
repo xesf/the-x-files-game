@@ -2240,6 +2240,173 @@ static void present_frame(explorer *e)
     plat_present(e->shown, e->shown_w, e->shown_h, e->shown_w);
 }
 
+/* --- Keyboard and d-pad navigation --------------------------------------
+ * The arrow keys (the Vita's d-pad) move the pointer to the nearest thing
+ * that takes a click in that direction; Tab cycles through them; Enter or
+ * Space clicks; I brings up the inventory. Keys typed into a text field
+ * (the computer's login, the ING) still go to the field. */
+
+#define NAV_MAX 160
+
+typedef struct {
+    int x, y;
+} nav_point;
+
+static void handle_event(explorer *e, plat_event ev);
+
+static int nav_targets(explorer *e, nav_point *t, int max)
+{
+    game *g = e->g;
+    int n = 0, i, k;
+#define NAV_ADD(px, py)                                                                                     \
+    do {                                                                                                     \
+        if (n < max) {                                                                                       \
+            t[n].x = (px);                                                                                   \
+            t[n].y = (py);                                                                                   \
+            n++;                                                                                             \
+        }                                                                                                    \
+    } while (0)
+    if (e->in_menu == 1) {
+        for (i = 0; i < (int)XF_COUNT(g_menu_items); i++)
+            NAV_ADD(556, (g_menu_items[i].top + g_menu_items[i].bottom) / 2);
+        return n;
+    }
+    if (g->ask) {
+        for (i = 0; i < (g->ask_action != GAME_ASK_OK ? 2 : 1); i++) {
+            vc_region r = msg_button(e, i);
+            NAV_ADD((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        }
+        return n;
+    }
+    if (g->iface_count) {
+        /* the top layout's items that take a click */
+        const game_iface *d = &g->ifaces[g->iface_count - 1];
+        for (i = 0; i < d->count; i++) {
+            const vc_region *r = &d->items[i].item.region;
+            if (d->items[i].item.triggers && vc_is_enabled(&g->interp, d->items[i].id) &&
+                (r->right - r->left < SCREEN_W || r->bottom - r->top < SCREEN_H))
+                NAV_ADD((r->left + r->right) / 2, (r->top + r->bottom) / 2);
+        }
+        return n;
+    }
+    if (g->talking) {
+        dlg_entry ent[GAME_MAX_CHOICES];
+        int more, x0 = dialog_x(e), m = dialog_layout(e, ent, GAME_MAX_CHOICES, &more);
+        for (k = 0; k < m; k++)
+            NAV_ADD(x0 + DLG_TEXT_X + 40, ent[k].y - 4);
+    }
+    for (i = 0; i < e->icon_count; i++)
+        NAV_ADD(icon_x(e, i) + ICON_W / 2, ICON_Y + ICON_H / 2);
+    if (!e->playing)
+        for (i = 0; i < g->spot_count; i++) {
+            const vc_region *r = &g->spots[i].region;
+            NAV_ADD((r->left + r->right) / 2, (r->top + r->bottom) / 2);
+        }
+    if (e->my >= inv_reveal(e) || game_pref(g, 983) == 'V')
+        for (i = 0; i < e->inv_count; i++) {
+            int x, y;
+            inv_pos(e, i, &x, &y);
+            NAV_ADD(x + INV_W / 2, y + INV_H / 2);
+        }
+    if (ai_icon_shown(e))
+        NAV_ADD(AI_ICON_X, AI_ICON_Y);
+#undef NAV_ADD
+    return n;
+}
+
+/* Moves the pointer as the mouse would, so rollovers follow. */
+static void nav_point_to(explorer *e, int x, int y)
+{
+    plat_event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.type = PLAT_EV_MOUSE_MOVE;
+    scr_to_output(&e->layout, x, y, &ev.x, &ev.y);
+    plat_set_pointer(ev.x, ev.y); /* the Vita clicks where its pointer is */
+    handle_event(e, ev);
+}
+
+/* dx, dy: a direction; 0, 0: the next target (Tab), dy -1 with dx 0 and
+ * `back` set: the previous one. */
+static void nav_move(explorer *e, int dx, int dy, int back)
+{
+    nav_point t[NAV_MAX];
+    int n = nav_targets(e, t, NAV_MAX), i, best = -1;
+    long best_d = 0;
+    if (!n)
+        return;
+    if (!dx && !dy) {
+        /* the target under the pointer, then the next or previous one */
+        int cur = -1;
+        long cur_d = 0;
+        for (i = 0; i < n; i++) {
+            long d = (long)(t[i].x - e->mx) * (t[i].x - e->mx) + (long)(t[i].y - e->my) * (t[i].y - e->my);
+            if (cur < 0 || d < cur_d)
+                cur = i, cur_d = d;
+        }
+        best = cur_d > 64 ? cur : (cur + (back ? n - 1 : 1)) % n;
+    } else {
+        for (i = 0; i < n; i++) {
+            long vx = t[i].x - e->mx, vy = t[i].y - e->my;
+            long along = vx * dx + vy * dy, across = labs(vx * dy) + labs(vy * dx), d;
+            if (along <= 4)
+                continue;
+            d = along + 2 * across;
+            if (best < 0 || d < best_d)
+                best = i, best_d = d;
+        }
+    }
+    if (best >= 0)
+        nav_point_to(e, t[best].x, t[best].y);
+}
+
+static void nav_click(explorer *e)
+{
+    plat_event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.button = PLAT_MOUSE_LEFT;
+    ev.x = e->out_mx;
+    ev.y = e->out_my;
+    ev.type = PLAT_EV_MOUSE_DOWN;
+    handle_event(e, ev);
+    ev.type = PLAT_EV_MOUSE_UP;
+    handle_event(e, ev);
+}
+
+/* Returns 1 when the key was used for navigation. */
+static int nav_key(explorer *e, const plat_event *ev)
+{
+    const game *g = e->g;
+    int typing = g->iface_count && g->focus_item; /* a text field has the focus */
+    switch (ev->key) {
+    case PLAT_KEY_LEFT: nav_move(e, -1, 0, 0); return 1;
+    case PLAT_KEY_RIGHT: nav_move(e, 1, 0, 0); return 1;
+    case PLAT_KEY_UP: nav_move(e, 0, -1, 0); return 1;
+    case PLAT_KEY_DOWN: nav_move(e, 0, 1, 0); return 1;
+    }
+    if (typing)
+        return 0;
+    if (ev->key == 9) {
+        nav_move(e, 0, 0, (ev->mods & PLAT_MOD_SHIFT) != 0);
+        return 1;
+    }
+    if ((ev->key == PLAT_KEY_RETURN && !g->ask) || ev->key == PLAT_KEY_SPACE) {
+        nav_click(e);
+        return 1;
+    }
+    if (ev->key == 'i' && !g->iface_count && !e->in_menu && g->view) {
+        /* the pointer to the inventory bar, which shows it */
+        int x, y;
+        nav_point_to(e, 10 + INV_W / 2, SCREEN_H - 20);
+        refresh_inventory(e);
+        if (e->inv_count) {
+            inv_pos(e, 0, &x, &y);
+            nav_point_to(e, x + INV_W / 2, y + INV_H / 2);
+        }
+        return 1;
+    }
+    return 0;
+}
+
 /* One input event: from the platform, or from a script. Mouse positions
  * are in the pixels of the frame shown last. */
 static void handle_event(explorer *e, plat_event ev)
@@ -2250,6 +2417,8 @@ static void handle_event(explorer *e, plat_event ev)
         e->out_my = ev.y;
         scr_to_screen(&e->layout, ev.x, ev.y, &ev.x, &ev.y);
     }
+    if (ev.type == PLAT_EV_KEY_DOWN && nav_key(e, &ev))
+        return;
     if (ev.type == PLAT_EV_QUIT)
         e->running = 0;
     else if (e->g->ask && ev.type == PLAT_EV_KEY_DOWN && (ev.key == PLAT_KEY_ESCAPE || ev.key == '\r'))

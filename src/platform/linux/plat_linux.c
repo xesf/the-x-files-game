@@ -368,6 +368,13 @@ int plat_font_path(const char *family, char *out, size_t size)
     return -1;
 }
 
+/* The mouse is the user's: navigation does not move it. */
+void plat_set_pointer(int x, int y)
+{
+    (void)x;
+    (void)y;
+}
+
 void plat_show_cursor(int show)
 {
     static int hidden;

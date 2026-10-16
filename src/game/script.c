@@ -1019,8 +1019,11 @@ int script_run(script *s, const char *path, int quiet)
                            g->interp.enables[i].enabled ? "on" : "off");
         } else if (strcmp(cmd, "key") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             /* key escape | return | <character>: a key press in the window */
+            /* the arrows are PLAT_KEY_LEFT .. PLAT_KEY_DOWN (0x100 ..) */
             int key = strcmp(what, "escape") == 0 ? 27 : strcmp(what, "return") == 0 ? 13
-                    : strcmp(what, "tab") == 0 ? 9 : (unsigned char)what[0];
+                    : strcmp(what, "tab") == 0 ? 9 : strcmp(what, "space") == 0 ? 32
+                    : strcmp(what, "left") == 0 ? 0x100 : strcmp(what, "right") == 0 ? 0x101
+                    : strcmp(what, "up") == 0 ? 0x102 : strcmp(what, "down") == 0 ? 0x103 : (unsigned char)what[0];
             if (s->host.input)
                 s->host.input(s->host.user, key, 0, 0);
             else

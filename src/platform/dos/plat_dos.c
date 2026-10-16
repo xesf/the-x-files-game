@@ -606,6 +606,13 @@ int plat_font_path(const char *family, char *out, size_t size)
 }
 
 /* The game draws its own cursor; the mouse driver's stays hidden. */
+/* The mouse is the user's: navigation does not move it. */
+void plat_set_pointer(int x, int y)
+{
+    (void)x;
+    (void)y;
+}
+
 void plat_show_cursor(int show) { (void)show; }
 
 /* plat_save_dir: see plat.h. */

@@ -169,7 +169,7 @@ XF_HEADLESS=1 build/xfiles --explore <game> 0 1 --media <cd> --script shots.txt
 | Command | What it does in the window |
 |---|---|
 | `clips on` / `clips off` | Lets clips play across steps instead of ending with each step |
-| `key escape\|return\|tab\|<char>` | Presses a key, as the platform would send it; without a window, it goes to the layout field with focus |
+| `key escape\|return\|tab\|space\|left\|right\|up\|down\|<char>` | Presses a key, as the platform would send it; without a window, it goes to the layout field with focus |
 | `press <x> <y>` | Clicks a 640x480 screen point through the window's input, in any layout |
 | `play <ms>` | Lets time pass with the clips playing |
 | `skip` | Ends every clip at once, running its triggers |
@@ -196,7 +196,9 @@ the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
 (`options.txt`) and saving (`save.txt`).
 
 Scripts in `tests/window` need the window: `menu.txt` opens the main
-menu with Escape and with the X icon during a clip, and returns.
+menu with Escape and with the X icon during a clip, and returns;
+`keyboard.txt` moves and clicks with the keys; `credits.txt` checks the
+opening credits and their music.
 
 ```sh
 XF_HEADLESS=1 build/xfiles --explore <game> 0 1 --media <cd> --script tests/window/menu.txt

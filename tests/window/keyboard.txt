@@ -1,0 +1,26 @@
+# Keyboard and d-pad navigation: the arrows and Tab move the pointer to
+# the next thing that takes a click, Enter clicks it, Escape opens the
+# menu, where the arrows move between its rows.
+new
+icon 18172                        # answer Cook
+skip
+expect view 691                   # the hallway
+key tab                           # the nearest move: to the west view
+key return
+expect view 705
+key escape
+expect window menu 1
+play 8000                         # the menu's rows animate in
+key up                            # to the first row, New
+key up
+key up
+key up
+key up
+key up
+key up
+key down                          # Load
+key down                          # Save
+key down                          # Return
+key return
+expect window menu 0              # back to the game
+expect view 705

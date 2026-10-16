@@ -70,6 +70,11 @@ int plat_font_path(const char *family, char *out, size_t size);
  * path, or -1. */
 int plat_save_dir(char *out, size_t size);
 
+/* Moves the pointer the platform keeps itself (the Vita's stick pointer),
+ * in the pixels of the last frame shown; keyboard and d-pad navigation
+ * move the pointer this way. Other platforms leave the mouse alone. */
+void plat_set_pointer(int x, int y);
+
 /* Shows or hides the system pointer over the window (the game draws its
  * own cursors). */
 void plat_show_cursor(int show);
