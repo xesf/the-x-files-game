@@ -147,10 +147,17 @@ movie frames against a screenshot of the menu:
 | `LEFTmain.mov` | 472×480 | (0, 0) | low |
 | `RIGHT.mov` | 168×480 | (472, 0) | low |
 | `MIDloop.mov` | 388×310 | (60, 102) | 7 of 255 |
-| `TOPro.mov` | 352×60 | probably (56, 0) | 13 of 255; not visible in the capture |
+| `TOPro.mov` | 352×60 | (57, 0) | from the title's hit rectangle (57, 0)-(409, 60) |
 
 The players are created with a canvas object (`menu + 0x44`) as parent;
 reading where that canvas places them would confirm these positions.
+
+The background, `LEFTmain.mov` (5.4 s), plays first; the centre loop
+`MIDloop.mov` and its sound start once it has played. `TOPro.mov` is the
+title's rollover, with sound: `MainMenu_hover` (`0x45E320`) plays it
+while the pointer is in (57, 0)-(409, 60), and stops it and rewinds it
+when the pointer leaves. The menu's click handler (slot 13, `0x496DC0`)
+tests the item rows only, so a click on the title does nothing more.
 
 ### The item column
 

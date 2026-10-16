@@ -30,7 +30,7 @@
 /* Main menu (0x48EE40 MainMenu_ctor): media IDs are fixed in the engine
  * (0x482FE0 MainMenu_load_media). Positions measured from the original
  * running under Wine; see docs/engine/runtime.md. */
-enum { MENU_LEFT, MENU_RIGHT, MENU_MID, MENU_SOUND, MENU_PARTS };
+enum { MENU_LEFT, MENU_RIGHT, MENU_MID, MENU_SOUND, MENU_TOP, MENU_PARTS };
 
 typedef struct {
     u32 asset;
@@ -42,7 +42,13 @@ static const menu_part g_menu_parts[MENU_PARTS] = {
     { 49587, 472, 0, 0 },  /* RIGHT.mov, 168x480, item labels */
     { 49585, 60, 102, 1 }, /* MIDloop.mov, 388x310 */
     { 94320, 0, 0, 1 },    /* MIDloop.amv, the loop's sound */
+    { 49589, 57, 0, 1 },   /* TOPro.mov, 352x60: the title's rollover, with sound */
 };
+
+/* The title's rollover area (0x6C3F38, MainMenu_hover 0x45E320). */
+#define MENU_TOP_LEFT 57
+#define MENU_TOP_RIGHT 409
+#define MENU_TOP_BOTTOM 60
 
 /* Item rows in screen coordinates, measured from the last frame of
  * RIGHT.mov. The exact hit rectangles in the engine are not read yet. */
@@ -2015,15 +2021,14 @@ static void menu_close(explorer *e)
 
 static void menu_enter(explorer *e)
 {
-    int i;
     if (game_running(e))
         pause_game_media(e, 1); /* the game waits behind the menu */
     else
         drop_game_media(e);
     e->from_menu = 0;
-    for (i = 0; i < MENU_PARTS; i++)
-        if (i != MENU_RIGHT)
-            e->menu_open[i] = open_asset_player(e, g_menu_parts[i].asset, &e->menu[i]) == 0;
+    /* The background animation first; the centre loop and its sound once
+     * it has played (menu_update), the title's rollover on the pointer. */
+    e->menu_open[MENU_LEFT] = open_asset_player(e, g_menu_parts[MENU_LEFT].asset, &e->menu[MENU_LEFT]) == 0;
     {
         vc_asset_ref a;
         char path[1024];
@@ -2085,9 +2090,39 @@ static void menu_set_hover(explorer *e, int item)
     e->right_next_ms = plat_ticks_ms();
 }
 
+static void open_menu_part(explorer *e, int i)
+{
+    if (!e->menu_open[i])
+        e->menu_open[i] = open_asset_player(e, g_menu_parts[i].asset, &e->menu[i]) == 0;
+}
+
+static void close_menu_part(explorer *e, int i)
+{
+    if (e->menu_open[i])
+        xf_player_close(&e->menu[i]);
+    e->menu_open[i] = 0;
+}
+
+/* MainMenu_hover: the title's rollover plays while the pointer is on it,
+ * and stops and goes back to its start when the pointer leaves. */
+static void menu_set_top_hover(explorer *e, int x, int y)
+{
+    int on = x >= MENU_TOP_LEFT && x < MENU_TOP_RIGHT && y >= 0 && y < MENU_TOP_BOTTOM;
+    if (on)
+        open_menu_part(e, MENU_TOP);
+    else
+        close_menu_part(e, MENU_TOP);
+}
+
 static void menu_update(explorer *e)
 {
     int i;
+    /* The centre loop starts once the background animation has played. */
+    if (!e->menu_open[MENU_MID] &&
+        (!e->menu_open[MENU_LEFT] || e->menu[MENU_LEFT].finished)) {
+        open_menu_part(e, MENU_MID);
+        open_menu_part(e, MENU_SOUND);
+    }
     for (i = 0; i < MENU_PARTS; i++) {
         if (!e->menu_open[i])
             continue;
@@ -2250,8 +2285,10 @@ static void handle_event(explorer *e, plat_event ev)
             key -= 'a' - 'A';
         game_key(e->g, key);
     }
-    else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE)
+    else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE) {
         menu_set_hover(e, menu_item_at(ev.x, ev.y));
+        menu_set_top_hover(e, ev.x, ev.y);
+    }
     else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
         int item = menu_item_at(ev.x, ev.y);
         if (item >= 0)
