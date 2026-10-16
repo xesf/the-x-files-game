@@ -3793,10 +3793,12 @@ static int host_call_function(void *user, const vc_action *a)
         }
         return 1;
     }
-    /* 0x4BC6D0 fn_SmGoonShoots(result, try, view) -> 0x4B0460: on the
+    /* 0x4BC6D0 fn_SmGoonShoots(result, try, timer) -> 0x4B0460: on the
      * second and third try a goon may hit Willmore (result 1): 20, 40 or
      * 60 percent on the second, 50, 65 or 80 on the third, by difficulty
-     * (var991 'E', 'S', 'H'). A miss goes on to `view`. */
+     * (var991 'E', 'S', 'H'), against a number from 0 to 100. A miss
+     * queues an action that stops `timer`, the goon's shot, whose event
+     * would take Willmore to his death. */
     if (strcmp(name, "SmGoonShoots") == 0 && argc == 3) {
         i32 tries = arg_value(g, &args[1]);
         char level = (char)vc_get_var(&g->interp, 991);
@@ -3804,11 +3806,11 @@ static int host_call_function(void *user, const vc_action *a)
         static const int chance[2][3] = { { 20, 40, 60 }, { 50, 65, 80 } };
         g->rand_seed = g->rand_seed * 1103515245u + 12345u;
         if (tries == 2 || tries == 3)
-            hit = (int)((g->rand_seed >> 16) % 100) < chance[tries - 2][d];
+            hit = (int)(g->rand_seed % 101) < chance[tries - 2][d];
         if (args[0].kind == VC_OPND_VARIABLE)
             vc_set_var(&g->interp, args[0].value, hit);
         if (!hit)
-            host_go_to_view(g, (u32)arg_value(g, &args[2]));
+            host_timer(g, (u8)arg_value(g, &args[2]), 0, 1);
         return 1;
     }
     if (strcmp(name, "SmIsWillShot1") == 0 && argc == 1) {

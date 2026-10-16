@@ -409,7 +409,7 @@ data 0x6B7A14 g_vc_root  global set after the database opens
 0x4B0B80 play_once_bones  GetPlayBones: flag 0x6B57A0
 0x4B0BD0 play_once_cancer  GetPlayCancer: flag 0x6B57A4
 0x4D0F80 bomb_clip_offset  PrepBombTime: the countdown clip starts at 180000 ms less the timer's time left
-0x4B0460 smol_goon_shoots  SmGoonShoots: chance by try (2, 3) and difficulty; a miss goes to the view
+0x4B0460 smol_goon_shoots  SmGoonShoots: chance by try (2, 3) and difficulty; a miss stops the goon's timer
 0x4B0410 rauch_draw_gun  DrawGunRauch: state 1 -> letter 'b', view 39746
 0x50C6B0 alien_blast  AlienBlast: drops queued moves, hides two screen layers
 0x51E160 shanks_var  SetShanksVar: one flag from the RegShanksNode2/3/6 variables and the node
