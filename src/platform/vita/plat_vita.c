@@ -2,9 +2,9 @@
  * Copyright (C) 2026 xesf */
 /* PlayStation Vita backend (VitaSDK):
  *
- *   Video     SceDisplay 960x544, 32-bit, double-buffered in CDRAM. A
- *             960x544 frame (the wide layout) is shown as it is; the
- *             640x480 one is scaled to 725x544 and centred.
+ *   Video     The GPU (vita_gpu.c) draws the frame scaled with bilinear
+ *             filtering, the 640x480 one to 725x544, centred. Without it,
+ *             the CPU scales into a SceDisplay framebuffer in CDRAM.
  *   Input     The front touch panel points and clicks. The left stick moves
  *             the pointer, Cross clicks, Circle right-clicks, Start is
  *             Escape. The d-pad moves between the things that take a
@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "platform/plat.h"
+#include "vita_gpu.h"
 #include "xf_jobs.h"
 #include "xf_log.h"
 
@@ -40,6 +41,7 @@ unsigned int sceUserMainThreadStackSize = 1024 * 1024;
 #define FB_BYTES ((SCREEN_W * SCREEN_H * 4 + 0x3FFFF) & ~0x3FFFF)
 #define EVENT_QUEUE_SIZE 64
 
+static int g_gpu;
 static SceUID g_fb_mem[2];
 static u32 *g_fb[2];
 static int g_back;
@@ -116,12 +118,16 @@ int plat_init(const char *title, int width, int height)
     }
     scePowerSetArmClockFrequency(444);
     scePowerSetBusClockFrequency(222);
-    for (i = 0; i < 2; i++) {
-        g_fb_mem[i] = sceKernelAllocMemBlock("fb", SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, FB_BYTES, NULL);
-        if (g_fb_mem[i] < 0)
-            return -1;
-        sceKernelGetMemBlockBase(g_fb_mem[i], (void **)&g_fb[i]);
-        memset(g_fb[i], 0, SCREEN_W * SCREEN_H * 4);
+    g_gpu = vita_gpu_init() == 0;
+    if (!g_gpu) {
+        vita_gpu_shutdown();
+        for (i = 0; i < 2; i++) {
+            g_fb_mem[i] = sceKernelAllocMemBlock("fb", SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, FB_BYTES, NULL);
+            if (g_fb_mem[i] < 0)
+                return -1;
+            sceKernelGetMemBlockBase(g_fb_mem[i], (void **)&g_fb[i]);
+            memset(g_fb[i], 0, SCREEN_W * SCREEN_H * 4);
+        }
     }
     /* The 4:3 picture fills the height. */
     if (fit_frame(width, height) != 0)
@@ -137,6 +143,7 @@ void plat_shutdown(void)
 {
     int i;
     plat_audio_close();
+    vita_gpu_shutdown();
     for (i = 0; i < 2; i++)
         if (g_fb_mem[i] > 0)
             sceKernelFreeMemBlock(g_fb_mem[i]);
@@ -256,6 +263,12 @@ void plat_present(const u32 *pixels, int width, int height, int pitch)
     SceDisplayFrameBuf fb;
     present_job j;
     int x;
+    if (g_gpu) {
+        if (width != g_width || height != g_height)
+            fit_frame(width, height);
+        vita_gpu_present(pixels, width, height, pitch, g_view_x, 0, g_view_w, SCREEN_H);
+        return;
+    }
     if ((width != g_width || height != g_height) && fit_frame(width, height) == 0)
         for (x = 0; x < 2; x++) /* clear the bars of both buffers */
             memset(g_fb[x], 0, SCREEN_W * SCREEN_H * 4);

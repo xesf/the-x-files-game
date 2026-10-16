@@ -77,6 +77,10 @@ licenses allow this use, and their notices are kept here:
   `src/media/mpeg2.c` takes its code tables from FFmpeg's
   `libavcodec/mpeg12data.c`, Copyright (c) 2000, 2001 Fabrice Bellard
   and (c) 2002-2004 Michael Niedermayer. https://ffmpeg.org
+- **libvita2d** (MIT): the Vita's texture shaders in
+  `src/platform/vita/vita_gpu.c` are libvita2d's, compiled, and the
+  sceGxm set-up follows its order. Copyright (c) 2015 Sergi Granell
+  (xerpi). https://github.com/xerpi/libvita2d
 - **mthcore/x-files-game** (MIT): NeoPersist HDB/GAM format research.
   https://github.com/mthcore/x-files-game
 - **Zeffuro/x-files-pc-enhancement-patch** (MIT): a QuickTime and

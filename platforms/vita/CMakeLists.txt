@@ -41,12 +41,12 @@ file(GLOB ENGINE_SRCS
     ${SRC}/core/*.c ${SRC}/media/*.c ${SRC}/data/*.c ${SRC}/audio/*.c
     ${SRC}/gfx/*.c ${SRC}/vc/*.c ${SRC}/game/*.c ${SRC}/main.c)
 
-add_executable(xfiles ${ENGINE_SRCS} ${SRC}/platform/vita/plat_vita.c)
+add_executable(xfiles ${ENGINE_SRCS} ${SRC}/platform/vita/plat_vita.c ${SRC}/platform/vita/vita_gpu.c)
 target_include_directories(xfiles PRIVATE ${SRC} ${SRC}/core)
 set_property(TARGET xfiles PROPERTY C_STANDARD 99)
 # char is unsigned on ARM; the engine is written for signed char.
 target_compile_options(xfiles PRIVATE -O2 -Wall -fsigned-char -Wno-unused-parameter)
-target_link_libraries(xfiles SceDisplay_stub SceCtrl_stub SceTouch_stub SceAudio_stub ScePower_stub m)
+target_link_libraries(xfiles SceGxm_stub SceDisplay_stub SceCtrl_stub SceTouch_stub SceAudio_stub ScePower_stub m)
 
 vita_create_self(eboot.bin xfiles UNSAFE)
 vita_create_vpk(xfiles.vpk XFIL00001 eboot.bin
