@@ -486,3 +486,72 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x4247C0 Login_key_field  LoginKeyPress by field: 1-2 the FBI computer, 3-4 the PowerBook
 0x4A3FE0 Message_show_item  opens the message layout 60115 and shows one of its items
 0x53D560 Font_create  CreateFontIndirect with lfHeight = -size: sizes are pixels
+# Functions the C code and docs cite by address (2026-10-16 review).
+0x41A250 ev_type01  event_dispatch handler for event type 1
+0x440E40 ev_type02  event_dispatch handler for event type 2
+0x44D3C0 ev_type03  event_dispatch handler for event type 3
+0x440FE0 ev_type04  event_dispatch handler for event type 4
+0x45E0E0 ev_type05  event_dispatch handler for event type 5
+0x463860 ev_type06  event_dispatch handler for event type 6
+0x4E0C80 ev_type07  event_dispatch handler for event type 7
+0x442D80 ev_type08  event_dispatch handler for event type 8
+0x44B5C0 ev_type09  event_dispatch handler for event type 9
+0x4E0BD0 ev_type10  event_dispatch handler for event type 10
+0x41A410 ev_type13  event_dispatch handler for event type 13
+0x435DE0 ev_type14  event_dispatch handler for event type 14
+0x48B020 ev_type15  event_dispatch handler for event type 15
+0x41A380 ev_type16  event_dispatch handler for event type 16
+0x4463A0 ev_type17  event_dispatch handler for event type 17
+0x41D200 ev_type18  event_dispatch handler for event type 18
+0x433260 ev_type22  event_dispatch handler for event type 22
+0x4E0DF0 ev_type23  event_dispatch handler for event type 23
+0x407990 ING_clear_search  INGInit: clears the search field
+0x40BC30 Screen_show_layers  FadeBack: shows or hides a set of screen layers
+0x41B150 LayoutDisplay_set_view  SetIFLAsView: sets the flag at +0x178 of the layout display
+0x42A2C0 ForwardObject_get  ForwardObject: what the mail encloses
+0x442B70 Pointer_over_a  pointer handler: runs kind 4 (mouse over) triggers
+0x4EEB90 Pointer_over_b  pointer handler: runs kind 4 (mouse over) triggers
+0x459230 Cursor_cross_create  the white cross cursor, hot spot (7, 7)
+0x4667D0 ING_show_record  one ING record: mug shot and fingerprint
+0x468120 App_get_prefs  returns the preferences object at +0xF4
+0x468550 RandGen_next  LCG seed*0x41C64E6D+0x3039, then modulo the span
+0x47C750 PDAEscape_run_list  PDAEscape: runs one of two fixed action lists
+0x47FD40 AIIcon_set_glow  SetAIGlow: the hint icon's glow on or off
+0x480850 TextFile_show  shows a text file (field notes, help pages, the APB)
+0x483F00 Email_create  makes a VCEmail
+0x48A470 FixJumpCut_impl  FixJumpCut: does nothing in this build
+0x48AE30 SetLanguage_write  SetLanguage: writes the language text into a string variable
+0x48B7A0 Email_scroll_to  scrolls so that the mail is in view; 0 shows the newest
+0x48BE50 Email_rows_show  the mail rows: sender, subject, unread icon
+0x48FC20 MainMenu_build_a  builds the main menu (with 0x4BFEC0)
+0x4BFEC0 MainMenu_build_b  builds the main menu (with 0x48FC20)
+0x496DC0 MainMenu_click  the main menu's click handler: tests the item rows only
+0x49EA10 FLight_darken  SetFLightProps mode 2: darkens the view by alpha
+0x49FFE0 KitIcon_enable  EnableKitIcon: enables an evidence icon in the kit
+0x4BFF40 PageTurnSound_play  PageTurnSound: plays one of the page sounds
+0x4C1700 Prefs_best_perf_a  'P' best performance settings
+0x4C1830 Prefs_best_perf_b  'P' best performance settings
+0x4CA010 Node2_is_done  SetIsNode2Done check
+0x4CA2B0 Node6_is_done  SetIsNode6Done check
+0x4CA350 Link2_is_done  SetIsLink2Done: the first RegLinkNVars variable is set
+0x4CA3F0 Link3_is_done  SetIsLink3Done: the first RegLinkNVars variable is set
+0x4CBDB0 SaveSlots_layout  Save/Load rows: row n at y 166 + 58 n
+0x4D8F60 Photo_scroll  PhotoScroll: a row at a time
+0x4D8F90 Photo_close  closes the photo screen
+0x4D8FA0 Photo_delete  PhotoDelete
+0x4D8FB0 Photo_enlarge  PhotoEnlarge
+0x4D8FD0 Photo_download  PhotoDownload
+0x4DB580 LocationCard_format  location label, date from iDayNight, time from iCurrTime
+0x4EF750 EnvSound_stop  StopEnvSounds: stops the sound beside the view
+0x4EF8E0 Screen_fade_to_black  FadeToBlack: fades the screen to black
+0x4F4050 Shot_end_triggers  a shot scene: the clip playing ends with its end triggers
+0x4F6370 TextOn_show  TextOn: shows or hides the two text layers
+0x5016A0 SwapDisc_node_var  SwapDisc: takes the node variable
+0x50D0E0 ViewState_set  sets RegViewState through the object at 0x6C4298
+0x513270 Media_stop_current  stops the clip being played
+0x516550 Media_drop_queued  drops a queued clip
+0x514BB0 ING_cook_prints  INGDisplayCook: the fingerprint search found Cook
+0x514DE0 ING_plate_search  plate search: two plates are on file
+0x518C80 Binoculars_closeup  the binoculars show the close-up of the view
+0x5192B0 View_swap_picture  swaps a view's picture on enable
+0x5E4EE0 Var_text_compare  string variables compare their text
