@@ -199,7 +199,8 @@ PowerBook (`passwords.txt`), the endings: a death at Smolnikoff's
 drawn on Dr. McIntyre (`shoot-doctor.txt`), the bum's guessing game
 lost (`bum-guesses.txt`), the woods after telling Cook the truth
 (`woods-truth.txt`), the base's corridor and blast door
-(`base-corridor.txt`, `base-deaths.txt`), the Options screen
+(`base-corridor.txt`, `base-deaths.txt`), the gun instead of the
+stiletto at the end (`final-gun.txt`), the Options screen
 (`options.txt`) and saving (`save.txt`).
 
 Scripts in `tests/window` need the window: `menu.txt` opens the main

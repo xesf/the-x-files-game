@@ -165,7 +165,11 @@ Media also carries triggers. The third field of a `VCAssetRef` holds a
 trigger list (see [Media references](#media-references)). 733 media
 references in the English DVD HDB have one. Its kind 8 triggers run when
 the media starts and its kind 9 triggers run when the media ends or the
-player skips it. The engine attaches trigger lists through
+player skips it. A view's own clip is media too: one that plays once
+rather than loops (no 0x08 in its kind) runs its kind 9 triggers when it
+ends, or when the player leaves the view before that. 24 such clips have
+end triggers, for example Secret Base 2A (view 93960), which ends the
+game unless Willmore fired (`xftool hdb-viewclips` lists them). The engine attaches trigger lists through
 `TriggerHandler_attach` (0x416800) and runs one kind with
 `triggers_run_kind` (0x4F6EA0). When a clip is missing on disk, the
 explorer still runs both kinds, so the story goes on.

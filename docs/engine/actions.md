@@ -195,6 +195,8 @@ xftool hdb-actions XFILES.HDB 24226     # decode an action list
 XF_FUNCTIONS=1 xftool hdb-actions XFILES.HDB   # also list every function call, with its action ID
 XF_ACTIONS=1 xftool hdb-actions XFILES.HDB     # every action as text, to search with grep
 xftool hdb-up XFILES.HDB <id>...                # what uses an object, up to the views, questions and objects
+xftool hdb-viewclips XFILES.HDB                 # views whose clips play once, and their end triggers
+XF_OFFSETS=1 xftool hdb XFILES.HDB              # every object with its class and file offset
 python3 -I tools/re/vc_functions.py path/to/xfiles.exe   # function table
 ```
 

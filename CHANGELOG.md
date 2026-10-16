@@ -4,6 +4,10 @@ All notable changes to this project.
 
 ## Unreleased
 
+- Every game ending the data can reach has a play script: 26 of 28 (one is orphaned data, one needs a missing clip).
+- View clips that play once have their sound and captions, and run their end triggers when they end.
+- Random chances differ from run to run and across Try again, as in the original.
+- Smolnikoff's barricade: a goon who misses no longer kills Willmore.
 - Play scripts for eight more game endings; `xftool hdb-up` shows what leads to any object.
 - Scully's PowerBook login works, and a refused computer login shows its message, including the four hidden ones.
 - Layout text uses the original pixel sizes: messages and mails fit their boxes.

@@ -25,6 +25,9 @@ static int cmd_hdb(int argc, char **argv)
     for (i = 0; i < db.count; i++)
         per[db.entries[i].class_id]++;
     printf("%u objects\n", db.count);
+    if (getenv("XF_OFFSETS")) /* every object: ID, class and file offset */
+        for (i = 0; i < db.count; i++)
+            printf("%u 0x%02X 0x%X\n", db.entries[i].id, db.entries[i].class_id, db.entries[i].offset);
     for (i = 0; i < 256; i++)
         if (per[i])
             printf("  class 0x%02X: %u\n", i, per[i]);
@@ -300,6 +303,47 @@ static int cmd_actions(int argc, char **argv)
 
 static u32 rec_u32(const u8 *p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]; }
 
+/* Views whose clips play once rather than loop: the clip's kind 9
+ * triggers run when it ends. */
+static int cmd_viewclips(int argc, char **argv)
+{
+    xf_neo_db db;
+    u32 i, ids[32];
+    int n, k, total = 0, with_end = 0;
+    if (argc != 2) {
+        fputs("usage: xftool hdb-viewclips <file.hdb>\n", stderr);
+        return 2;
+    }
+    if (xf_neo_open(&db, argv[1]) != 0)
+        return 1;
+    for (i = 0; i < db.count; i++) {
+        vc_view v;
+        if (db.entries[i].class_id != VC_VIEW || vc_read_view(&db, db.entries[i].id, &v) != 0)
+            continue;
+        n = vc_read_list(&db, v.assets, ids, 32);
+        for (k = 0; k < n; k++) {
+            vc_asset_ref a;
+            u32 tl[64];
+            int m, j, ends = 0;
+            if (vc_read_asset_ref(&db, ids[k], &a) != 0 || (a.kind & 0x48) || !a.entry_count)
+                continue;
+            total++;
+            m = a.triggers ? vc_read_list(&db, a.triggers, tl, 64) : 0;
+            for (j = 0; j < m; j++) {
+                xf_neo_reader r;
+                if (xf_neo_object(&db, tl[j], &r, NULL, NULL) == 0 && r.p + 5 <= r.end && r.p[4] == 9)
+                    ends = 1;
+            }
+            with_end += ends;
+            printf("view %u media %u kind %u%s %s\n", db.entries[i].id, ids[k], a.kind, ends ? " END" : "",
+                   a.logical);
+        }
+    }
+    printf("%d clips that play once, %d with end triggers\n", total, with_end);
+    xf_neo_close(&db);
+    return 0;
+}
+
 /* --- hdb-up: what uses an object, up to the places of the game ---------- */
 
 typedef struct {
@@ -536,6 +580,7 @@ static int cmd_run(int argc, char **argv)
 const xftool_cmd xftool_hdb_cmds[] = {
     { "hdb-run", "<hdb> <gam> <list> [kind]  run an action or trigger list with tracing", cmd_run },
     { "hdb-triggers", "<file.hdb> <trigger list>  decode each trigger: kind and actions", cmd_triggers },
+    { "hdb-viewclips", "<file.hdb>  views whose clips play once, and which have end triggers", cmd_viewclips },
     { "hdb-up", "<file.hdb> <id>...  what uses an object, up to the views, questions and objects of the game", cmd_up },
     { "hdb-actions", "<file.hdb> [list id]  decode actions, or count them by type", cmd_actions },
     { "hdb-walk", "<file.hdb> <view> [disc]  follow every move from a view", cmd_walk },
