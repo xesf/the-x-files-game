@@ -134,6 +134,7 @@ typedef struct {
     const char *out;
     const char *sub;
     long words, lines;
+    int sjis; /* the release's documents are Shift-JIS (Japanese) */
 } export_ctx;
 
 static long count_words(const char *s)
@@ -175,7 +176,10 @@ static int export_doc(void *user, const char *dir, const char *name)
         free(d);
         return -1;
     }
-    xf_cp1252_to_utf8(text, w * 3 + 1, d, w);
+    if (x->sjis)
+        xf_sjis_to_utf8(text, w * 3 + 1, d, w);
+    else
+        xf_cp1252_to_utf8(text, w * 3 + 1, d, w);
     fputs(text, f);
     fclose(f);
     x->words += count_words(text);
@@ -218,12 +222,13 @@ static int cmd_lang_export(int argc, char **argv)
     export_ctx x;
     char path[1024];
     size_t i;
-    if (argc != 3) {
-        fputs("usage: xftool lang-export <release folder> <out folder>\n", stderr);
+    if (argc != 3 && !(argc == 4 && strcmp(argv[3], "shift-jis") == 0)) {
+        fputs("usage: xftool lang-export <release folder> <out folder> [shift-jis]\n", stderr);
         return 2;
     }
     memset(&x, 0, sizeof(x));
     x.out = argv[2];
+    x.sjis = argc == 4;
     make_dir(argv[2]);
     for (i = 0; i < XF_COUNT(g_tables); i++) {
         xf_strings t;
@@ -428,7 +433,7 @@ static int cmd_lang_check(int argc, char **argv)
 }
 
 const xftool_cmd xftool_lang_cmds[] = {
-    { "lang-export", "<release> <out>  write a release's text as files to translate", cmd_lang_export },
+    { "lang-export", "<release> <out> [shift-jis]  write a release's text as files to translate", cmd_lang_export },
     { "lang-check", "<release> <translation>  compare a translation with the release's text", cmd_lang_check },
     { 0 }
 };

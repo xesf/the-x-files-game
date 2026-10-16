@@ -25,9 +25,28 @@ captions of sound effects and no dialogue. German voices with English
 captions therefore take the captions from the English copy of each
 clip.
 
-The Japanese release writes its documents in Shift-JIS and needs its own
-fonts. Our engine does not draw Japanese text yet, so it offers Japanese
-only as a voice language.
+### Japanese text
+
+The Japanese release writes its documents in Shift-JIS (Windows code page
+932) and its string tables in Unicode. Its four fonts are the Western
+ones, with no Japanese characters: the original drew Japanese with a
+Windows font. Our engine:
+
+- reads documents as UTF-8, converting the Japanese folder's from
+  Shift-JIS (`xf_sjis_to_utf8`, with a table from
+  `tools/text/gen_sjis.py`) and the others from Windows-1252;
+- draws every character a game font lacks with a Japanese font: the
+  language's own (`font=` in `lang.txt`, or `font.ttf` or `font.ttc` in
+  its folder), else the system's (Arial Unicode on macOS, MS Gothic,
+  Meiryo or Yu Gothic on Windows, IPA, Takao or Droid fonts on Linux).
+  The font must have TrueType outlines (`glyf`); fonts with CFF
+  outlines, such as Hiragino and Noto CJK, do not load;
+- breaks lines between Japanese characters, never before closing
+  punctuation, and reads the full-width colon of mail headers.
+
+The Vita and DOS have no such system font: put a TrueType font with
+Japanese characters in the `jp` folder as `font.ttf`, for example
+IPAexGothic (IPA Font License, free to redistribute).
 
 ## The folder layout
 
@@ -66,7 +85,7 @@ from its fallback language (English unless `lang.txt` says otherwise).
 
 | File | Content |
 |---|---|
-| `lang.txt` | `name=Português` (shown on the Options screen), `fallback=en`, and the words drawn over pictures the translation has no copy of: `talk=FALAR`, `history=HISTÓRICO` (the dialogue folder's tabs) |
+| `lang.txt` | `name=Português` (shown on the Options screen), `fallback=en`, `encoding=shift-jis` for Shift-JIS documents, `font=` a font file for characters the game fonts lack, and the words drawn over pictures the translation has no copy of: `talk=FALAR`, `history=HISTÓRICO` (the dialogue folder's tabs) |
 | `xfilest.txt`, `xfilese.txt`, `xfilesc.txt` | One string a line: `id<TAB>text`, UTF-8, `\n` for a line break |
 | `xt/<id>.xtx` | Documents, UTF-8 |
 | `xv/<id>.srt` | Captions of the clip `XV/<id>.xmv`, SRT, UTF-8 |

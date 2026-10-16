@@ -7,7 +7,8 @@ files on computers, phone messages and journal pages. Each file is plain
 text:
 
 - Encoding is Windows-1252. The English release uses curly quotes
-  (`0x91` to `0x94`) and `é` (`0xE9`).
+  (`0x91` to `0x94`) and `é` (`0xE9`). The Japanese release uses
+  Shift-JIS (code page 932), with full-width colons in mail headers.
 - Lines end with CR LF.
 - There are no control codes or markup.
 
