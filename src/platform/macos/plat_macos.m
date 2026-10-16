@@ -61,11 +61,32 @@ static int map_key(NSEvent *e)
     return 0;
 }
 
+/* The game draws its own cursors over the picture: there the system
+ * pointer is an invisible cursor, set as the view's cursor rectangle, so
+ * it comes back on the title bar and outside the window. */
+static int g_cursor_hidden;
+static NSCursor *g_blank_cursor;
+
+static NSCursor *blank_cursor(void)
+{
+    if (!g_blank_cursor) {
+        NSImage *img = [[NSImage alloc] initWithSize:NSMakeSize(16, 16)];
+        g_blank_cursor = [[NSCursor alloc] initWithImage:img hotSpot:NSMakePoint(0, 0)];
+    }
+    return g_blank_cursor;
+}
+
 @interface XFView : NSView
 @end
 
 @implementation XFView
 - (BOOL)acceptsFirstResponder { return YES; }
+
+- (void)resetCursorRects
+{
+    if (g_cursor_hidden)
+        [self addCursorRect:self.bounds cursor:blank_cursor()];
+}
 - (BOOL)isFlipped { return YES; }
 
 - (void)drawRect:(NSRect)dirty
@@ -350,14 +371,10 @@ int plat_font_path(const char *family, char *out, size_t size)
 
 void plat_show_cursor(int show)
 {
-    static int hidden;
-    if (g_headless || hidden == !show)
+    if (g_headless || g_cursor_hidden == !show || !g_window)
         return;
-    if (show)
-        [NSCursor unhide];
-    else
-        [NSCursor hide];
-    hidden = !show;
+    g_cursor_hidden = !show;
+    [g_window invalidateCursorRectsForView:g_window.contentView];
 }
 
 /* plat_save_dir: see plat.h. */
