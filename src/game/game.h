@@ -162,6 +162,7 @@ typedef struct {
     int pending_mail_count;
     char login[2][32];    /* computer login: name and password */
     xf_strings strings;   /* xfilest.dll: the game's text */
+    xf_strings base_strings; /* the release's xfilest.dll under a translation: search words match both */
     game_item_label labels[GAME_MAX_LABELS];
     int label_count;
     u32 trigger_item;     /* layout item whose triggers are running */

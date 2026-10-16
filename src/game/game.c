@@ -2368,6 +2368,7 @@ const char *game_credit(const game *g)
 }
 
 static void load_text(game *g);
+static const char *original_text(game *g, u32 asset, char *buf, size_t size);
 
 static void prefs_save(game *g)
 {
@@ -2623,7 +2624,8 @@ static void media_search(game *g)
             if (!vc_is_enabled(&g->interp, ids[k]))
                 continue;
             game_text(g, ids[k], kw, sizeof(kw));
-            if (same_words(kw, g->media_query))
+            if (same_words(kw, g->media_query) ||
+                (original_text(g, ids[k], kw, sizeof(kw)) && same_words(kw, g->media_query)))
                 article = ids[0];
         }
     }
@@ -3352,6 +3354,10 @@ static int ing_name(game *g, char db, const char *typed)
             char t[64];
             ing_key(game_text(g, media[k], t, sizeof(t)), have, sizeof(have));
             match = strcmp(want, have) == 0;
+            if (!match && original_text(g, media[k], t, sizeof(t))) {
+                ing_key(t, have, sizeof(have));
+                match = strcmp(want, have) == 0;
+            }
         }
         if (!match)
             continue;
@@ -4396,7 +4402,24 @@ static int host_call_function(void *user, const vc_action *a)
 
 /* --- Set-up ---------------------------------------------------------- */
 
+static const char *text_from(game *g, const xf_strings *table, u32 asset, char *buf, size_t size);
+
 const char *game_text(game *g, u32 asset, char *buf, size_t size)
+{
+    return text_from(g, &g->strings, asset, buf, size);
+}
+
+/* The release's own text of a string a translation replaced, or NULL:
+ * search words match in both languages. */
+static const char *original_text(game *g, u32 asset, char *buf, size_t size)
+{
+    if (!g->base_strings.count)
+        return NULL;
+    text_from(g, &g->base_strings, asset, buf, size);
+    return buf[0] ? buf : NULL;
+}
+
+static const char *text_from(game *g, const xf_strings *table, u32 asset, char *buf, size_t size)
 {
     xf_neo_reader r, blob;
     const u8 *p;
@@ -4417,7 +4440,7 @@ const char *game_text(game *g, u32 asset, char *buf, size_t size)
         p += n;
     }
     if (k == 2 && strcmp(tok[0], "6") == 0) {
-        const char *t = xf_strings_get(&g->strings, (u32)atoi(tok[1]));
+        const char *t = xf_strings_get(table, (u32)atoi(tok[1]));
         snprintf(buf, size, "%s", t ? t : "");
     } else {
         /* A text reference: the "path" token is the text. */
@@ -4474,7 +4497,13 @@ static void load_table(game *g, xf_strings *t, const char *dll, const char *txt)
 
 static void load_text(game *g)
 {
+    char path[1024];
     load_table(g, &g->strings, "XFILEST.DLL", "xfilest.txt");
+    /* a translated table: the release's own kept for search words */
+    xf_strings_free(&g->base_strings);
+    if (xf_langs_resolve_in(&g->langs, g->langs.text, "xfilest.txt", path, sizeof(path)) == 0 &&
+        (game_resolve(g, "XFILEST.DLL", path, sizeof(path)) != 0 || xf_strings_load(&g->base_strings, path) != 0))
+        memset(&g->base_strings, 0, sizeof(g->base_strings));
     if (!g->strings.count)
         xf_warn("game: no xfilest.dll, interface texts are missing");
     load_table(g, &g->engine_strings, "XFILESE.DLL", "xfilese.txt"); /* empty: English fallbacks */
@@ -4542,6 +4571,7 @@ void game_close(game *g)
     free(g->checkpoint);
     g->checkpoint = NULL;
     xf_strings_free(&g->strings);
+    xf_strings_free(&g->base_strings);
     xf_strings_free(&g->engine_strings);
     xf_strings_free(&g->credit_strings);
     vc_place_map_free(&g->places);
