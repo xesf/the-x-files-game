@@ -607,6 +607,15 @@ int plat_font_path(const char *family, char *out, size_t size)
 
 /* The game draws its own cursor; the mouse driver's stays hidden. */
 /* The mouse is the user's: navigation does not move it. */
+int plat_text_input(const char *title, const char *initial, int password, int clear)
+{
+    (void)title;
+    (void)initial;
+    (void)password;
+    (void)clear;
+    return 0; /* a physical keyboard types into the field */
+}
+
 void plat_set_pointer(int x, int y)
 {
     (void)x;

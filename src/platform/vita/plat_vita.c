@@ -5,9 +5,9 @@
  *   Video     The GPU (vita_gpu.c) draws the frame scaled with bilinear
  *             filtering, the 640x480 one to 725x544, centred. Without it,
  *             the CPU scales into a SceDisplay framebuffer in CDRAM.
- *   Input     The front touch panel points and clicks. The left stick moves
+ *   Input     The front touch panel points and clicks. Either stick moves
  *             the pointer, Cross clicks, Circle right-clicks, Start is
- *             Escape. The d-pad moves between the things that take a
+ *             Escape. A text field opens the system keyboard. The d-pad moves between the things that take a
  *             click; Square clicks too, Triangle shows the inventory, L and
  *             R step to the previous and next one.
  *   Sound     One BGM port at the engine's rate, fed by a thread.
@@ -15,14 +15,17 @@
  * The game files live in ux0:data/xfiles, outside the VPK. Based on the
  * Vita backend of the Ecstatica engine (same author, GPL-3.0-or-later). */
 #include <psp2/audioout.h>
+#include <psp2/common_dialog.h>
 #include <psp2/ctrl.h>
 #include <psp2/display.h>
+#include <psp2/ime_dialog.h>
 #include <psp2/io/stat.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/sysmem.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/power.h>
 #include <psp2/touch.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,7 +42,8 @@ unsigned int sceUserMainThreadStackSize = 1024 * 1024;
 #define SCREEN_W 960
 #define SCREEN_H 544
 #define FB_BYTES ((SCREEN_W * SCREEN_H * 4 + 0x3FFFF) & ~0x3FFFF)
-#define EVENT_QUEUE_SIZE 64
+#define EVENT_QUEUE_SIZE 256 /* room for a typed line */
+#define TEXT_MAX 63
 
 static int g_gpu;
 static SceUID g_fb_mem[2];
@@ -52,6 +56,9 @@ static int g_ev_head, g_ev_tail;
 static u32 g_buttons;
 static int g_touching;
 static float g_px, g_py; /* pointer, in frame pixels */
+static u32 g_last_pump;
+static int g_ime_open, g_ime_clear;
+static SceWChar16 g_ime_title[32], g_ime_initial[TEXT_MAX + 1], g_ime_text[TEXT_MAX + 1];
 
 void plat_set_pointer(int x, int y)
 {
@@ -160,19 +167,29 @@ static void pump_input(void)
         { SCE_CTRL_RTRIGGER, 9 },            { SCE_CTRL_LTRIGGER, 9 } };
     SceCtrlData pad;
     SceTouchData touch;
-    u32 pressed, released;
-    int dx, dy, moved = 0;
+    u32 pressed, released, now;
+    float dt;
+    int moved = 0;
     size_t i;
 
     sceCtrlPeekBufferPositive(0, &pad, 1);
-    /* Left stick: the pointer, faster further out; a dead zone near the
-     * centre. */
-    dx = (int)pad.lx - 128;
-    dy = (int)pad.ly - 128;
-    if (dx * dx + dy * dy > 30 * 30) {
-        g_px += dx / 16.0f;
-        g_py += dy / 16.0f;
-        moved = 1;
+    now = plat_ticks_ms();
+    dt = g_last_pump ? (float)(now - g_last_pump) / 1000.0f : 0.0f;
+    if (dt > 0.1f)
+        dt = 0.1f;
+    g_last_pump = now;
+    /* Either stick: the pointer, at a speed that grows with the square of
+     * the push, so a small push places it finely; a dead zone near the
+     * centre. Up to 700 pixels a second, whatever the frame rate. */
+    for (i = 0; i < 2; i++) {
+        float sx = ((i ? pad.rx : pad.lx) - 128) / 127.0f, sy = ((i ? pad.ry : pad.ly) - 128) / 127.0f;
+        float mag = sx * sx + sy * sy;
+        if (mag > 0.06f) {
+            mag = sqrtf(mag);
+            g_px += sx * mag * 700.0f * dt;
+            g_py += sy * mag * 700.0f * dt;
+            moved = 1;
+        }
     }
     sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1);
     if (touch.reportNum > 0) {
@@ -217,9 +234,96 @@ static void pump_input(void)
     }
 }
 
+/* The keyboard is up until the player closes it; then the text arrives
+ * as key presses. */
+static void ime_poll(void)
+{
+    SceImeDialogResult res;
+    int i;
+    if (sceImeDialogGetStatus() != SCE_COMMON_DIALOG_STATUS_FINISHED)
+        return;
+    memset(&res, 0, sizeof(res));
+    sceImeDialogGetResult(&res);
+    if (res.button == SCE_IME_DIALOG_BUTTON_ENTER) {
+        for (i = 0; i < g_ime_clear; i++) {
+            push_event(PLAT_EV_KEY_DOWN, 0, 8);
+            push_event(PLAT_EV_KEY_UP, 0, 8);
+        }
+        for (i = 0; i < TEXT_MAX && g_ime_text[i]; i++) {
+            int c = g_ime_text[i], mods = 0;
+            if (c < 32 || c > 126)
+                continue; /* the fields take plain ASCII */
+            if (c >= 'A' && c <= 'Z') {
+                c += 'a' - 'A';
+                mods = PLAT_MOD_SHIFT;
+            }
+            push_event(PLAT_EV_KEY_DOWN, 0, c);
+            g_events[(g_ev_head + EVENT_QUEUE_SIZE - 1) % EVENT_QUEUE_SIZE].mods = mods;
+            push_event(PLAT_EV_KEY_UP, 0, c);
+        }
+    }
+    sceImeDialogTerm();
+    vita_gpu_dialog(0);
+    g_ime_open = 0;
+    {
+        /* A button or touch that closed the keyboard does not press again;
+         * the click that opened it still gets its release. */
+        SceCtrlData pad;
+        SceTouchData touch;
+        sceCtrlPeekBufferPositive(0, &pad, 1);
+        sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1);
+        g_buttons |= pad.buttons;
+        g_touching |= touch.reportNum > 0;
+    }
+    g_last_pump = 0;
+}
+
+static void to_utf16(SceWChar16 *out, const char *in, int size)
+{
+    int i;
+    for (i = 0; i < size - 1 && in[i]; i++)
+        out[i] = (unsigned char)in[i];
+    out[i] = 0;
+}
+
+int plat_text_input(const char *title, const char *initial, int password, int clear)
+{
+    static int configured;
+    SceImeDialogParam p;
+    if (!g_gpu || g_ime_open)
+        return 0; /* the dialog draws itself through the GPU */
+    if (!configured) {
+        SceCommonDialogConfigParam config;
+        sceCommonDialogConfigParamInit(&config); /* the system's language and Enter button */
+        sceCommonDialogSetConfigParam(&config);
+        configured = 1;
+    }
+    to_utf16(g_ime_title, title, 32);
+    to_utf16(g_ime_initial, initial, TEXT_MAX + 1);
+    memcpy(g_ime_text, g_ime_initial, sizeof(g_ime_text));
+    sceImeDialogParamInit(&p);
+    p.supportedLanguages = SCE_IME_LANGUAGE_ENGLISH;
+    p.languagesForced = SCE_TRUE;
+    p.type = SCE_IME_TYPE_BASIC_LATIN;
+    p.option = SCE_IME_OPTION_NO_AUTO_CAPITALIZATION | SCE_IME_OPTION_NO_ASSISTANCE;
+    p.textBoxMode = password ? SCE_IME_DIALOG_TEXTBOX_MODE_PASSWORD : SCE_IME_DIALOG_TEXTBOX_MODE_WITH_CLEAR;
+    p.title = g_ime_title;
+    p.maxTextLength = TEXT_MAX;
+    p.initialText = g_ime_initial;
+    p.inputTextBuffer = g_ime_text;
+    if (sceImeDialogInit(&p) < 0)
+        return 0;
+    g_ime_open = 1;
+    g_ime_clear = clear;
+    vita_gpu_dialog(1);
+    return 1;
+}
+
 int plat_poll(plat_event *ev)
 {
-    if (g_ev_tail == g_ev_head)
+    if (g_ime_open)
+        ime_poll();
+    if (g_ev_tail == g_ev_head && !g_ime_open)
         pump_input();
     if (g_ev_tail == g_ev_head)
         return 0;

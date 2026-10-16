@@ -74,6 +74,11 @@ int plat_save_dir(char *out, size_t size);
  * in the pixels of the last frame shown; keyboard and d-pad navigation
  * move the pointer this way. Other platforms leave the mouse alone. */
 void plat_set_pointer(int x, int y);
+/* Asks for text with the system's on-screen keyboard, on machines with no
+ * physical one. Returns 1 when the keyboard opened: what is typed arrives
+ * later as key presses, `clear` backspaces first (to replace the field's
+ * text), then the text. Returns 0 where there is no such keyboard. */
+int plat_text_input(const char *title, const char *initial, int password, int clear);
 
 /* Shows or hides the system pointer over the window (the game draws its
  * own cursors). */
