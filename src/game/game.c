@@ -4011,6 +4011,17 @@ static int host_call_function(void *user, const vc_action *a)
         if (field < 0 || field > 1)
             return 1;
         n = strlen(g->login[field]);
+        /* 0x4F3500: Return runs the Connect button's list (trigger 39475,
+         * list 39477); Tab moves between the name (item 50747) and the
+         * password (50748). */
+        if (key == 13) {
+            vc_run_trigger_list(&g->interp, 39475, 39477);
+            return 1;
+        }
+        if (key == 9) {
+            g->focus_item = field == 0 ? 50748 : 50747;
+            return 1;
+        }
         if (key == 8 && n)
             g->login[field][n - 1] = '\0';
         else if (key >= 32 && key < 127 && n + 1 < sizeof(g->login[0])) {

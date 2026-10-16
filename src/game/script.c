@@ -1019,10 +1019,12 @@ int script_run(script *s, const char *path, int quiet)
                            g->interp.enables[i].enabled ? "on" : "off");
         } else if (strcmp(cmd, "key") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             /* key escape | return | <character>: a key press in the window */
-            int key = strcmp(what, "escape") == 0 ? 27 : strcmp(what, "return") == 0 ? 13 : (unsigned char)what[0];
-            ok = s->host.input != NULL;
-            if (ok)
+            int key = strcmp(what, "escape") == 0 ? 27 : strcmp(what, "return") == 0 ? 13
+                    : strcmp(what, "tab") == 0 ? 9 : (unsigned char)what[0];
+            if (s->host.input)
                 s->host.input(s->host.user, key, 0, 0);
+            else
+                ok = key != 27 && game_key(g, key); /* without a window: to the field with focus */
         } else if (strcmp(cmd, "press") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
             /* press <x> <y>: a left click in the window, through its input */
             ok = s->host.input != NULL;

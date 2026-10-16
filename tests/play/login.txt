@@ -1,0 +1,13 @@
+# The FBI computer's login at the apartment (disc 4): Tab moves from the
+# name to the password, Return connects (0x4F3500), as the Connect
+# button does.
+include disc3.txt
+walk 3872
+click 38627                     # the computer
+click 50747                     # the name field
+type Craig Willmore
+key tab                         # to the password
+type shiloh
+key return                      # connect
+expect var 4946 1               # IFL_bHasLoggedInToFBIComputer
+expect iface 15105              # the desktop
