@@ -165,6 +165,9 @@ typedef struct {
     int have_card_font;
     xf_font caption_font; /* Arial for the captions' Geneva */
     int have_caption_font;
+    xf_font cjk_font;     /* Japanese characters, under every other font */
+    int have_cjk_font;
+    char cjk_path[1024];
     xf_font hcd_font;     /* Hcd.ttr: computer screens */
     int have_hcd_font;
     xf_font phn_font;     /* Phn.ttr: the cell phone's display */
@@ -742,8 +745,12 @@ static void draw_label(explorer *e, const game_iface_item *it, const game_item_l
             const char *nl = strchr(line, '\n');
             size_t len = nl ? (size_t)(nl - line) : strlen(line);
             int w = xf_text_width(f, px, line, len), x;
-            while (len && w > r->right - r->left) /* cut at the item's edge */
-                w = xf_text_width(f, px, line, --len);
+            while (len && w > r->right - r->left) { /* cut at the item's edge, a whole character at a time */
+                do
+                    len--;
+                while (len && ((u8)line[len] & 0xC0) == 0x80);
+                w = xf_text_width(f, px, line, len);
+            }
             x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
             xf_text_draw(&sf, f, px, x, y, line, len, l->color == 'b' ? 0xFFFFFF : 0x000000);
             y += lh;
@@ -1139,26 +1146,7 @@ static void draw_outlined(explorer *e, const xf_font *f, float px, int x, int y,
  * `starts` and `lens` describe each line. */
 static int wrap_lines_font(const xf_font *f, const char *text, float px, int w, int *starts, int *lens, int max)
 {
-    int n = 0, pos = 0, len = (int)strlen(text);
-    while (pos < len && n < max) {
-        int end = pos, last_space = -1;
-        while (end < len && xf_text_width(f, px, text + pos, (size_t)(end + 1 - pos)) <= w) {
-            if (text[end] == ' ')
-                last_space = end;
-            end++;
-        }
-        if (end < len && last_space > pos)
-            end = last_space;
-        if (end == pos)
-            end = pos + 1;
-        starts[n] = pos;
-        lens[n] = end - pos;
-        n++;
-        pos = end;
-        while (pos < len && text[pos] == ' ')
-            pos++;
-    }
-    return n;
+    return xf_text_wrap(f, px, text, w, starts, lens, max);
 }
 
 /* Where the dialogue box goes: centred on the character, on screen. */
@@ -2805,6 +2793,39 @@ static int resolve_font(const explorer *e, const char *stem, char *out, size_t s
 }
 
 /* The game's fonts, from the text language. */
+/* A font with Japanese characters, when the text language needs one: the
+ * language's own (lang.txt "font=", or font.ttf / font.ttc in its
+ * folder), else the system's. The Japanese release's fonts have none:
+ * the original drew Japanese with a Windows font. */
+static void load_cjk_font(explorer *e)
+{
+    const xf_langs *l = &e->g->langs;
+    const xf_lang *lang = l->text >= 0 ? &l->langs[l->text] : NULL;
+    char path[1024] = "";
+    if (!lang || (!lang->sjis && !xf_lang_value(lang, "font"))) {
+        if (e->have_cjk_font)
+            xf_font_free(&e->cjk_font);
+        e->have_cjk_font = 0;
+        e->cjk_path[0] = '\0';
+        return;
+    }
+    if (!(xf_lang_value(lang, "font") &&
+          xf_langs_resolve_in(l, l->text, xf_lang_value(lang, "font"), path, sizeof(path)) == 0) &&
+        xf_langs_resolve_in(l, l->text, "font.ttf", path, sizeof(path)) != 0 &&
+        xf_langs_resolve_in(l, l->text, "font.ttc", path, sizeof(path)) != 0 &&
+        plat_font_path("Japanese", path, sizeof(path)) != 0) {
+        xf_warn("explore: no font with Japanese characters; put one in %s as font.ttf", lang->dir);
+        return;
+    }
+    if (e->have_cjk_font && strcmp(path, e->cjk_path) == 0)
+        return;
+    if (e->have_cjk_font)
+        xf_font_free(&e->cjk_font);
+    e->have_cjk_font = xf_font_load(&e->cjk_font, path) == 0;
+    snprintf(e->cjk_path, sizeof(e->cjk_path), "%s", path);
+    xf_info("explore: Japanese characters from %s%s", path, e->have_cjk_font ? "" : " (not a TrueType font)");
+}
+
 static void load_game_fonts(explorer *e)
 {
     char path[1024];
@@ -2824,6 +2845,18 @@ static void load_game_fonts(explorer *e)
         e->have_hcd_font = xf_font_load(&e->hcd_font, path) == 0;
     if (resolve_font(e, "PHN", path, sizeof(path)) == 0)
         e->have_phn_font = xf_font_load(&e->phn_font, path) == 0;
+    if (!e->have_card_font && plat_font_path("Courier New", path, sizeof(path)) == 0)
+        e->have_card_font = xf_font_load(&e->card_font, path) == 0;
+    if (!e->have_caption_font &&
+        (plat_font_path("Arial", path, sizeof(path)) == 0 || plat_font_path("arial", path, sizeof(path)) == 0))
+        e->have_caption_font = xf_font_load(&e->caption_font, path) == 0;
+    load_cjk_font(e);
+    {
+        /* every font draws the characters it lacks with the Japanese one */
+        const xf_font *cjk = e->have_cjk_font ? &e->cjk_font : NULL;
+        e->font.fallback = e->hcd_font.fallback = e->phn_font.fallback = cjk;
+        e->card_font.fallback = e->caption_font.fallback = cjk;
+    }
 }
 
 /* One input event: from the platform, or from a script. Mouse positions
@@ -3230,10 +3263,6 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     }
     e->disc = disc;
     load_game_fonts(e);
-    if (plat_font_path("Courier New", path, sizeof(path)) == 0)
-        e->have_card_font = xf_font_load(&e->card_font, path) == 0;
-    if (plat_font_path("Arial", path, sizeof(path)) == 0 || plat_font_path("arial", path, sizeof(path)) == 0)
-        e->have_caption_font = xf_font_load(&e->caption_font, path) == 0;
     if (!e->have_card_font)
         xf_warn("explore: no Courier New; location cards use the dialogue font");
     e->debug = getenv("XF_DEBUG_OVERLAY") != NULL;
@@ -3316,6 +3345,10 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         xf_font_free(&e->hcd_font);
     if (e->have_phn_font)
         xf_font_free(&e->phn_font);
+    if (e->have_caption_font)
+        xf_font_free(&e->caption_font);
+    if (e->have_cjk_font)
+        xf_font_free(&e->cjk_font);
     game_close(e->g);
     free(e->g);
     free(e);

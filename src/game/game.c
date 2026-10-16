@@ -2023,7 +2023,7 @@ static const u32 g_email_from[GAME_EMAIL_ROWS] = { 38282, 38283, 38284, 38285, 3
 static const u32 g_email_subject[GAME_EMAIL_ROWS] = { 42733, 42734, 42735, 42736, 42737, 42738, 42739, 42740 };
 static const u32 g_email_icon[GAME_EMAIL_ROWS] = { 15293, 38253, 38255, 38257, 38259, 38261, 38263, 38265 };
 
-/* The text of a mail file, in Windows-1252 as the game wrote it. */
+/* The text of a document (a mail, a note, an article), as UTF-8. */
 static size_t email_text(game *g, u32 asset, char *out, size_t size)
 {
     vc_asset_ref a;
@@ -2036,9 +2036,20 @@ static size_t email_text(game *g, u32 asset, char *out, size_t size)
         return 0;
     for (i = 0; i < a.entry_count; i++)
         if (game_resolve(g, a.entries[i].path, path, sizeof(path)) == 0 && (f = fopen(path, "rb"))) {
-            n = fread(out, 1, size - 1, f);
+            u8 *raw = malloc(size);
+            n = raw ? fread(raw, 1, size - 1, f) : 0;
             fclose(f);
-            n = xf_utf8_to_cp1252(out, n); /* a translation's documents are UTF-8 */
+            /* as UTF-8: a translation's documents already are; the
+             * Japanese release's are Shift-JIS, the others Windows-1252 */
+            if (raw && xf_is_utf8((const char *)raw, n)) {
+                memcpy(out, raw, n);
+                out[n] = '\0';
+            } else if (raw && xf_langs_path_sjis(&g->langs, path)) {
+                n = xf_sjis_to_utf8(out, size, raw, n);
+            } else if (raw) {
+                n = xf_cp1252_to_utf8(out, size, raw, n);
+            }
+            free(raw);
             break;
         }
     out[n] = '\0';
@@ -2068,7 +2079,9 @@ static void email_field(game *g, u32 asset, const char *name, char *out, size_t 
     out[0] = '\0';
     email_text(g, asset, text, sizeof(text));
     for (p = text; *p; p = strchr(p, '\n') ? strchr(p, '\n') + 1 : p + strlen(p)) {
-        const char *colon = strchr(p, ':'), *end = strchr(p, '\n');
+        const char *colon = strchr(p, ':'), *wide = strstr(p, "\xEF\xBC\x9A"), *end = strchr(p, '\n');
+        if (wide && (!colon || wide < colon))
+            colon = wide + 2; /* the Japanese full-width colon: its last byte */
         if (strncmp(p, name, k) == 0 && p[k] == ':') {
             line[0] = p + k;
             n_lines = -1;
@@ -3534,6 +3547,10 @@ static const card_locale g_card_locales[] = {
       { "", "janeiro", "fevereiro", "mar\xC3\xA7o", "abril", "maio", "junho", "julho", "agosto", "setembro",
         "outubro", "novembro", "dezembro" },
       "WDdeM", 1, ':' },
+    { "jp",
+      { "\xE6\x97\xA5\xE6\x9B\x9C\xE6\x97\xA5", "\xE6\x9C\x88\xE6\x9B\x9C\xE6\x97\xA5", "\xE7\x81\xAB\xE6\x9B\x9C\xE6\x97\xA5", "\xE6\xB0\xB4\xE6\x9B\x9C\xE6\x97\xA5", "\xE6\x9C\xA8\xE6\x9B\x9C\xE6\x97\xA5", "\xE9\x87\x91\xE6\x9B\x9C\xE6\x97\xA5", "\xE5\x9C\x9F\xE6\x9B\x9C\xE6\x97\xA5" },
+      { "", "", "", "", "", "", "", "", "", "", "", "", "" },
+      "YMDW", 1, ':' },
 };
 
 static const card_locale *card_locale_of(const game *g)
@@ -3573,6 +3590,8 @@ static void format_location_card(game *g, u32 label_ref, i32 day_night, i32 hhmm
         n = snprintf(g->card, sizeof(g->card), "%s\n%s, %s %d, 1996", label, wd, mon, day);
     else if (strcmp(lc->date, "WD.M") == 0) /* Dienstag, 2. April 1996 */
         n = snprintf(g->card, sizeof(g->card), "%s\n%s, %d. %s 1996", label, wd, day, mon);
+    else if (strcmp(lc->date, "YMDW") == 0) /* 1996年4月2日 火曜日 */
+        n = snprintf(g->card, sizeof(g->card), "%s\n1996%s%d%s%d%s %s", label, "\xE5\xB9\xB4", month, "\xE6\x9C\x88", day, "\xE6\x97\xA5", wd);
     else if (strcmp(lc->date, "WDdeM") == 0) /* Terça-feira, 2 de abril de 1996 */
         n = snprintf(g->card, sizeof(g->card), "%s\n%s, %d de %s de 1996", label, wd, day, mon);
     else /* mardi 2 avril 1996 */

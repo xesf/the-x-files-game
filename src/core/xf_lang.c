@@ -66,16 +66,15 @@ static int add_lang(xf_langs *l, const char *root, const char *name)
     g->text = has(g->dir, "XFILEST.DLL") || has(g->dir, "xfilest.txt") || has(g->dir, "XT") || has(g->dir, "lang.txt");
     if (!g->game && !g->voices && !g->text)
         return 0;
-    /* Japanese documents are Shift-JIS and its strings need the
-     * Japanese fonts: not drawn yet, so only its voices are offered. */
-    if (strcmp(g->code, "jp") == 0 || strcmp(g->code, "ja") == 0)
-        g->text = 0;
+    g->sjis = strcmp(g->code, "jp") == 0 || strcmp(g->code, "ja") == 0;
     memcpy(g->name, g->code, sizeof(g->code)); /* both zero-terminated, the name the larger */
     for (i = 0; i < XF_COUNT(g_names); i++)
         if (strcmp(g_names[i].code, g->code) == 0)
             snprintf(g->name, sizeof(g->name), "%s", g_names[i].name);
     snprintf(g->fallback, sizeof(g->fallback), "en");
     read_lang_txt(g);
+    if (xf_lang_value(g, "encoding"))
+        g->sjis = strcasecmp(xf_lang_value(g, "encoding"), "shift-jis") == 0;
     l->count++;
     return 1;
 }
@@ -219,6 +218,17 @@ int xf_langs_captions(const xf_langs *l, const char *rel, const char *clip_path,
             return strcmp(out, clip_path) == 0 ? -1 : 0;
     }
     return -1;
+}
+
+int xf_langs_path_sjis(const xf_langs *l, const char *path)
+{
+    int i;
+    for (i = 0; i < l->count; i++) {
+        size_t n = strlen(l->langs[i].dir);
+        if (l->langs[i].sjis && strncmp(path, l->langs[i].dir, n) == 0 && path[n] == '/')
+            return 1;
+    }
+    return 0;
 }
 
 const char *xf_lang_value(const xf_lang *g, const char *key)
