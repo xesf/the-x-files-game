@@ -2318,6 +2318,37 @@ static int menu_item_at(int x, int y)
 
 /* Draws the frame and shows it: the 640x480 screen as it is, or the
  * wide layout at the output's size. */
+/* XF_PROFILE=1: the time of each stage of a frame, averaged and logged
+ * every two seconds (on the Vita in ux0:data/xfiles/xfiles.log). */
+enum { PROF_MEDIA, PROF_DRAW, PROF_COMPOSE, PROF_PRESENT, PROF_SLEEP, PROF_COUNT };
+static const char *const g_prof_names[PROF_COUNT] = { "media", "draw", "compose", "present", "sleep" };
+static struct {
+    int on;
+    u32 t[PROF_COUNT], frames, since;
+} g_prof;
+
+static void prof_add(int stage, u32 from) { g_prof.t[stage] += plat_ticks_ms() - from; }
+
+static void prof_frame(void)
+{
+    u32 now = plat_ticks_ms();
+    int i;
+    g_prof.frames++;
+    if (now - g_prof.since < 2000)
+        return;
+    if (g_prof.frames) {
+        char line[256];
+        int n = snprintf(line, sizeof(line), "profile: %.1f fps", g_prof.frames * 1000.0 / (now - g_prof.since));
+        for (i = 0; i < PROF_COUNT; i++)
+            n += snprintf(line + n, sizeof(line) - (size_t)n, ", %s %.1f ms", g_prof_names[i],
+                          (double)g_prof.t[i] / g_prof.frames);
+        xf_info("%s", line);
+    }
+    memset(g_prof.t, 0, sizeof(g_prof.t));
+    g_prof.frames = 0;
+    g_prof.since = now;
+}
+
 static void present_frame(explorer *e)
 {
     int ow, oh;
@@ -2326,12 +2357,15 @@ static void present_frame(explorer *e)
         ow = ow * 3 / 4;
         oh = oh * 3 / 4;
     }
+    u32 t0 = plat_ticks_ms();
     scr_layout_begin(&e->layout, ow, oh, want_wide(e));
     if (e->in_menu == 1)
         menu_draw(e);
     else
         draw(e, e->mx, e->my);
     e->fb = e->scene_fb;
+    prof_add(PROF_DRAW, t0);
+    t0 = plat_ticks_ms();
     if (e->layout.wide && (size_t)ow * oh > e->out_cap) {
         u32 *o = realloc(e->out, (size_t)ow * oh * 4);
         if (o) {
@@ -2362,7 +2396,10 @@ static void present_frame(explorer *e)
         e->shown_w = ow;
         e->shown_h = oh;
     }
+    prof_add(PROF_COMPOSE, t0);
+    t0 = plat_ticks_ms();
     plat_present(e->shown, e->shown_w, e->shown_h, e->shown_w);
+    prof_add(PROF_PRESENT, t0);
 }
 
 /* --- Keyboard and d-pad navigation --------------------------------------
@@ -2699,6 +2736,7 @@ static void handle_event(explorer *e, plat_event ev)
 /* One frame: input, clips and sound, drawing. */
 static void run_frame(explorer *e)
 {
+    u32 t0, start = plat_ticks_ms(), budget;
     plat_event ev;
     /* The game clock stops in the menu, on the Save and Load screens and
      * while a message box waits. */
@@ -2719,6 +2757,7 @@ static void run_frame(explorer *e)
         game_tick(e->g, plat_ticks_ms() - e->paused_ms);
     while (plat_poll(&ev))
         handle_event(e, ev);
+    t0 = plat_ticks_ms();
     if (!e->media_paused) {
         if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
             (e->card_until && (i32)(plat_ticks_ms() - e->card_until) >= 0))
@@ -2734,6 +2773,7 @@ static void run_frame(explorer *e)
         update_sound(e);
         update_overlay(e);
     }
+    prof_add(PROF_MEDIA, t0);
     if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g) && e->title_next >= e->title_count)
         menu_enter(e);
     switch (e->g->ui_request) {
@@ -2765,7 +2805,14 @@ static void run_frame(explorer *e)
         refresh_iface_pictures(e);
     }
     present_frame(e);
-    plat_sleep_ms(e->playing ? 5 : 16);
+    /* What is left of the frame's time: a slow device gets no sleep. */
+    t0 = plat_ticks_ms();
+    budget = e->playing ? 10 : 16;
+    if (t0 - start < budget)
+        plat_sleep_ms(budget - (t0 - start));
+    prof_add(PROF_SLEEP, t0);
+    if (g_prof.on)
+        prof_frame();
 }
 
 /* --- Scripts in the window --------------------------------------------- */
@@ -2931,6 +2978,10 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     if (!e->have_card_font)
         xf_warn("explore: no Courier New; location cards use the dialogue font");
     e->debug = getenv("XF_DEBUG_OVERLAY") != NULL;
+    /* XF_PROFILE, or a file named profile.txt in the game folder (for
+     * consoles without an environment) */
+    g_prof.on = getenv("XF_PROFILE") != NULL || xf_path_resolve(data_dir, "profile.txt", path, sizeof(path)) == 0;
+    g_prof.since = plat_ticks_ms();
     if (script_path) {
         /* The script starts the game itself. */
     } else if (start_view == 0) {
