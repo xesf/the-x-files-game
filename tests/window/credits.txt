@@ -1,0 +1,8 @@
+# The opening credits: the "Funny" answer to Cook runs RollHdCredits,
+# with FOCredit.mus; a card every 4.5 s, shown for 3 s, from XFilesC.dll.
+clips on
+new
+icon 18172
+expect window credit 0
+play 10000
+expect window credit 1

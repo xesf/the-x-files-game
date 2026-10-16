@@ -1560,6 +1560,29 @@ static void ui_piece(explorer *e, int x, int y, int w, int h, int anchor)
     scr_add_piece(&e->layout, r, anchor, px);
 }
 
+/* RollHdCredits: the opening credit cards in Typist (Hcd.ttr) 12 point,
+ * right-aligned (0x12: DT_RIGHT | DT_WORDBREAK) at the bottom of the
+ * scene strip, 5 pixels in (rectangle 0x6C4988, 0x458AA0). */
+static void draw_credit(explorer *e)
+{
+    const char *text = game_credit(e->g), *line;
+    const xf_font *f = e->have_hcd_font ? &e->hcd_font : &e->font;
+    const float px = 16.0f;
+    int lines = 1, lh = (int)(px * 1.25f), y;
+    if (!text || (!e->have_hcd_font && !e->have_font))
+        return;
+    for (line = text; *line; line++)
+        lines += *line == '\n';
+    y = PICTURE_Y + PICTURE_H - 5 - 4 - (lines - 1) * lh; /* the last baseline above the bottom */
+    for (line = text; line; y += lh) {
+        const char *nl = strchr(line, '\n');
+        size_t len = nl ? (size_t)(nl - line) : strlen(line);
+        int w = xf_text_width(f, px, line, len);
+        draw_outlined(e, f, px, PICTURE_X + PICTURE_W - 5 - w, y, line, len, 0xFFFFFF);
+        line = nl ? nl + 1 : NULL;
+    }
+}
+
 static int menu_icon_shown(const explorer *e, int mx, int my)
 {
     const game *g = e->g;
@@ -1622,6 +1645,7 @@ static void draw(explorer *e, int mx, int my)
         }
         if (e->card_active && !e->g->text_off)
             draw_card(e, cx, cy, cw, ch);
+        draw_credit(e);
         begin_ui(e);
         s = screen_surface(e);
         scr_reserve_bottom(&e->layout, inv_reveal(e)); /* icons stay put when the clip ends */
@@ -1653,6 +1677,7 @@ static void draw(explorer *e, int mx, int my)
     }
     draw_darkness(e, mx, my);
     draw_fade(e);
+    draw_credit(e);
     if (e->debug)
         /* Ctrl+Shift+D: hotspot outlines and the view's media name. */
         for (i = 0; i < g->spot_count; i++) {
@@ -2399,6 +2424,8 @@ static int script_window(void *user, const char *what)
         return e->media_paused;
     if (strcmp(what, "playing") == 0)
         return e->playing;
+    if (strcmp(what, "credit") == 0)
+        return game_credit(e->g) != NULL;
     return -1;
 }
 
