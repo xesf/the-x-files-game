@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "media/mpeg2.h"
+#include "xf_jobs.h"
 #include "xf_file.h"
 #include "xf_log.h"
 
@@ -303,21 +304,29 @@ static int set_view(xf_vob *v, const xf_vob_view *view)
 
 static u8 clip(int v) { return (u8)(v < 0 ? 0 : v > 255 ? 255 : v); }
 
-/* Converts the decoded picture (BT.601, video range) to RGB, scaled to the
- * view. Interlaced pictures are blended with their neighbour rows. */
-static void draw(xf_vob *v, u32 *rgb, const xf_vob_view *view)
+typedef struct {
+    const xf_vob *v;
+    u32 *rgb;
+    const xf_vob_view *view;
+} draw_job;
+
+/* Rows part, part + parts, ... of the output: converted (BT.601, video
+ * range) to RGB and scaled to the view. Interlaced pictures are blended
+ * with their neighbour rows. */
+static void draw_rows(void *ctx, int part, int parts)
 {
+    const draw_job *j = ctx;
+    const xf_vob *v = j->v;
+    const xf_vob_view *view = j->view;
     const xf_mpeg2_picture *p = &v->next;
     int x, y, last_col = p->width - 1;
-    u8 *row = malloc((size_t)p->width);
-    if (!row || set_view(v, view) != 0) {
-        free(row);
+    u8 row[2048];
+    if (p->width > (int)sizeof(row))
         return;
-    }
-    for (y = 0; y < view->out_h; y++) {
+    for (y = part; y < view->out_h; y += parts) {
         int sy = view->y + y * view->h / view->out_h, i;
-        const u8 *yr, *cb, *cr;
-        u32 *o = rgb + (size_t)y * view->out_w;
+        const u8 *cb, *cr;
+        u32 *o = j->rgb + (size_t)y * view->out_w;
         if (sy >= p->height)
             sy = p->height - 1;
         {
@@ -328,19 +337,28 @@ static void draw(xf_vob *v, u32 *rgb, const xf_vob_view *view)
             for (i = 0; i < p->width; i++)
                 row[i] = (u8)((a[i] + 2 * m[i] + b[i] + 2) >> 2);
         }
-        yr = row;
         cb = p->cb + (size_t)(sy >> 1) * p->cstride;
         cr = p->cr + (size_t)(sy >> 1) * p->cstride;
         for (x = 0; x < view->out_w; x++) {
             int c0 = v->col[x], c1 = c0 < last_col ? c0 + 1 : c0, f = v->frac[x];
-            int luma = (yr[c0] * (256 - f) + yr[c1] * f + 128) >> 8;
+            int luma = (row[c0] * (256 - f) + row[c1] * f + 128) >> 8;
             int u = cb[c0 >> 1] - 128, w = cr[c0 >> 1] - 128;
             int l = 298 * (luma - 16) + 128;
             o[x] = (u32)clip((l + 409 * w) >> 8) << 16 | (u32)clip((l - 100 * u - 208 * w) >> 8) << 8 |
                    clip((l + 516 * u) >> 8);
         }
     }
-    free(row);
+}
+
+static void draw(xf_vob *v, u32 *rgb, const xf_vob_view *view)
+{
+    draw_job j;
+    if (set_view(v, view) != 0)
+        return;
+    j.v = v;
+    j.rgb = rgb;
+    j.view = view;
+    xf_jobs_run(draw_rows, &j, xf_jobs_count());
 }
 
 int xf_vob_video(xf_vob *v, u32 ms, u32 *rgb, const xf_vob_view *view)
