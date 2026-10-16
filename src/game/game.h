@@ -9,6 +9,7 @@
 
 #include "vc/interp.h"
 #include "data/strings.h"
+#include "xf_lang.h"
 #include "vc/vc.h"
 
 #define GAME_MAX_SPOTS 64
@@ -174,7 +175,9 @@ typedef struct {
     u32 all_icons[128], all_inventory[128], all_evidence[128];
     int all_icon_count, all_inventory_count, all_evidence_count;
     u32 fade_serial;                  /* changes on FadeToBlack */
-    char data_dir[512];
+    char data_dir[512];      /* the release whose database runs */
+    char root_dir[512];      /* the folder given: data_dir, or the one holding the language folders */
+    xf_langs langs;          /* language folders (src/core/xf_lang.h); count 0: one release */
     int ing_cook_shown;
     u32 overlay;                      /* PlayAssetAt: clip over the screen */
     int overlay_x, overlay_y;
@@ -398,6 +401,12 @@ const char *game_credit(const game *g);
 void game_prefs_load(game *g);
 /* Turns the wide layout on or off, and saves the preferences. */
 void game_set_screen_wide(game *g, int on);
+/* Finds a game file: in the chosen voice or text language when there are
+ * language folders, then in the release. Returns 0 when found. */
+int game_resolve(const game *g, const char *rel, char *out, size_t size);
+/* Chooses the voice and text languages (indexes into g->langs, -1 keeps
+ * one), reloads the text and saves the choice. */
+void game_set_languages(game *g, int voices, int text);
 void game_prefs_apply(game *g);
 i32 game_pref(const game *g, u32 var);
 

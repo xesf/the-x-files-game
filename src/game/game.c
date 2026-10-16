@@ -9,6 +9,7 @@
 #include <strings.h>
 
 #include "xf_file.h"
+#include "xf_text.h"
 #include "media/hot.h"
 #include "xf_log.h"
 
@@ -1483,7 +1484,7 @@ static int load_hot(game *g, u32 asset, xf_hot *hot)
         if (!(dot = strrchr(name, '.')))
             continue;
         snprintf(dot, sizeof(name) - (size_t)(dot - name), ".hot");
-        if (xf_path_resolve(g->data_dir, name, path, sizeof(path)) == 0 && xf_hot_load(hot, path) == 0)
+        if (game_resolve(g, name, path, sizeof(path)) == 0 && xf_hot_load(hot, path) == 0)
             return 0;
     }
     return -1;
@@ -1998,9 +1999,10 @@ static size_t email_text(game *g, u32 asset, char *out, size_t size)
     if (vc_read_asset_ref(&g->db, asset, &a) != 0)
         return 0;
     for (i = 0; i < a.entry_count; i++)
-        if (xf_path_resolve(g->data_dir, a.entries[i].path, path, sizeof(path)) == 0 && (f = fopen(path, "rb"))) {
+        if (game_resolve(g, a.entries[i].path, path, sizeof(path)) == 0 && (f = fopen(path, "rb"))) {
             n = fread(out, 1, size - 1, f);
             fclose(f);
+            n = xf_utf8_to_cp1252(out, n); /* a translation's documents are UTF-8 */
             break;
         }
     out[n] = '\0';
@@ -2326,6 +2328,9 @@ void game_prefs_apply(game *g)
  * game's interface best. 0xFFFF0001 held it when the Vita defaulted to
  * wide; that value is no longer read. */
 #define PREF_SCREEN_WIDE 0xFFFF0002u
+/* The voice and text languages, by code (xf_lang_pack). */
+#define PREF_VOICES 0xFFFF0003u
+#define PREF_TEXT 0xFFFF0004u
 
 const char *game_credit(const game *g)
 {
@@ -2341,6 +2346,8 @@ const char *game_credit(const game *g)
     return s && *s ? s : NULL;
 }
 
+static void load_text(game *g);
+
 static void prefs_save(game *g)
 {
     char path[1024];
@@ -2354,6 +2361,10 @@ static void prefs_save(game *g)
     for (i = 0; i < GAME_PREFS; i++)
         fprintf(f, "%u %d\n", g_pref_vars[i], g->prefs[i]);
     fprintf(f, "%u %d\n", PREF_SCREEN_WIDE, g->screen_wide);
+    if (g->langs.voices >= 0)
+        fprintf(f, "%u %d\n", PREF_VOICES, xf_lang_pack(g->langs.langs[g->langs.voices].code));
+    if (g->langs.text >= 0)
+        fprintf(f, "%u %d\n", PREF_TEXT, xf_lang_pack(g->langs.langs[g->langs.text].code));
     fclose(f);
 }
 
@@ -2368,7 +2379,8 @@ void game_prefs_load(game *g)
     char path[1024];
     FILE *f;
     unsigned var;
-    int value, i;
+    int value, i, voices = -1, text = -1;
+    char code[8];
     for (i = 0; i < GAME_PREFS; i++) /* the shipped values first */
         g->prefs[i] = vc_get_var(&g->interp, g_pref_vars[i]);
     /* Artificial Intuition is on unless the player turns it off: the GAM
@@ -2381,11 +2393,20 @@ void game_prefs_load(game *g)
         while (fscanf(f, "%u %d", &var, &value) == 2)
             if (var == PREF_SCREEN_WIDE)
                 g->screen_wide = value != 0;
-            else if ((i = pref_index(var)) >= 0)
+            else if (var == PREF_VOICES || var == PREF_TEXT) {
+                xf_lang_unpack(value, code);
+                *(var == PREF_VOICES ? &voices : &text) = xf_langs_find(&g->langs, code);
+            } else if ((i = pref_index(var)) >= 0)
                 g->prefs[i] = value;
         fclose(f);
     }
     game_prefs_apply(g);
+    if (voices >= 0 && g->langs.langs[voices].voices)
+        g->langs.voices = voices;
+    if (text >= 0 && g->langs.langs[text].text && text != g->langs.text) {
+        g->langs.text = text;
+        load_text(g);
+    }
 }
 
 static void pref_set(game *g, u32 var, i32 value)
@@ -4406,11 +4427,55 @@ const game_item_label *game_item_label_of(game *g, u32 item)
     return NULL;
 }
 
+int game_resolve(const game *g, const char *rel, char *out, size_t size)
+{
+    if (xf_langs_resolve(&g->langs, rel, out, size) == 0)
+        return 0;
+    return xf_path_resolve(g->data_dir, rel, out, size);
+}
+
+/* One string table of the text language: its DLL (or the nearest
+ * fallback's), then the language's own text file over it. */
+static void load_table(game *g, xf_strings *t, const char *dll, const char *txt)
+{
+    char path[1024];
+    xf_strings_free(t);
+    if (game_resolve(g, dll, path, sizeof(path)) != 0 || xf_strings_load(t, path) != 0)
+        memset(t, 0, sizeof(*t));
+    if (xf_langs_resolve_in(&g->langs, g->langs.text, txt, path, sizeof(path)) == 0)
+        xf_strings_load_text(t, path);
+}
+
+static void load_text(game *g)
+{
+    load_table(g, &g->strings, "XFILEST.DLL", "xfilest.txt");
+    if (!g->strings.count)
+        xf_warn("game: no xfilest.dll, interface texts are missing");
+    load_table(g, &g->engine_strings, "XFILESE.DLL", "xfilese.txt"); /* empty: English fallbacks */
+    load_table(g, &g->credit_strings, "XFILESC.DLL", "xfilesc.txt");
+}
+
+void game_set_languages(game *g, int voices, int text)
+{
+    if (voices >= 0 && voices < g->langs.count && g->langs.langs[voices].voices)
+        g->langs.voices = voices;
+    if (text >= 0 && text < g->langs.count && g->langs.langs[text].text && text != g->langs.text) {
+        g->langs.text = text;
+        load_text(g);
+    }
+    prefs_save(g);
+}
+
 int game_open(game *g, const char *data_dir)
 {
     char path[1024];
     vc_host host = { NULL, host_go_to_view, host_play_media, host_timer, host_interface, host_call_function };
     memset(g, 0, sizeof(*g));
+    snprintf(g->root_dir, sizeof(g->root_dir), "%s", data_dir);
+    if (xf_langs_scan(&g->langs, data_dir) > 0) {
+        data_dir = xf_langs_game_dir(&g->langs);
+        xf_info("game: %d language folders, the game from %s", g->langs.count, data_dir);
+    }
     snprintf(g->data_dir, sizeof(g->data_dir), "%s", data_dir);
     g->disc = 1;
     memset(g->play_once, 1, sizeof(g->play_once));
@@ -4439,13 +4504,7 @@ int game_open(game *g, const char *data_dir)
         return -1;
     }
     g->interp.trace = getenv("XF_TRACE") != NULL;
-    if (xf_path_resolve(data_dir, "XFILEST.DLL", path, sizeof(path)) != 0 || xf_strings_load(&g->strings, path) != 0)
-        xf_warn("game: no xfilest.dll, interface texts are missing");
-    if (xf_path_resolve(data_dir, "XFILESE.DLL", path, sizeof(path)) != 0 || xf_strings_load(&g->engine_strings, path) != 0)
-        memset(&g->engine_strings, 0, sizeof(g->engine_strings)); /* English fallbacks */
-    if (xf_path_resolve(data_dir, "XFILESC.DLL", path, sizeof(path)) != 0 ||
-        xf_strings_load(&g->credit_strings, path) != 0)
-        memset(&g->credit_strings, 0, sizeof(g->credit_strings));
+    load_text(g);
     vc_place_map_build(&g->db, &g->places);
     xf_info("%u views placed in the hierarchy", g->places.count);
     game_prefs_load(g); /* the shipped values until save_dir is known */

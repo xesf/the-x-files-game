@@ -238,16 +238,36 @@ static xf_surface screen_surface(explorer *e)
 static void stop_media(explorer *e);
 static void stop_sound(explorer *e);
 
-/* Finds a media file in the game folder, then in the extra media folders. */
+/* Finds a media file in the chosen language (voices for clips and
+ * sounds, text for the rest), the game folder, then the extra media
+ * folders. */
 static int resolve_media(const explorer *e, const char *name, char *out, size_t size)
 {
     int i;
-    if (xf_path_resolve(e->data_dir, name, out, size) == 0)
+    if (game_resolve(e->g, name, out, size) == 0)
         return 0;
     for (i = 0; e->media_dirs && e->media_dirs[i]; i++)
         if (xf_path_resolve(e->media_dirs[i], name, out, size) == 0)
             return 0;
     return -1;
+}
+
+/* A DVD clip carries its release's voices: with language folders, only
+ * the voice language's own. */
+static int resolve_vob(const explorer *e, const char *name, char *out, size_t size)
+{
+    if (e->g->langs.count)
+        return xf_langs_resolve_in(&e->g->langs, e->g->langs.voices, name, out, size);
+    return resolve_media(e, name, out, size);
+}
+
+/* The text language's captions for a clip, when they come from another
+ * file: a translation's SRT, or another release's copy of the clip. */
+static void use_captions(explorer *e, xf_player *p, const char *rel, const char *path)
+{
+    char src[1024];
+    if (xf_langs_captions(&e->g->langs, rel, path, src, sizeof(src)) == 0 && xf_player_captions(p, src) == 0)
+        xf_debug("captions of %s from %s", rel, src);
 }
 
 static int open_nav_file(explorer *e, const char *name)
@@ -414,6 +434,8 @@ static void load_picture(explorer *e)
                 } else if (resolve_media(e, m->path, path, sizeof(path)) == 0 &&
                            open_anim(e, path, m->start, m->end, (a.kind & 0x08) != 0) == 0) {
                     e->anims[e->anim_count - 1].asset = e->view_media[i];
+                    if (e->anims[e->anim_count - 1].use_player)
+                        use_captions(e, &e->anims[e->anim_count - 1].player, m->path, path);
                     done = 1;
                     if (!e->have_picture)
                         snprintf(e->label, sizeof(e->label), "view %u  disc %d  %s", e->g->view, m->disc,
@@ -784,7 +806,7 @@ static int open_dvd_clip(explorer *e, const char *movie)
     if (!dot || strcasecmp(dot, ".xmv") != 0 || (n = (size_t)(dot - base)) > 40)
         return -1;
     snprintf(name, sizeof(name), "vob/%.*s.vob", (int)n, base);
-    if (resolve_media(e, name, path, sizeof(path)) != 0)
+    if (resolve_vob(e, name, path, sizeof(path)) != 0)
         return -1;
     return xf_player_open_vob(&e->player, path, plat_ticks_ms(), &xf_vob_scene_view);
 }
@@ -795,7 +817,7 @@ static void start_title(explorer *e)
     while (!e->playing && !game_media_pending(e->g) && e->title_next < e->title_count) {
         char name[64], path[1024];
         snprintf(name, sizeof(name), "vob/%s.vob", e->titles[e->title_next++]);
-        if (resolve_media(e, name, path, sizeof(path)) == 0 &&
+        if (resolve_vob(e, name, path, sizeof(path)) == 0 &&
             xf_player_open_vob(&e->player, path, plat_ticks_ms(), &xf_vob_full_view) == 0) {
             e->have_clip = e->playing = 1;
             e->card_active = 0;
@@ -833,6 +855,7 @@ static void start_next_media(explorer *e)
                                                     a.entries[j].start + game_clip_offset(e->g, m.asset),
                                                     a.entries[j].end) == 0) {
                         e->have_clip = 1;
+                        use_captions(e, &e->player, a.entries[j].path, path);
                         set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
                         xf_info("playing %s (%s)", a.logical, a.entries[j].path);
                     }
@@ -2092,7 +2115,7 @@ static void queue_intro(explorer *e)
     size_t i;
     if (getenv("XF_SKIP_INTRO") || game_pref(e->g, 994)) /* Pref_bSkipIntro */
         return;
-    if (resolve_media(e, "vob/ddigital1.vob", path, sizeof(path)) == 0 &&
+    if (resolve_vob(e, "vob/ddigital1.vob", path, sizeof(path)) == 0 &&
         (e->prefer_dvd || !media_on_disk(e, intro[2]))) {
         e->titles[0] = "ddigital1";
         e->titles[1] = "teaser";
@@ -2611,6 +2634,26 @@ static void ask_text(explorer *e, u32 clicked)
     plat_text_input("The X-Files", secret ? "" : text, secret, (int)strlen(text));
 }
 
+/* The game's fonts, from the text language. */
+static void load_game_fonts(explorer *e)
+{
+    char path[1024];
+    xf_text_cache_clear();
+    if (e->have_font)
+        xf_font_free(&e->font);
+    if (e->have_hcd_font)
+        xf_font_free(&e->hcd_font);
+    if (e->have_phn_font)
+        xf_font_free(&e->phn_font);
+    e->have_font = e->have_hcd_font = e->have_phn_font = 0;
+    if (game_resolve(e->g, "DLG.TTF", path, sizeof(path)) == 0 || game_resolve(e->g, "DLG.TTR", path, sizeof(path)) == 0)
+        e->have_font = xf_font_load(&e->font, path) == 0;
+    if (game_resolve(e->g, "HCD.TTR", path, sizeof(path)) == 0 || game_resolve(e->g, "HCD.TTF", path, sizeof(path)) == 0)
+        e->have_hcd_font = xf_font_load(&e->hcd_font, path) == 0;
+    if (game_resolve(e->g, "PHN.TTR", path, sizeof(path)) == 0)
+        e->have_phn_font = xf_font_load(&e->phn_font, path) == 0;
+}
+
 /* One input event: from the platform, or from a script. Mouse positions
  * are in the pixels of the frame shown last. */
 static void handle_event(explorer *e, plat_event ev)
@@ -3012,13 +3055,14 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
             e->wide_pref = strcmp(screen, "wide") == 0 || strcmp(screen, "fill") == 0;
     }
     e->disc = disc;
-    if (xf_path_resolve(data_dir, "DLG.TTF", path, sizeof(path)) == 0 ||
-        xf_path_resolve(data_dir, "DLG.TTR", path, sizeof(path)) == 0)
-        e->have_font = xf_font_load(&e->font, path) == 0;
-    if (xf_path_resolve(data_dir, "HCD.TTR", path, sizeof(path)) == 0)
-        e->have_hcd_font = xf_font_load(&e->hcd_font, path) == 0;
-    if (xf_path_resolve(data_dir, "PHN.TTR", path, sizeof(path)) == 0)
-        e->have_phn_font = xf_font_load(&e->phn_font, path) == 0;
+    {
+        /* XF_VOICES and XF_TEXT (language folder names) override the saved choice */
+        const char *v = getenv("XF_VOICES"), *t = getenv("XF_TEXT");
+        if (v || t)
+            game_set_languages(e->g, v ? xf_langs_find(&e->g->langs, v) : -1,
+                               t ? xf_langs_find(&e->g->langs, t) : -1);
+    }
+    load_game_fonts(e);
     if (plat_font_path("Courier New", path, sizeof(path)) == 0)
         e->have_card_font = xf_font_load(&e->card_font, path) == 0;
     if (!e->have_card_font)

@@ -301,6 +301,7 @@ int game_reset(game *g)
     u8 play_once[sizeof(g->play_once)];
     i32 prefs[GAME_PREFS];
     int screen_wide = g->screen_wide;
+    int voices = g->langs.voices, text = g->langs.text; /* the same folders after the scan */
     u32 seed = g->rand_seed;
     serials[0] = g->iface_serial;
     serials[1] = g->sound_serial;
@@ -308,7 +309,7 @@ int game_reset(game *g)
     serials[3] = g->overlay_serial;
     memcpy(play_once, g->play_once, sizeof(play_once)); /* per session, like the original */
     memcpy(prefs, g->prefs, sizeof(prefs));
-    memcpy(dir, g->data_dir, sizeof(dir));
+    memcpy(dir, g->root_dir, sizeof(dir));
     memcpy(save_dir, g->save_dir, sizeof(save_dir));
     g->checkpoint = NULL;
     game_close(g);
@@ -326,6 +327,8 @@ int game_reset(game *g)
     memcpy(g->play_once, play_once, sizeof(play_once));
     memcpy(g->prefs, prefs, sizeof(prefs));
     g->screen_wide = screen_wide;
+    if (g->langs.count) /* the languages chosen, the text reloaded */
+        game_set_languages(g, voices, text);
     /* The original seeds each random number from the clock: a new game
      * or Try again does not replay the same chances. */
     g->rand_seed = seed;

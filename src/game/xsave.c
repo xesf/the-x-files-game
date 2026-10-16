@@ -446,7 +446,7 @@ static void photo_pixels(game *g, u32 media, u32 *out)
             const vc_media_entry *m = &a.entries[j];
             const char *ext = strrchr(m->path, '.');
             char path[1024];
-            if (xf_path_resolve(g->data_dir, m->path, path, sizeof(path)) != 0)
+            if (game_resolve(g, m->path, path, sizeof(path)) != 0)
                 continue;
             if (ext && strcmp(ext, ".pff") == 0) {
                 xf_pff pff;

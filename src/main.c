@@ -19,6 +19,7 @@
 #include "media/player.h"
 #include "platform/plat.h"
 #include "xf_file.h"
+#include "xf_lang.h"
 #include "xf_log.h"
 
 #define SCREEN_W 640
@@ -96,11 +97,13 @@ static int play_movie(const char *path, const char *data_dir)
     return 0;
 }
 
-/* A folder holds the game when XFILES.HDB is in it. */
+/* A folder holds the game when XFILES.HDB is in it, or in one of its
+ * language folders (src/core/xf_lang.h). */
 static int is_game_dir(const char *dir)
 {
+    static xf_langs langs; /* large for the stack of some systems */
     char path[1024];
-    return xf_path_resolve(dir, "XFILES.HDB", path, sizeof(path)) == 0;
+    return xf_path_resolve(dir, "XFILES.HDB", path, sizeof(path)) == 0 || xf_langs_scan(&langs, dir) > 0;
 }
 
 /* Where a release looks for the game: $XF_GAME_DIR, then a folder named
