@@ -2,6 +2,13 @@
 
 All notable changes to this project.
 
+## 0.2.1 - 2026-10-16
+
+- Video decoding and drawing use every CPU core (three on the Vita): MPEG-2 slices, JPEG transforms and colour conversion, DVD picture conversion, the screen composition and the Vita's display conversion.
+- The original 4:3 screen is the default everywhere, the Vita included; the wide layout stays a desktop option.
+- A frame sleeps only for what is left of its time, so slow devices are not held back further.
+- `XF_PROFILE` (on the Vita, `profile.txt` in the game folder) logs the time of each stage of a frame.
+
 ## 0.2.0 - 2026-10-16
 
 ### Media
