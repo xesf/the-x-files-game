@@ -61,6 +61,12 @@ int xf_audio_supported(const xf_mov_track *t)
         return 1;
     if (t->codec == XF_FOURCC('t', 'w', 'o', 's'))
         return t->bits == 8 || t->bits == 16;
+    if (t->codec == XF_FOURCC('Q', 'D', 'M', 'C')) {
+        xf_qdmc *q = xf_qdmc_open(t->desc, t->desc_size);
+        int ok = q && xf_qdmc_channels(q) == t->channels;
+        xf_qdmc_close(q);
+        return ok;
+    }
     return 0;
 }
 
@@ -71,17 +77,23 @@ int xf_audio_open(xf_audio_stream *s, xf_mov *mov, const xf_mov_track *t)
         return -1;
     s->mov = mov;
     s->track = t;
+    if (t->codec == XF_FOURCC('Q', 'D', 'M', 'C') && !(s->qdmc = xf_qdmc_open(t->desc, t->desc_size)))
+        return -1;
     return 0;
 }
 
 void xf_audio_close(xf_audio_stream *s)
 {
+    xf_qdmc_close(s->qdmc);
     free(s->buf);
     memset(s, 0, sizeof(*s));
 }
 
-static size_t chunk_bytes(const xf_mov_track *t, u32 frames)
+static size_t chunk_bytes(const xf_audio_stream *s, u32 frames)
 {
+    const xf_mov_track *t = s->track;
+    if (s->qdmc) /* whole packets of a fixed size */
+        return (size_t)(frames / xf_qdmc_frame_samples(s->qdmc)) * xf_qdmc_packet_bytes(s->qdmc);
     if (t->codec == XF_FOURCC('i', 'm', 'a', '4'))
         return (size_t)(frames / IMA_PACKET_FRAMES) * IMA_PACKET_BYTES * t->channels;
     return (size_t)frames * t->channels * (t->bits / 8);
@@ -105,7 +117,7 @@ int xf_audio_next(xf_audio_stream *s, i16 *out)
     if (s->chunk >= t->chunk_count)
         return 0;
     frames = t->chunk_samples[s->chunk];
-    n = chunk_bytes(t, frames);
+    n = chunk_bytes(s, frames);
     if (n > s->buf_size) {
         u8 *b = realloc(s->buf, n);
         if (!b)
@@ -117,6 +129,12 @@ int xf_audio_next(xf_audio_stream *s, i16 *out)
         return -1;
     s->chunk++;
 
+    if (s->qdmc) {
+        u32 fs = xf_qdmc_frame_samples(s->qdmc), pb = xf_qdmc_packet_bytes(s->qdmc), p;
+        for (p = 0; p < frames / fs; p++)
+            xf_qdmc_decode(s->qdmc, s->buf + (size_t)p * pb, pb, out + (size_t)p * fs * ch);
+        return (int)(frames / fs * fs);
+    }
     if (t->codec == XF_FOURCC('i', 'm', 'a', '4')) {
         u32 packets = frames / IMA_PACKET_FRAMES, p;
         int c;
@@ -142,5 +160,7 @@ u32 xf_audio_seek(xf_audio_stream *s, u32 frame)
     const xf_mov_track *t = s->track;
     s->chunk = xf_mov_chunk_at(t, frame);
     memset(s->ima, 0, sizeof(s->ima));
+    if (s->qdmc)
+        xf_qdmc_reset(s->qdmc);
     return t->chunk_count ? frame - t->chunk_first[s->chunk] : 0;
 }

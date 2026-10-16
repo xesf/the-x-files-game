@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 xesf */
 /* Decodes the sound track of a QuickTime movie to 16-bit PCM, one chunk
- * at a time. Supports 'ima4' (IMA ADPCM) and 'twos' (signed PCM). */
+ * at a time. Supports 'ima4' (IMA ADPCM), 'twos' (signed PCM) and 'QDMC'
+ * (QDesign Music 1). */
 #ifndef XF_AUDIO_H
 #define XF_AUDIO_H
 
 #include "media/mov.h"
+#include "media/qdmc.h"
 
 typedef struct {
     int predictor, step_index;
@@ -18,6 +20,7 @@ typedef struct {
     xf_ima_state ima[2];
     u8 *buf;
     size_t buf_size;
+    xf_qdmc *qdmc;
 } xf_audio_stream;
 
 int xf_audio_supported(const xf_mov_track *t);
