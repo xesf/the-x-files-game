@@ -80,7 +80,9 @@ test: $(BUILD)/xftest$(EXE)
 # VIEW=0 starts a new game from the title object. MEDIA_DIR is searched
 # for clips missing from GAME_DIR: the DVD build streams its video from
 # the disc, so the CD install provides the QuickTime clips.
-GAME_DIR ?= ../Installations/x-files-en-dvd
+# data/ holds the releases in language folders (docs/engine/languages.md);
+# without it, the English DVD install.
+GAME_DIR ?= $(if $(wildcard data/en),data,../Installations/x-files-en-dvd)
 MEDIA_DIR ?= ../Installations/x-files-en
 VIEW     ?= 0
 DISC     ?= 1
