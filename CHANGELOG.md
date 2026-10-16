@@ -2,6 +2,13 @@
 
 All notable changes to this project.
 
+## Unreleased
+
+- The Vita draws the frame with its GPU; the CPU path stays as the fallback.
+- The Vita plays the QuickTime clips instead of the slower DVD ones (`XF_DVD_VIDEO` overrides).
+- The Vita runs at a steady 30 frames a second.
+- On the Vita, a text field opens the system keyboard, and the right stick moves the pointer too, at the same speed at any frame rate.
+
 ## 0.2.1 - 2026-10-16
 
 - Video decoding and drawing use every CPU core (three on the Vita): MPEG-2 slices, JPEG transforms and colour conversion, DVD picture conversion, the screen composition and the Vita's display conversion.
