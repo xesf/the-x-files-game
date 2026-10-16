@@ -1,8 +1,10 @@
 # Changelog
 
-All notable changes to this project. No version has been released yet.
+All notable changes to this project.
 
-## Unreleased
+## 0.1.0 - 2026-10-16
+
+The first release: the whole game plays from the original game files.
 
 ### Engine and data
 
