@@ -35,6 +35,12 @@
 #include "xf_jobs.h"
 #include "xf_log.h"
 
+/* vita-elf-create appends 2 KB of import data to the code segment, and
+ * fails ("segment 1 overlaps") when the code ends just short of the 64
+ * KB boundary where the data segment starts. This pad moved the end
+ * away from it; if the error comes back, change its size. */
+__attribute__((used)) static const char g_segment_pad[4096] = { 1 };
+
 /* Clips, pictures and the database live in newlib's heap. */
 int _newlib_heap_size_user = 192 * 1024 * 1024;
 unsigned int sceUserMainThreadStackSize = 1024 * 1024;
