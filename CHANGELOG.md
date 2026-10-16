@@ -2,12 +2,15 @@
 
 All notable changes to this project.
 
-## Unreleased
+## 0.2.2 - 2026-10-16
 
 - The Vita draws the frame with its GPU; the CPU path stays as the fallback.
+- The Vita builds its display rows in cached memory and copies them whole.
 - The Vita plays the QuickTime clips instead of the slower DVD ones (`XF_DVD_VIDEO` overrides).
 - The Vita runs at a steady 30 frames a second.
 - On the Vita, a text field opens the system keyboard, and the right stick moves the pointer too, at the same speed at any frame rate.
+- The icon, inventory and evidence lists are built once instead of scanning the database every frame.
+- The log can go to a file, flushed after each line; the Vita writes `xfiles.log` when `profile.txt` is in the game folder.
 
 ## 0.2.1 - 2026-10-16
 
