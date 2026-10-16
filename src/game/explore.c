@@ -123,6 +123,7 @@ typedef struct {
     int playing;          /* a clip, or the location card alone, is on screen */
     int have_clip;
     int card_active;
+    int prefer_dvd;       /* DVD clips before QuickTime ones (not on the Vita) */
     /* the DVD edition's opening titles, played after the queued clips */
     const char *titles[3];
     int title_count, title_next;
@@ -814,22 +815,30 @@ static void start_next_media(explorer *e)
         vc_asset_ref a;
         int j;
         e->have_clip = 0;
-        if (vc_read_asset_ref(&e->g->db, m.asset, &a) == 0)
-            for (j = 0; j < a.entry_count && !e->have_clip; j++) {
-                char path[1024];
-                if (open_dvd_clip(e, a.entries[j].path) == 0) {
-                    e->have_clip = 1;
-                    set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
-                    xf_info("playing %s (DVD clip for %s)", a.logical, a.entries[j].path);
-                } else if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
-                    xf_player_open_range(&e->player, path, plat_ticks_ms(),
-                                         a.entries[j].start + game_clip_offset(e->g, m.asset),
-                                         a.entries[j].end) == 0) {
-                    e->have_clip = 1;
-                    set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
-                    xf_info("playing %s (%s)", a.logical, a.entries[j].path);
+        /* The DVD clip first, as the DVD edition does, unless QuickTime
+         * comes first (the Vita: MPEG-2 is too slow there); the other
+         * kind when the first is missing. */
+        if (vc_read_asset_ref(&e->g->db, m.asset, &a) == 0) {
+            int pass;
+            for (pass = 0; pass < 2 && !e->have_clip; pass++) {
+                int dvd = pass == 0 ? e->prefer_dvd : !e->prefer_dvd;
+                for (j = 0; j < a.entry_count && !e->have_clip; j++) {
+                    char path[1024];
+                    if (dvd && open_dvd_clip(e, a.entries[j].path) == 0) {
+                        e->have_clip = 1;
+                        set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
+                        xf_info("playing %s (DVD clip for %s)", a.logical, a.entries[j].path);
+                    } else if (!dvd && resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
+                               xf_player_open_range(&e->player, path, plat_ticks_ms(),
+                                                    a.entries[j].start + game_clip_offset(e->g, m.asset),
+                                                    a.entries[j].end) == 0) {
+                        e->have_clip = 1;
+                        set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
+                        xf_info("playing %s (%s)", a.logical, a.entries[j].path);
+                    }
                 }
             }
+        }
         e->card_active = m.card;
         e->card_start = plat_ticks_ms();
         if (e->have_clip) {
@@ -2058,6 +2067,20 @@ static void draw_overlay(explorer *e)
     }
 }
 
+/* Whether a media reference has a file the player can open. */
+static int media_on_disk(explorer *e, u32 asset)
+{
+    vc_asset_ref a;
+    int j;
+    char path[1024];
+    if (vc_read_asset_ref(&e->g->db, asset, &a) != 0)
+        return 0;
+    for (j = 0; j < a.entry_count; j++)
+        if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0)
+            return 1;
+    return 0;
+}
+
 /* 0x471820 play_intro_sequence: Fox logo, HyperBole logo, teaser and
  * title, each skippable with a click. When the DVD title ddigital1
  * plays, the DVD titles ddigital1, teaser and intro replace the last
@@ -2069,7 +2092,8 @@ static void queue_intro(explorer *e)
     size_t i;
     if (getenv("XF_SKIP_INTRO") || game_pref(e->g, 994)) /* Pref_bSkipIntro */
         return;
-    if (resolve_media(e, "vob/ddigital1.vob", path, sizeof(path)) == 0) {
+    if (resolve_media(e, "vob/ddigital1.vob", path, sizeof(path)) == 0 &&
+        (e->prefer_dvd || !media_on_disk(e, intro[2]))) {
         e->titles[0] = "ddigital1";
         e->titles[1] = "teaser";
         e->titles[2] = "intro";
@@ -2978,6 +3002,14 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     if (!e->have_card_font)
         xf_warn("explore: no Courier New; location cards use the dialogue font");
     e->debug = getenv("XF_DEBUG_OVERLAY") != NULL;
+    /* XF_DVD_VIDEO=0 or 1 overrides: QuickTime first on the Vita */
+#ifdef __vita__
+    e->prefer_dvd = 0;
+#else
+    e->prefer_dvd = 1;
+#endif
+    if (getenv("XF_DVD_VIDEO"))
+        e->prefer_dvd = atoi(getenv("XF_DVD_VIDEO")) != 0;
     /* XF_PROFILE, or a file named profile.txt in the game folder (for
      * consoles without an environment) */
     g_prof.on = getenv("XF_PROFILE") != NULL || xf_path_resolve(data_dir, "profile.txt", path, sizeof(path)) == 0;

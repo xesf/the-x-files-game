@@ -363,7 +363,7 @@ static void draw(xf_vob *v, u32 *rgb, const xf_vob_view *view)
 
 int xf_vob_video(xf_vob *v, u32 ms, u32 *rgb, const xf_vob_view *view)
 {
-    int changed = 0;
+    int changed = 0, decoded = 0;
     for (;;) {
         u32 at, after;
         if (!v->have_next) {
@@ -379,7 +379,9 @@ int xf_vob_video(xf_vob *v, u32 ms, u32 *rgb, const xf_vob_view *view)
         after = v->video_start_ms + field_ms(v, v->fields + (u64)v->next.fields);
         v->fields += (u64)v->next.fields;
         v->have_next = 0;
-        if (after > ms) {
+        /* A machine too slow to keep up shows every third picture or so
+         * rather than decoding ever more of them each time. */
+        if (after > ms || ++decoded >= 3) {
             /* the picture to show now; earlier ones were late and skipped */
             draw(v, rgb, view);
             return 1;
