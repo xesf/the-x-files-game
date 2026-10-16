@@ -68,13 +68,81 @@ static u32 next_cp(const char **p, const char *end)
     return c;
 }
 
+/* The glyph of a character: in the font, else in its fallback (which
+ * then becomes *f). */
+static int glyph_of(const xf_font **f, u32 cp)
+{
+    int gi = xf_font_glyph_index(*f, cp), alt;
+    if (!gi && cp > ' ' && (*f)->fallback && (alt = xf_font_glyph_index((*f)->fallback, cp)) != 0) {
+        *f = (*f)->fallback;
+        return alt;
+    }
+    return gi;
+}
+
 int xf_text_width(const xf_font *f, float px, const char *utf8, size_t len)
 {
     const char *p = utf8, *end = utf8 + len;
     float w = 0;
-    while (p < end)
-        w += xf_font_advance(f, xf_font_glyph_index(f, next_cp(&p, end)), px);
+    while (p < end) {
+        const xf_font *g = f;
+        int gi = glyph_of(&g, next_cp(&p, end));
+        w += xf_font_advance(g, gi, px);
+    }
     return (int)(w + 0.5f);
+}
+
+/* Characters a line may break before or after without a space: the
+ * Japanese and Chinese scripts and their punctuation. */
+static int breaks_anywhere(u32 cp)
+{
+    /* never before closing punctuation (kinsoku): 、。，．」』）】！？ー… */
+    static const u32 no_start[] = { 0x3001, 0x3002, 0xFF0C, 0xFF0E, 0x300D, 0x300F, 0xFF09, 0x3011,
+                                    0xFF01, 0xFF1F, 0x30FC, 0x2026, 0x30FB, 0xFF1A, 0x3009, 0x300B };
+    size_t i;
+    if (cp < 0x2E80 || cp >= 0xFFF0)
+        return 0;
+    for (i = 0; i < sizeof(no_start) / sizeof(no_start[0]); i++)
+        if (cp == no_start[i])
+            return 0;
+    return 1;
+}
+
+int xf_text_wrap(const xf_font *f, float px, const char *text, int max_w, int *starts, int *lens, int max)
+{
+    int n = 0, pos = 0, len = (int)strlen(text);
+    while (pos < len && n < max) {
+        const char *p = text + pos, *end = text + len;
+        int fit = pos, brk = -1;
+        float w = 0;
+        while (p < end && *p != '\n') {
+            const char *q = p;
+            const xf_font *g = f;
+            u32 cp = next_cp(&q, end);
+            int gi = glyph_of(&g, cp); /* switches g to the fallback font */
+            float a = xf_font_advance(g, gi, px);
+            if (w + a > (float)max_w && fit > pos)
+                break;
+            if (*p == ' ')
+                brk = (int)(p - text); /* before the space */
+            else if (breaks_anywhere(cp) && p > text + pos)
+                brk = (int)(p - text); /* before a Japanese character */
+            w += a;
+            p = q;
+            fit = (int)(p - text);
+        }
+        if (p < end && *p != '\n' && brk > pos)
+            fit = brk; /* the line is full: back to the last break */
+        starts[n] = pos;
+        lens[n] = fit - pos;
+        n++;
+        pos = fit;
+        while (pos < len && text[pos] == ' ')
+            pos++;
+        if (pos < len && text[pos] == '\n')
+            pos++;
+    }
+    return n;
 }
 
 void xf_text_draw(xf_surface *s, const xf_font *f, float px, int x, int y, const char *utf8,
@@ -85,8 +153,9 @@ void xf_text_draw(xf_surface *s, const xf_font *f, float px, int x, int y, const
     u32 cr = color >> 16 & 255, cg = color >> 8 & 255, cb = color & 255;
 
     while (p < end) {
-        int gi = xf_font_glyph_index(f, next_cp(&p, end)), gx, gy;
-        const xf_glyph *g = get_glyph(f, gi, px);
+        const xf_font *gf = f;
+        int gi = glyph_of(&gf, next_cp(&p, end)), gx, gy;
+        const xf_glyph *g = get_glyph(gf, gi, px);
         if (g && g->alpha) {
             int ox = (int)(pen + 0.5f) + g->x0, oy = y + g->y0;
             for (gy = 0; gy < g->height; gy++) {
@@ -106,46 +175,26 @@ void xf_text_draw(xf_surface *s, const xf_font *f, float px, int x, int y, const
                 }
             }
         }
-        pen += xf_font_advance(f, gi, px);
+        pen += xf_font_advance(gf, gi, px);
     }
 }
 
 int xf_text_draw_wrapped(xf_surface *s, const xf_font *f, float px, int cx, int y, int max_w,
                          const char *utf8, u32 color, u32 shadow)
 {
-    const char *line = utf8;
-    int lines = 0, line_h = (int)((f->ascent - f->descent + f->line_gap) * px / f->units_per_em + 0.5f);
-
-    while (*line) {
-        const char *p = line, *brk = NULL;
-        size_t n;
+    int line_h = (int)((f->ascent - f->descent + f->line_gap) * px / f->units_per_em + 0.5f);
+    int starts[32], lens[32], n = xf_text_wrap(f, px, utf8, max_w, starts, lens, 32), k;
+    for (k = 0; k < n; k++) {
+        const char *line = utf8 + starts[k];
+        size_t len = (size_t)lens[k];
         int w;
-        /* Take words while they fit. */
-        while (*p && *p != '\n') {
-            const char *q = p;
-            while (*q == ' ')
-                q++;
-            while (*q && *q != ' ' && *q != '\n')
-                q++;
-            if (brk && xf_text_width(f, px, line, (size_t)(q - line)) > max_w)
-                break;
-            brk = q;
-            p = q;
-        }
-        if (!brk)
-            brk = p;
-        n = (size_t)(brk - line);
-        while (n && line[n - 1] == ' ')
-            n--;
-        w = xf_text_width(f, px, line, n);
+        while (len && line[len - 1] == ' ')
+            len--;
+        w = xf_text_width(f, px, line, len);
         if (shadow != color)
-            xf_text_draw(s, f, px, cx - w / 2 + 1, y + 1, line, n, shadow);
-        xf_text_draw(s, f, px, cx - w / 2, y, line, n, color);
-        lines++;
+            xf_text_draw(s, f, px, cx - w / 2 + 1, y + 1, line, len, shadow);
+        xf_text_draw(s, f, px, cx - w / 2, y, line, len, color);
         y += line_h;
-        line = brk;
-        while (*line == ' ' || *line == '\n')
-            line++;
     }
-    return lines;
+    return n;
 }

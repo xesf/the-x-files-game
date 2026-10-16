@@ -13,6 +13,10 @@ typedef struct {
 
 /* Width of a line in pixels. */
 int xf_text_width(const xf_font *f, float px, const char *utf8, size_t len);
+/* Splits text into lines at most `max_w` wide: at spaces and line
+ * breaks, and between Japanese characters, which have no spaces. Writes
+ * byte offsets and lengths; returns the number of lines. */
+int xf_text_wrap(const xf_font *f, float px, const char *text, int max_w, int *starts, int *lens, int max);
 /* Draws one line with its baseline at `y`. */
 void xf_text_draw(xf_surface *s, const xf_font *f, float px, int x, int y, const char *utf8,
                   size_t len, u32 color);
