@@ -194,6 +194,7 @@ xftool hdb-actions XFILES.HDB           # count actions by type
 xftool hdb-actions XFILES.HDB 24226     # decode an action list
 XF_FUNCTIONS=1 xftool hdb-actions XFILES.HDB   # also list every function call, with its action ID
 XF_ACTIONS=1 xftool hdb-actions XFILES.HDB     # every action as text, to search with grep
+xftool hdb-owner XFILES.HDB <action>...         # the media, view or item whose triggers run it
 python3 -I tools/re/vc_functions.py path/to/xfiles.exe   # function table
 ```
 
