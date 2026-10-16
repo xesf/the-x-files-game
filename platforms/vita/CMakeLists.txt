@@ -46,7 +46,7 @@ target_include_directories(xfiles PRIVATE ${SRC} ${SRC}/core)
 set_property(TARGET xfiles PROPERTY C_STANDARD 99)
 # char is unsigned on ARM; the engine is written for signed char.
 target_compile_options(xfiles PRIVATE -O2 -Wall -fsigned-char -Wno-unused-parameter)
-target_link_libraries(xfiles SceGxm_stub SceDisplay_stub SceCtrl_stub SceTouch_stub SceAudio_stub ScePower_stub m)
+target_link_libraries(xfiles SceGxm_stub SceCommonDialog_stub SceDisplay_stub SceCtrl_stub SceTouch_stub SceAudio_stub ScePower_stub m)
 
 vita_create_self(eboot.bin xfiles UNSAFE)
 vita_create_vpk(xfiles.vpk XFIL00001 eboot.bin

@@ -4,6 +4,7 @@
  * Copyright (c) 2015 Sergi Granell (xerpi) (MIT licence). */
 #include "vita_gpu.h"
 
+#include <psp2/common_dialog.h>
 #include <psp2/display.h>
 #include <psp2/gxm.h>
 #include <psp2/kernel/sysmem.h>
@@ -88,6 +89,8 @@ static SceUID g_blocks[24];
 static int g_block_count;
 static void *g_context_host;
 static int g_initialized;
+static void *g_depth_mem;
+static int g_dialog;
 
 /* GPU-mapped memory; CDRAM sizes go by 256 KiB, the others by 4 KiB. */
 static void *gpu_alloc(SceKernelMemBlockType type, unsigned size, int attribs)
@@ -144,6 +147,10 @@ static void display_callback(const void *data)
     fb.width = SCREEN_W;
     fb.height = SCREEN_H;
     sceDisplaySetFrameBuf(&fb, SCE_DISPLAY_SETBUF_NEXTFRAME);
+    /* Each frame stays two vertical blanks: a steady 30 frames a second.
+     * The game's clips run at 15 or fewer, and an even rate moves the
+     * pointer more smoothly than one that swings between 30 and 60. */
+    sceDisplayWaitVblankStartMulti(2);
 }
 
 int vita_gpu_init(void)
@@ -218,6 +225,7 @@ int vita_gpu_init(void)
                       SCE_GXM_MEMORY_ATTRIB_READ | SCE_GXM_MEMORY_ATTRIB_WRITE);
     stencil = gpu_alloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, 4 * depth_w * depth_h,
                         SCE_GXM_MEMORY_ATTRIB_READ | SCE_GXM_MEMORY_ATTRIB_WRITE);
+    g_depth_mem = depth;
     if (!depth || !stencil ||
         sceGxmDepthStencilSurfaceInit(&g_depth, SCE_GXM_DEPTH_STENCIL_FORMAT_S8D24, SCE_GXM_DEPTH_STENCIL_SURFACE_TILED,
                                       depth_w, depth, stencil) < 0)
@@ -376,6 +384,8 @@ static void quad(vertex *v, float x0, float y0, float x1, float y1)
     v[0].z = v[1].z = v[2].z = v[3].z = 0.5f;
 }
 
+void vita_gpu_dialog(int running) { g_dialog = running; }
+
 void vita_gpu_present(const u32 *pixels, int width, int height, int pitch, int x, int y, int w, int h)
 {
     static const float identity[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
@@ -410,6 +420,20 @@ void vita_gpu_present(const u32 *pixels, int width, int height, int pitch, int x
     sceGxmSetVertexStream(g_ctx, 0, v + 4);
     sceGxmDraw(g_ctx, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, g_indices, 4);
     sceGxmEndScene(g_ctx, NULL, NULL);
+    if (g_dialog) {
+        /* the system dialog draws itself over the frame */
+        SceCommonDialogUpdateParam up;
+        memset(&up, 0, sizeof(up));
+        up.renderTarget.colorFormat = SCE_GXM_COLOR_FORMAT_A8B8G8R8;
+        up.renderTarget.surfaceType = SCE_GXM_COLOR_SURFACE_LINEAR;
+        up.renderTarget.width = SCREEN_W;
+        up.renderTarget.height = SCREEN_H;
+        up.renderTarget.strideInPixels = SCREEN_W;
+        up.renderTarget.colorSurfaceData = g_display[g_back];
+        up.renderTarget.depthSurfaceData = g_depth_mem;
+        up.displaySyncObject = g_sync[g_back];
+        sceCommonDialogUpdate(&up);
+    }
     sceGxmPadHeartbeat(&g_surface[g_back], g_sync[g_back]);
 
     dd.address = g_display[g_back];
