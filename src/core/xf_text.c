@@ -2,6 +2,8 @@
  * Copyright (C) 2026 xesf */
 #include "xf_text.h"
 
+#include <string.h>
+
 /* 0x80-0x9F differ from Latin-1; 0 marks bytes that are not defined. */
 static const u16 g_cp1252_80[32] = {
     0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
@@ -124,4 +126,30 @@ size_t xf_utf8_to_cp1252(char *text, size_t size)
     if (w < size)
         s[w] = '\0';
     return w;
+}
+
+size_t xf_fold_ascii(char *dst, size_t size, const char *src)
+{
+    /* the base letters of U+00C0..U+00FF; '?' where there is none */
+    static const char base[] = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuyty";
+    const u8 *s = (const u8 *)src;
+    size_t n = 0, len;
+    if (!size)
+        return 0;
+    while (*s && n + 1 < size) {
+        size_t rest = strlen((const char *)s);
+        long c = utf8_next(s, rest, &len);
+        if (c < 0) { /* Windows-1252 */
+            c = (long)xf_cp1252_to_unicode(*s);
+            len = 1;
+        }
+        s += len;
+        if (c >= 0xC0 && c <= 0xFF)
+            c = base[c - 0xC0];
+        else if (c >= 0x80)
+            continue;
+        dst[n++] = (char)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+    }
+    dst[n] = '\0';
+    return n;
 }

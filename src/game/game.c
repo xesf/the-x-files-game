@@ -1915,9 +1915,12 @@ static void set_item_text(game *g, u32 item, const char *text)
 
 /* Lower case, without spaces, dashes and brackets: how the ING compares
  * what the player typed. */
-static void ing_key(const char *in, char *out, size_t size)
+static void ing_key(const char *text, char *out, size_t size)
 {
+    char folded[256];
+    const char *in = folded;
     size_t k = 0;
+    xf_fold_ascii(folded, sizeof(folded), text); /* a translation's accents */
     for (; *in && k + 1 < size; in++)
         if (!strchr(" -()", *in))
             out[k++] = (char)tolower((unsigned char)*in);
@@ -2598,11 +2601,13 @@ static const u32 g_media_index[16] = {
     91114, 91117, 91118, 91125, 91127, 91131,
 };
 
-static int same_words(const char *a, const char *b)
+/* Case and a translation's accents aside. */
+static int same_words(const char *x, const char *y)
 {
-    while (*a && tolower((unsigned char)*a) == tolower((unsigned char)*b))
-        a++, b++;
-    return *a == '\0' && *b == '\0';
+    char a[256], b[256];
+    xf_fold_ascii(a, sizeof(a), x);
+    xf_fold_ascii(b, sizeof(b), y);
+    return strcmp(a, b) == 0;
 }
 
 /* 0x4654A0: the typed words must equal a keyword (case aside). A match

@@ -22,5 +22,9 @@ size_t xf_macroman_to_utf8(char *dst, size_t dst_size, const u8 *src, size_t src
  * text alone. Characters Windows-1252 lacks become '?'. Returns the new
  * length. */
 size_t xf_utf8_to_cp1252(char *text, size_t size);
+/* Writes text (UTF-8, or Windows-1252 where not UTF-8) as lower-case
+ * ASCII, accents dropped ("Plutónio" -> "plutonio"), for comparing typed
+ * words. Returns the length. */
+size_t xf_fold_ascii(char *dst, size_t size, const char *src);
 
 #endif
