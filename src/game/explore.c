@@ -117,6 +117,9 @@ typedef struct {
     int playing;          /* a clip, or the location card alone, is on screen */
     int have_clip;
     int card_active;
+    /* the DVD edition's opening titles, played after the queued clips */
+    const char *titles[3];
+    int title_count, title_next;
     u32 card_start, card_until;
     /* the main menu */
     int in_menu;
@@ -726,6 +729,40 @@ static void set_volume(explorer *e, const xf_player *p, u32 pref)
         xf_mixer_set_volume(p->channel, (int)(game_pref(e->g, pref) * game_pref(e->g, 979) * 256 / 10000));
 }
 
+/* 0x517190 media_object_create: on the DVD edition a movie plays from
+ * vob/<name>.vob when that file exists (0x4E5E30 dvd_play_title), and
+ * from its QuickTime file otherwise. */
+static int open_dvd_clip(explorer *e, const char *movie)
+{
+    char name[64], path[1024];
+    const char *base = strrchr(movie, '/'), *dot;
+    size_t n;
+    base = base ? base + 1 : movie;
+    dot = strrchr(base, '.');
+    if (!dot || strcasecmp(dot, ".xmv") != 0 || (n = (size_t)(dot - base)) > 40)
+        return -1;
+    snprintf(name, sizeof(name), "vob/%.*s.vob", (int)n, base);
+    if (resolve_media(e, name, path, sizeof(path)) != 0)
+        return -1;
+    return xf_player_open_vob(&e->player, path, plat_ticks_ms(), &xf_vob_scene_view);
+}
+
+/* The next DVD title, once the queued clips have played. */
+static void start_title(explorer *e)
+{
+    while (!e->playing && !game_media_pending(e->g) && e->title_next < e->title_count) {
+        char name[64], path[1024];
+        snprintf(name, sizeof(name), "vob/%s.vob", e->titles[e->title_next++]);
+        if (resolve_media(e, name, path, sizeof(path)) == 0 &&
+            xf_player_open_vob(&e->player, path, plat_ticks_ms(), &xf_vob_full_view) == 0) {
+            e->have_clip = e->playing = 1;
+            e->card_active = 0;
+            set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
+            xf_info("playing DVD title %s", name);
+        }
+    }
+}
+
 /* Starts the next queued clip. A clip missing on disk still runs its
  * triggers, so the story goes on; if the location card belongs to it,
  * the card is shown alone for its typing time plus two seconds. */
@@ -739,7 +776,11 @@ static void start_next_media(explorer *e)
         if (vc_read_asset_ref(&e->g->db, m.asset, &a) == 0)
             for (j = 0; j < a.entry_count && !e->have_clip; j++) {
                 char path[1024];
-                if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
+                if (open_dvd_clip(e, a.entries[j].path) == 0) {
+                    e->have_clip = 1;
+                    set_volume(e, &e->player, 976); /* Pref_iVolumeDialog */
+                    xf_info("playing %s (DVD clip for %s)", a.logical, a.entries[j].path);
+                } else if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
                     xf_player_open_range(&e->player, path, plat_ticks_ms(),
                                          a.entries[j].start + game_clip_offset(e->g, m.asset),
                                          a.entries[j].end) == 0) {
@@ -1952,14 +1993,26 @@ static void draw_overlay(explorer *e)
 }
 
 /* 0x471820 play_intro_sequence: Fox logo, HyperBole logo, teaser and
- * title, each skippable with a click. The DVD build plays its own DVD
- * titles instead of the last two; we use the QuickTime files. */
+ * title, each skippable with a click. When the DVD title ddigital1
+ * plays, the DVD titles ddigital1, teaser and intro replace the last
+ * two. */
 static void queue_intro(explorer *e)
 {
     static const u32 intro[] = { 56003, 56002, 19668, 56001 };
+    char path[1024];
     size_t i;
     if (getenv("XF_SKIP_INTRO") || game_pref(e->g, 994)) /* Pref_bSkipIntro */
         return;
+    if (resolve_media(e, "vob/ddigital1.vob", path, sizeof(path)) == 0) {
+        e->titles[0] = "ddigital1";
+        e->titles[1] = "teaser";
+        e->titles[2] = "intro";
+        e->title_count = 3;
+        e->title_next = 0;
+        game_queue_media(e->g, intro[0]);
+        game_queue_media(e->g, intro[1]);
+        return;
+    }
     for (i = 0; i < XF_COUNT(intro); i++)
         game_queue_media(e->g, intro[i]);
 }
@@ -2605,10 +2658,11 @@ static void run_frame(explorer *e)
                 stop_media(e);
         }
         start_next_media(e);
+        start_title(e);
         update_sound(e);
         update_overlay(e);
     }
-    if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g))
+    if (e->in_menu == -1 && !e->playing && !game_media_pending(e->g) && e->title_next >= e->title_count)
         menu_enter(e);
     switch (e->g->ui_request) {
     case GAME_UI_MENU:

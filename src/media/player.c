@@ -53,8 +53,45 @@ int xf_player_open_range(xf_player *p, const char *path, u32 now_ticks, u32 star
     return 0;
 }
 
+#define VOB_CHUNK 2048
+
+int xf_player_open_vob(xf_player *p, const char *path, u32 now_ticks, const xf_vob_view *view)
+{
+    memset(p, 0, sizeof(*p));
+    p->channel = -1;
+    p->vob = xf_vob_open(path);
+    if (!p->vob)
+        return -1;
+    p->view = *view;
+    p->duration_ms = xf_vob_duration_ms(p->vob);
+    p->video.width = view->out_w;
+    p->video.height = view->out_h;
+    p->video.frame = calloc((size_t)view->out_w * view->out_h, 4);
+    if (!p->video.frame) {
+        xf_player_close(p);
+        return -1;
+    }
+    p->has_video = 1;
+    if (xf_vob_sample_rate(p->vob)) {
+        p->pcm = malloc((size_t)VOB_CHUNK * xf_vob_channels(p->vob) * 2);
+        p->channel = p->pcm ? xf_mixer_open(xf_vob_sample_rate(p->vob), xf_vob_channels(p->vob)) : -1;
+        p->has_audio = p->channel >= 0;
+    }
+    p->start_ticks = now_ticks;
+    return 0;
+}
+
 void xf_player_close(xf_player *p)
 {
+    if (p->vob) {
+        if (p->channel >= 0)
+            xf_mixer_close(p->channel);
+        xf_vob_close(p->vob);
+        free(p->video.frame);
+        free(p->pcm);
+        memset(p, 0, sizeof(*p));
+        return;
+    }
     if (p->channel >= 0)
         xf_mixer_close(p->channel);
     if (p->has_audio)
@@ -85,6 +122,40 @@ static void feed_audio(xf_player *p)
     }
 }
 
+static void feed_vob_audio(xf_player *p)
+{
+    while (!p->audio_done && xf_mixer_space(p->channel) >= VOB_CHUNK) {
+        int n = xf_vob_audio(p->vob, p->pcm, VOB_CHUNK);
+        if (n <= 0) {
+            p->audio_done = 1;
+            xf_mixer_finish(p->channel);
+            break;
+        }
+        xf_mixer_write(p->channel, p->pcm, (u32)n);
+    }
+}
+
+/* The clock as for movies; the pictures follow it and the clip ends with
+ * the last picture and the sound. */
+static int update_vob(xf_player *p, u32 now_ticks)
+{
+    u32 wall = now_ticks - p->start_ticks;
+    if (p->has_audio) {
+        feed_vob_audio(p);
+        p->now_ms = (u32)(xf_mixer_played(p->channel) * 1000 / (u32)xf_vob_sample_rate(p->vob));
+        if (wall > p->now_ms + 400)
+            p->now_ms = wall - 400;
+    } else {
+        p->now_ms = wall;
+    }
+    if (p->has_video && xf_vob_video(p->vob, p->now_ms, p->video.frame, &p->view) < 0)
+        p->has_video = 2; /* the pictures are over; the last one stays */
+    if ((p->has_video == 2 || p->now_ms >= p->duration_ms) &&
+        (!p->has_audio || !xf_mixer_active(p->channel) || wall >= p->duration_ms + 500))
+        p->finished = 1;
+    return !p->finished;
+}
+
 void xf_player_pause(xf_player *p, int paused, u32 now_ticks)
 {
     paused = paused != 0;
@@ -105,6 +176,8 @@ int xf_player_update(xf_player *p, u32 now_ticks)
         return 0;
     if (p->paused)
         return 1;
+    if (p->vob)
+        return update_vob(p, now_ticks);
     if (p->has_audio) {
         u32 wall = now_ticks - p->start_ticks;
         feed_audio(p);

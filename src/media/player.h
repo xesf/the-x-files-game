@@ -9,6 +9,7 @@
 #include "media/mov.h"
 #include "media/subtitle.h"
 #include "media/video.h"
+#include "media/vob.h"
 
 typedef struct {
     xf_mov mov;
@@ -28,12 +29,16 @@ typedef struct {
     int finished;
     int paused;
     u32 pause_ticks;    /* wall clock when paused */
+    xf_vob *vob;        /* a DVD clip instead of a QuickTime movie */
+    xf_vob_view view;
 } xf_player;
 
 int xf_player_open(xf_player *p, const char *path, u32 now_ticks);
 /* Plays only start_ms..end_ms of the movie (end_ms 0: to the end). Media
  * references name such ranges, for example XV/90178.xmv 59100..60767. */
 int xf_player_open_range(xf_player *p, const char *path, u32 now_ticks, u32 start_ms, u32 end_ms);
+/* Plays a DVD clip (.vob), showing `view` of its pictures. */
+int xf_player_open_vob(xf_player *p, const char *path, u32 now_ticks, const xf_vob_view *view);
 void xf_player_close(xf_player *p);
 /* Advances to wall-clock time `now_ticks` (ms). Returns 1 while playing. */
 int xf_player_update(xf_player *p, u32 now_ticks);
