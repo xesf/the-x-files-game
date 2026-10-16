@@ -361,6 +361,8 @@ int plat_font_path(const char *family, char *out, size_t size)
     static const char *const dirs[] = { "/System/Library/Fonts/Supplemental", "/System/Library/Fonts",
                                         "/Library/Fonts" };
     size_t i;
+    if (strcmp(family, "Japanese") == 0)
+        family = "Arial Unicode"; /* TrueType outlines; Hiragino's are CFF */
     for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
         snprintf(out, size, "%s/%s.ttf", dirs[i], family);
         if (access(out, R_OK) == 0)

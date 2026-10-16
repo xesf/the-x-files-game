@@ -393,7 +393,8 @@ void plat_audio_unlock(void)
 int plat_font_path(const char *family, char *out, size_t size)
 {
     static const struct { const char *family, *file; } files[] = {
-        { "Courier New", "cour.ttf" }, { "Arial", "arial.ttf" }, { "Times New Roman", "times.ttf" } };
+        { "Courier New", "cour.ttf" }, { "Arial", "arial.ttf" }, { "Times New Roman", "times.ttf" },
+        { "Japanese", "msgothic.ttc" }, { "Japanese", "meiryo.ttc" }, { "Japanese", "YuGothR.ttc" } };
     char dir[MAX_PATH];
     size_t i;
     UINT n = GetWindowsDirectoryA(dir, sizeof(dir));
@@ -402,7 +403,8 @@ int plat_font_path(const char *family, char *out, size_t size)
     for (i = 0; i < sizeof(files) / sizeof(files[0]); i++)
         if (strcmp(family, files[i].family) == 0) {
             snprintf(out, size, "%s\\Fonts\\%s", dir, files[i].file);
-            return GetFileAttributesA(out) != INVALID_FILE_ATTRIBUTES ? 0 : -1;
+            if (GetFileAttributesA(out) != INVALID_FILE_ATTRIBUTES)
+                return 0;
         }
     return -1;
 }

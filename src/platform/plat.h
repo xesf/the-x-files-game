@@ -62,8 +62,9 @@ void plat_present(const u32 *pixels, int width, int height, int pitch);
  * size given to plat_init. */
 void plat_output_size(int *width, int *height);
 
-/* Finds an installed system font by family name ("Courier New"). Returns
- * 0 and its path, or -1 when the system has no such font. */
+/* Finds an installed system font by family name ("Courier New"), or
+ * "Japanese" for any TrueType font with Japanese characters. Returns 0
+ * and its path, or -1 when the system has no such font. */
 int plat_font_path(const char *family, char *out, size_t size);
 
 /* The folder for saved games, created if needed. Returns 0 and its

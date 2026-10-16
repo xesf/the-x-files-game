@@ -354,7 +354,19 @@ int plat_font_path(const char *family, char *out, size_t size)
                       : strcmp(family, "Arial") == 0         ? "LiberationSans-Regular"
                       : strcmp(family, "Times New Roman") == 0 ? "LiberationSerif-Regular"
                                                              : NULL;
+    static const char *const japanese[] = {
+        "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf", "/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf",
+        "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf", "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+        "/usr/share/fonts/ipa-gothic/ipag.ttf" };
     size_t i;
+    if (strcmp(family, "Japanese") == 0) { /* TrueType outlines: the Noto CJK fonts are CFF */
+        for (i = 0; i < sizeof(japanese) / sizeof(japanese[0]); i++)
+            if (access(japanese[i], R_OK) == 0) {
+                snprintf(out, size, "%s", japanese[i]);
+                return 0;
+            }
+        return -1;
+    }
     for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
         snprintf(out, size, "%s/%s.ttf", dirs[i], family);
         if (access(out, R_OK) == 0)
