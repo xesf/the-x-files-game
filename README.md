@@ -28,6 +28,13 @@ and Steam Machine), Windows, Windows 9x, DOS and the PlayStation Vita.
 3. Start the program. The macOS app is not signed: the first time, open
    it with Control-click > Open.
 
+To play in other languages, put each release in a folder named by its
+language code inside the game folder (`game/en`, `game/de`, ...). The
+Options screen then chooses the voices and the text apart, for example
+German voices with English captions. A translation of the text alone
+can join them. See
+[docs/engine/languages.md](docs/engine/languages.md).
+
 The game keeps its original 4:3 screen. On wide screens, Ctrl+Shift+W
 tries a layout where the scene fills the screen, with the interface
 around it. See
