@@ -2343,7 +2343,6 @@ static void prof_frame(void)
             n += snprintf(line + n, sizeof(line) - (size_t)n, ", %s %.1f ms", g_prof_names[i],
                           (double)g_prof.t[i] / g_prof.frames);
         xf_info("%s", line);
-        fflush(stderr);
     }
     memset(g_prof.t, 0, sizeof(g_prof.t));
     g_prof.frames = 0;

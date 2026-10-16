@@ -29,6 +29,7 @@
 
 #include "platform/plat.h"
 #include "xf_jobs.h"
+#include "xf_log.h"
 
 /* Clips, pictures and the database live in newlib's heap. */
 int _newlib_heap_size_user = 192 * 1024 * 1024;
@@ -107,9 +108,11 @@ int plat_init(const char *title, int width, int height)
         /* With ux0:data/xfiles/profile.txt the log goes to xfiles.log
          * there (the profile lines included). */
         SceIoStat st;
-        if (sceIoGetstat("ux0:data/xfiles/profile.txt", &st) >= 0 &&
-            freopen("ux0:data/xfiles/xfiles.log", "w", stderr))
-            setvbuf(stderr, NULL, _IOLBF, 1024); /* a line at a time: the app can be closed at any moment */
+        if (sceIoGetstat("ux0:data/xfiles/profile.txt", &st) >= 0) {
+            FILE *f = fopen("ux0:data/xfiles/xfiles.log", "w");
+            if (f) /* flushed a line at a time: the app can be closed at any moment */
+                xf_log_set_file(f);
+        }
     }
     scePowerSetArmClockFrequency(444);
     scePowerSetBusClockFrequency(222);

@@ -7,6 +7,8 @@
 enum { XF_LOG_DEBUG, XF_LOG_INFO, XF_LOG_WARN, XF_LOG_ERROR };
 
 void xf_log_set_level(int level);
+/* Sends the log to a file, flushed after each line (NULL: stderr). */
+void xf_log_set_file(void *file);
 void xf_log(int level, const char *fmt, ...);
 void xf_fatal(const char *fmt, ...);
 
