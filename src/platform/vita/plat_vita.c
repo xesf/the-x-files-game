@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "platform/plat.h"
+#include "xf_jobs.h"
 
 /* Clips, pictures and the database live in newlib's heap. */
 int _newlib_heap_size_user = 192 * 1024 * 1024;
@@ -102,6 +103,13 @@ int plat_init(const char *title, int width, int height)
 {
     int i;
     (void)title;
+    {
+        /* With ux0:data/xfiles/profile.txt the log goes to xfiles.log
+         * there (the profile lines included). */
+        SceIoStat st;
+        if (sceIoGetstat("ux0:data/xfiles/profile.txt", &st) >= 0)
+            freopen("ux0:data/xfiles/xfiles.log", "w", stderr);
+    }
     scePowerSetArmClockFrequency(444);
     scePowerSetBusClockFrequency(222);
     for (i = 0; i < 2; i++) {
@@ -209,26 +217,44 @@ int plat_poll(plat_event *ev)
     return 1;
 }
 
-void plat_present(const u32 *pixels, int width, int height, int pitch)
+typedef struct {
+    const u32 *pixels;
+    int height, pitch;
+    u32 *dst;
+} present_job;
+
+/* One band of display rows: scaled by the column and row maps and
+ * turned from 0x00RRGGBB into the display's 0xAABBGGRR. */
+static void present_band(void *ctx, int part, int parts)
 {
-    SceDisplayFrameBuf fb;
-    u32 *dst = g_fb[g_back];
-    int x, y;
-    if ((width != g_width || height != g_height) && fit_frame(width, height) == 0)
-        for (x = 0; x < 2; x++) /* clear the bars of both buffers */
-            memset(g_fb[x], 0, SCREEN_W * SCREEN_H * 4);
-    for (y = 0; y < SCREEN_H; y++) {
-        const u32 *src = pixels + (size_t)(y * height / SCREEN_H) * (size_t)pitch;
-        u32 *row = dst + (size_t)y * SCREEN_W + g_view_x;
-        /* The display wants 0xAABBGGRR; the frame is 0x00RRGGBB. */
+    const present_job *j = ctx;
+    int y, x, y0 = SCREEN_H * part / parts, y1 = SCREEN_H * (part + 1) / parts;
+    for (y = y0; y < y1; y++) {
+        const u32 *src = j->pixels + (size_t)(y * j->height / SCREEN_H) * (size_t)j->pitch;
+        u32 *row = j->dst + (size_t)y * SCREEN_W + g_view_x;
         for (x = 0; x < g_view_w; x++) {
             u32 c = src[g_col_map[x]];
             row[x] = 0xFF000000u | (c & 0x00FF00u) | (c >> 16 & 0xFFu) | (c & 0xFFu) << 16;
         }
     }
+}
+
+void plat_present(const u32 *pixels, int width, int height, int pitch)
+{
+    SceDisplayFrameBuf fb;
+    present_job j;
+    int x;
+    if ((width != g_width || height != g_height) && fit_frame(width, height) == 0)
+        for (x = 0; x < 2; x++) /* clear the bars of both buffers */
+            memset(g_fb[x], 0, SCREEN_W * SCREEN_H * 4);
+    j.pixels = pixels;
+    j.height = height;
+    j.pitch = pitch;
+    j.dst = g_fb[g_back];
+    xf_jobs_run(present_band, &j, xf_jobs_count());
     memset(&fb, 0, sizeof(fb));
     fb.size = sizeof(fb);
-    fb.base = dst;
+    fb.base = j.dst;
     fb.pitch = SCREEN_W;
     fb.pixelformat = SCE_DISPLAY_PIXELFORMAT_A8B8G8R8;
     fb.width = SCREEN_W;
