@@ -305,17 +305,21 @@ static int open_nav_file(explorer *e, const char *name)
 
 /* --- View picture ---------------------------------------------------- */
 
+static void close_anim(view_anim *an)
+{
+    if (an->use_player) {
+        xf_player_close(&an->player);
+    } else {
+        xf_video_close(&an->video);
+        xf_mov_close(&an->mov);
+    }
+}
+
 static void close_anims(explorer *e)
 {
     int i;
-    for (i = 0; i < e->anim_count; i++) {
-        if (e->anims[i].use_player) {
-            xf_player_close(&e->anims[i].player);
-        } else {
-            xf_video_close(&e->anims[i].video);
-            xf_mov_close(&e->anims[i].mov);
-        }
-    }
+    for (i = 0; i < e->anim_count; i++)
+        close_anim(&e->anims[i]);
     e->anim_count = 0;
 }
 
@@ -422,10 +426,13 @@ static int clip_shot(explorer *e, int x, int y)
 /* Loads the enabled media of the view: the navigation still (media type
  * bit 0x40, a frame of a .nmv file) and moving pictures (a range of a
  * movie; type bit 0x08 loops it). Uses the current disc, or the first
- * disc whose file is installed. */
+ * disc whose file is installed. A view lists its full-picture loops in
+ * order of priority (Willmore's desk: Cook at the desk, the desk with
+ * the letter and files, then the empty desk): the first enabled one is
+ * the picture, the others are not shown. */
 static void load_picture(explorer *e)
 {
-    int i, j, pass;
+    int i, j, pass, have_full = 0;
     e->have_picture = 0;
     close_anims(e);
     e->shown_view = e->g->view;
@@ -451,6 +458,15 @@ static void load_picture(explorer *e)
                     }
                 } else if (resolve_media(e, m->path, path, sizeof(path)) == 0 &&
                            open_anim(e, path, m->start, m->end, (a.kind & 0x08) != 0) == 0) {
+                    const xf_video *vd = anim_video(&e->anims[e->anim_count - 1]);
+                    int full = vd->width >= PICTURE_W && vd->height >= PICTURE_H;
+                    done = 1;
+                    if (full && have_full) { /* a lower-priority picture */
+                        close_anim(&e->anims[--e->anim_count]);
+                        xf_debug("view %u: %s behind an earlier picture", e->g->view, a.logical);
+                        continue;
+                    }
+                    have_full |= full;
                     e->anims[e->anim_count - 1].asset = e->view_media[i];
                     if (e->anims[e->anim_count - 1].use_player)
                         use_captions(e, &e->anims[e->anim_count - 1].player, m->path, path);

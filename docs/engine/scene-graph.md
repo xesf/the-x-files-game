@@ -30,6 +30,13 @@ VCTitle (299)
 
 Example: viewpoint 690 has position (0, 0), name 689 and four views.
 
+A view's media list is in order of priority. Its full-picture loops are
+alternatives: the first enabled one is the picture and the others are
+not shown. Willmore's desk (view 1237) lists Cook at the desk, the desk
+with the letter and files (disc 1), then the empty desk (every disc);
+both of the last two are enabled at the start of the game. Smaller loops
+and the navigation still are drawn as well.
+
 ## VCView
 
 | Field | Content |
