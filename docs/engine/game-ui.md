@@ -397,6 +397,14 @@ Willmore's journal on his nightstand (layout 45360, `JournalInit`,
 The journal's pages are the enabled media of item 49422, so it grows as
 the story goes on, and it opens at the last entries.
 
+Other documents are close-ups with pages, one layout per page (the lab's
+translation of the Russian log: layouts 45476 .. 45484, and others from
+45476 to 90942): a strip at each edge of the page turns to the next or
+the previous page (cursors 284 and 285), the page's halves zoom in
+(cursor 7164), and `PageTurnSound` plays. These items lie over the
+close-up's full-screen "back up" item (cursor 287): the smaller item
+takes the pointer.
+
 ## Secret base terminal
 
 A terminal in the secret base (layout 52692) lists files; each asks for

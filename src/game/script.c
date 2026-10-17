@@ -993,6 +993,20 @@ int script_run(script *s, const char *path, int quiet)
                 game_text(g, ids[k], t, sizeof(t));
                 printf("  %u %s: %.60s\n", ids[k], vc_is_enabled(&g->interp, ids[k]) ? "on " : "off", t);
             }
+        } else if (strcmp(cmd, "items") == 0) {
+            /* The top layout's items: rectangle, cursor, picture, enabled,
+             * and the one the pointer would take at each item's centre. */
+            int k;
+            ok = g->iface_count > 0;
+            for (k = 0; ok && k < g->ifaces[g->iface_count - 1].count; k++) {
+                const game_iface_item *it = &g->ifaces[g->iface_count - 1].items[k];
+                const vc_region *r = &it->item.region;
+                const game_iface_item *hit = game_iface_item_at(g, (r->left + r->right) / 2, (r->top + r->bottom) / 2);
+                printf("  item %u: (%d,%d)-(%d,%d) cursor %u%s%s%s, centre takes %u\n", it->id, r->left, r->top,
+                       r->right, r->bottom, r->cursor, it->item.assets ? " picture" : "",
+                       it->item.triggers ? " triggers" : "", vc_is_enabled(&g->interp, it->id) ? "" : " off",
+                       hit ? hit->id : 0);
+            }
         } else if (strcmp(cmd, "text") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             char t[512];
             printf("  text %ld: %s\n", a, game_text(g, (u32)a, t, sizeof(t)));

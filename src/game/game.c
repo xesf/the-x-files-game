@@ -813,11 +813,19 @@ static void host_interface(void *user, u32 id, u8 control)
 }
 
 static int item_order(const game_iface_item *it) { return it->item.flags & 0xFF; }
+/* A smaller item over a larger one takes the pointer: a close-up's page
+ * strips (next, previous) and zoom areas lie over its full-screen "back
+ * up" area. */
+static long area(const game_iface_item *it)
+{
+    const vc_region *r = &it->item.region;
+    return (long)(r->right - r->left) * (long)(r->bottom - r->top);
+}
 
-/* The front item with triggers under (x, y), searching the layouts from
- * the top one down. A close-up has a full-screen item behind its picture,
- * so it takes every click; the inventory bar only takes clicks on its
- * items. */
+/* The item with triggers under (x, y), searching the layouts from the
+ * top one down: the smallest, so a close-up's full-screen item behind its
+ * picture takes only the clicks no other item takes; the inventory bar
+ * only takes clicks on its items. */
 const game_iface_item *game_iface_item_at(game *g, int x, int y)
 {
     int k, i;
@@ -835,7 +843,8 @@ const game_iface_item *game_iface_item_at(game *g, int x, int y)
              * and only the hotspot's triggers are up to date (the dot's
              * own list is an older version). */
             if (!best || (!it->item.assets && best->item.assets) ||
-                (!it->item.assets == !best->item.assets && item_order(it) >= item_order(best)))
+                (!it->item.assets == !best->item.assets &&
+                 (area(it) < area(best) || (area(it) == area(best) && item_order(it) >= item_order(best)))))
                 best = it;
         }
         if (best)

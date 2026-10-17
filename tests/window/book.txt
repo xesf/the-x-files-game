@@ -1,0 +1,12 @@
+# A close-up with pages (the lab's translation of the Russian log,
+# layouts 45476 .. 45484): the strips at the page's edges turn the pages
+# and the page's halves zoom in. They lie over the close-up's full-screen
+# "back up" item, which takes only the clicks around the page.
+new
+open 45476
+press 480 200                     # the right edge: the next page
+expect iface 45478
+press 168 200                     # the left edge: back
+expect iface 45476
+press 168 200                     # the left edge again: the last page
+expect iface 45484
