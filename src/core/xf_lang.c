@@ -47,16 +47,31 @@ static void read_lang_txt(xf_lang *g)
     fclose(f);
 }
 
+/* A language code: 2 or 3 letters, maybe a region after - or _ (pt-BR).
+ * Other folders (media, saves) are not languages. */
+static int is_code(const char *name)
+{
+    size_t i = 0, k;
+    while (i < 3 && ((name[i] >= 'a' && name[i] <= 'z') || (name[i] >= 'A' && name[i] <= 'Z')))
+        i++;
+    if (i < 2)
+        return 0;
+    if (!name[i])
+        return 1;
+    if (name[i] != '-' && name[i] != '_')
+        return 0;
+    for (k = ++i; name[i] && i - k < 4; i++)
+        if (!((name[i] >= 'a' && name[i] <= 'z') || (name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= '0' && name[i] <= '9')))
+            return 0;
+    return !name[i] && i - k >= 2;
+}
+
 static int add_lang(xf_langs *l, const char *root, const char *name)
 {
     xf_lang *g = &l->langs[l->count];
     size_t i, n = strlen(name);
-    if (n < 2 || n > 5 || l->count >= XF_LANG_MAX)
+    if (!is_code(name) || l->count >= XF_LANG_MAX)
         return 0;
-    for (i = 0; i < n; i++)
-        if (!((name[i] >= 'a' && name[i] <= 'z') || (name[i] >= 'A' && name[i] <= 'Z') || name[i] == '-' ||
-              name[i] == '_'))
-            return 0;
     memset(g, 0, sizeof(*g));
     snprintf(g->dir, sizeof(g->dir), "%s/%s", root, name);
     for (i = 0; i < n; i++)

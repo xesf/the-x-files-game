@@ -61,7 +61,9 @@ game/
   pt/    a translation: text only
 ```
 
-The game folder then holds no `XFILES.HDB` of its own. A folder counts
+The game folder then holds no `XFILES.HDB` of its own. Language folders
+are named by a code of 2 or 3 letters, maybe with a region (`pt-BR`);
+other folders, such as `media` and `saves`, stay what they are. A folder counts
 as a language when it holds a release (`XFILES.HDB`), clips (`XV`), or
 text (`XFILEST.DLL`, `xfilest.txt`, `XT` or `lang.txt`). The game's
 database comes from the English release, else the first one.
