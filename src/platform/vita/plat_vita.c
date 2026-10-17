@@ -5,8 +5,8 @@
  *   Video     The GPU (vita_gpu.c) draws the frame scaled with bilinear
  *             filtering, the 640x480 one to 725x544, centred. Without it,
  *             the CPU scales into a SceDisplay framebuffer in CDRAM.
- *   Input     The front touch panel points and clicks. Either stick moves
- *             the pointer, Cross clicks, Circle right-clicks, Start is
+ *   Input     The front touch panel moves the pointer; a short tap clicks.
+ *             Either stick moves the pointer, Cross clicks, Circle right-clicks, Start is
  *             Escape. A text field opens the system keyboard. The d-pad moves between the things that take a
  *             click; Square clicks too, Triangle shows the inventory, L and
  *             R step to the previous and next one.
@@ -61,6 +61,8 @@ static plat_event g_events[EVENT_QUEUE_SIZE];
 static int g_ev_head, g_ev_tail;
 static u32 g_buttons;
 static int g_touching;
+static u32 g_touch_start; /* when the finger came down, and where */
+static float g_touch_x, g_touch_y;
 static float g_px, g_py; /* pointer, in frame pixels */
 static u32 g_last_pump;
 static int g_ime_open, g_ime_clear;
@@ -184,16 +186,18 @@ static void pump_input(void)
     if (dt > 0.1f)
         dt = 0.1f;
     g_last_pump = now;
-    /* Either stick: the pointer, at a speed that grows with the square of
-     * the push, so a small push places it finely; a dead zone near the
-     * centre. Up to 700 pixels a second, whatever the frame rate. */
+    /* Either stick: the pointer, from 120 pixels a second just past the
+     * dead zone (the sticks rest a little off centre) up to 900 at a full
+     * push, faster towards the edge; the same speed at any frame rate. */
     for (i = 0; i < 2; i++) {
         float sx = ((i ? pad.rx : pad.lx) - 128) / 127.0f, sy = ((i ? pad.ry : pad.ly) - 128) / 127.0f;
-        float mag = sx * sx + sy * sy;
-        if (mag > 0.06f) {
-            mag = sqrtf(mag);
-            g_px += sx * mag * 700.0f * dt;
-            g_py += sy * mag * 700.0f * dt;
+        float r = sqrtf(sx * sx + sy * sy), k, speed;
+        if (r > 0.18f) {
+            k = (r > 1.0f ? 1.0f : r) - 0.18f;
+            k /= 0.82f;
+            speed = 120.0f + 780.0f * k * sqrtf(k);
+            g_px += sx / r * speed * dt;
+            g_py += sy / r * speed * dt;
             moved = 1;
         }
     }
@@ -211,11 +215,19 @@ static void pump_input(void)
     if (g_py > g_height - 1) g_py = (float)(g_height - 1);
     if (moved)
         push_event(PLAT_EV_MOUSE_MOVE, 0, 0);
-    /* A tap is a left click where the finger touched. */
-    if (touch.reportNum > 0 && !g_touching)
+    /* The finger is the pointer: touching and sliding moves it, so things
+     * highlight under it; a short tap that hardly moved is a left click
+     * where it lifted. */
+    if (touch.reportNum > 0 && !g_touching) {
+        g_touch_start = now;
+        g_touch_x = g_px;
+        g_touch_y = g_py;
+    }
+    if (touch.reportNum == 0 && g_touching && now - g_touch_start < 300 &&
+        fabsf(g_px - g_touch_x) < 12 && fabsf(g_py - g_touch_y) < 12) {
         push_event(PLAT_EV_MOUSE_DOWN, PLAT_MOUSE_LEFT, 0);
-    if (touch.reportNum == 0 && g_touching)
         push_event(PLAT_EV_MOUSE_UP, PLAT_MOUSE_LEFT, 0);
+    }
     g_touching = touch.reportNum > 0;
 
     pressed = pad.buttons & ~g_buttons;

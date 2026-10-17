@@ -51,7 +51,7 @@ d-pad:
 | I | Triangle | Show the inventory |
 | Backspace | Circle | Put the item in hand away, stop talking, or go back |
 | Escape | Start | The main menu; in it, Return goes back to the game |
-| Mouse | Either stick, touch | Move the pointer |
+| Mouse | Either stick, touch | Move the pointer (a finger on the screen highlights what is under it; a short tap clicks) |
 | Typing | System keyboard | Opens when you click a text field, such as a login |
 
 The DOS, Windows 9x and Vita builds are new and have only been tried in

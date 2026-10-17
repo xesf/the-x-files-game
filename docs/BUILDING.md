@@ -67,7 +67,8 @@ docker run --rm -v "$PWD:/src" -w /src vitasdk/vitasdk make vita
 ```
 
 This builds `build/vita/xfiles.vpk` with VitaSDK. Copy the game files to
-`ux0:data/xfiles`. The front touch panel is the pointer; either stick
+`ux0:data/xfiles`. The front touch panel is the pointer (a short tap
+clicks, sliding only points); either stick
 moves it, Cross and Circle are the mouse buttons and Start is Escape.
 Clicking a text field, such as a login, opens the system keyboard; its
 text replaces the field's. The Vita waits for the vertical blank, so frames never tear.
