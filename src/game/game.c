@@ -714,11 +714,21 @@ void game_tick(game *g, u32 now_ms)
             memcpy(spots, g->spots, sizeof(spots[0]) * (size_t)n);
             for (k = 0; k < n; k++)
                 vc_run_timer_triggers(&g->interp, spots[k].triggers, id);
+            /* The items as they are now: a trigger that closes its layout
+             * (the hint overlays close on timer 22, two of them at once)
+             * must not make the others' triggers skip their turn. */
+            u32 items[GAME_MAX_IFACES * GAME_MAX_IFACE_ITEMS], lists[GAME_MAX_IFACES * GAME_MAX_IFACE_ITEMS];
+            int m = 0;
             for (k = 0; k < g->iface_count; k++)
-                for (j = 0; j < g->ifaces[k].count; j++) {
-                    g->trigger_item = g->ifaces[k].items[j].id;
-                    vc_run_timer_triggers(&g->interp, g->ifaces[k].items[j].item.triggers, id);
+                for (j = 0; j < g->ifaces[k].count; j++, m++) {
+                    items[m] = g->ifaces[k].items[j].id;
+                    lists[m] = g->ifaces[k].items[j].item.triggers;
                 }
+            for (k = 0; k < m; k++) {
+                g->trigger_item = items[k];
+                vc_run_timer_triggers(&g->interp, lists[k], id);
+            }
+            g->trigger_item = 0;
         }
         if (g->current.asset) {
             vc_asset_ref a;

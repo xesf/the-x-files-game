@@ -1,0 +1,38 @@
+# The Artificial Intuition hint at the field office (disc 2) can open two
+# overlays at once, 58529 (the ING) and 32660; both close on timer 22.
+include disc1.txt
+expect view 6548
+
+click 22631                     # the motel clerk
+state
+hold Badge
+click 22631                     # flash the badge
+hold none
+click 22631
+state
+askall 22631                    # badge shown: ask her everything, then go to the rooms
+expect view 6578                # Mulder's room
+expect iface 83579              # her note with the rental car's plate
+click 83585                     # put it away
+walk 31395                      # the phone in the room: Willmore notes it
+expect enabled 21927 1          # idea: motel phone
+walk 6622                       # Scully's room, Skinner
+askall 22760                    # includes the motel phone idea
+walk 6661                       # Scully's Powerbook on the desk
+click 39617
+walk 6548                       # back to the clerk
+askall 22631                    # motel phone: the record of calls
+expect iface 39183
+click 39202                     # put the record away
+dial 12025550149                # the D.C. number: Frohike answers
+
+inv 17451                       # PDA
+click 58726                     # Seattle
+click 59118                     # FBI Field Office
+set 3707 0                      # the second overlay's condition too
+inv 56185                       # the hint
+expect iface 58529
+expect iface 32660
+wait 2500
+expect noiface 58529
+expect noiface 32660
