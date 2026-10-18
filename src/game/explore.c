@@ -1878,7 +1878,9 @@ static const cursor_art *current_cursor(explorer *e, int mx, int my)
 {
     u32 id = held_cursor(e);
     const cursor_art *c;
-    if (!id && !e->playing && e->in_menu != 1 && !e->g->talking)
+    /* a close-up shown during a conversation (Skinner's travel papers)
+     * has its own cursors, its zoom eye included */
+    if (!id && !e->playing && e->in_menu != 1 && (!e->g->talking || e->g->iface_count))
         id = game_cursor_at(e->g, mx, my);
     c = id ? get_cursor(e, id) : NULL;
     if (!c)
@@ -3459,6 +3461,10 @@ static int script_window(void *user, const char *what)
         return (int)e->g->sound;
     if (strcmp(what, "clip") == 0)
         return (int)e->g->current.asset;
+    if (strcmp(what, "cursor") == 0) { /* the VCCursor under the pointer, 0 for the cross */
+        const cursor_art *c = current_cursor(e, e->mx, e->my);
+        return c && c != cross_cursor(e) ? (int)c->id : 0;
+    }
     return -1;
 }
 
