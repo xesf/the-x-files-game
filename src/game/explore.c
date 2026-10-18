@@ -1043,6 +1043,180 @@ static int spaced_width(explorer *e, float px, const char *text, int gap)
     return w - gap;
 }
 
+/* The Options tabs' words are pictures in the clip: square letters of
+ * 2-pixel strokes, capitals 20 pixels high, small letters 16, about 10
+ * pixels apart. The Language tab draws its name in the same style from
+ * these cells (2x2 pixels each; rows 0-9 down to the baseline, 10-12
+ * below it). Other letters fall back to the dialogue font. */
+static const struct {
+    char c;
+    const char *rows;
+} g_tab_font[] = {
+    { 'A', "###|#.#|#.#|#.#|###|#.#|#.#|#.#|#.#|#.#" },
+    { 'B', "##.|#.#|#.#|#.#|###|#.#|#.#|#.#|#.#|###" },
+    { 'C', "###|#..|#..|#..|#..|#..|#..|#..|#..|###" },
+    { 'D', "##.|#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|##." },
+    { 'E', "###|#..|#..|#..|###|#..|#..|#..|#..|###" },
+    { 'F', "###|#..|#..|#..|###|#..|#..|#..|#..|#.." },
+    { 'G', "###|#..|#..|#..|#.#|#.#|#.#|#.#|#.#|###" },
+    { 'H', "#.#|#.#|#.#|#.#|###|#.#|#.#|#.#|#.#|#.#" },
+    { 'I', "#|#|#|#|#|#|#|#|#|#" },
+    { 'J', "..#|..#|..#|..#|..#|..#|..#|..#|..#|###" },
+    { 'K', "#.#|#.#|#.#|##.|##.|#.#|#.#|#.#|#.#|#.#" },
+    { 'L', "#..|#..|#..|#..|#..|#..|#..|#..|#..|###" },
+    { 'M', "#####|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#" },
+    { 'N', "###|#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#" },
+    { 'O', "###|#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|###" },
+    { 'P', "###|#.#|#.#|#.#|###|#..|#..|#..|#..|#.." },
+    { 'Q', "###|#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|###|..#" },
+    { 'R', "###|#.#|#.#|#.#|##.|#.#|#.#|#.#|#.#|#.#" },
+    { 'S', "###|#..|#..|#..|###|..#|..#|..#|..#|###" },
+    { 'T', "###|.#.|.#.|.#.|.#.|.#.|.#.|.#.|.#.|.#." },
+    { 'U', "#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|###" },
+    { 'V', "#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|#.#|.#." },
+    { 'W', "#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#####" },
+    { 'X', "#.#|#.#|#.#|#.#|.#.|.#.|#.#|#.#|#.#|#.#" },
+    { 'Y', "#.#|#.#|#.#|#.#|###|.#.|.#.|.#.|.#.|.#." },
+    { 'Z', "###|..#|..#|..#|.#.|.#.|#..|#..|#..|###" },
+    { 'a', "|||###|..#|###|#.#|#.#|#.#|###" },
+    { 'b', "#..|#..|###|#.#|#.#|#.#|#.#|#.#|#.#|###" },
+    { 'c', "||###|#..|#..|#..|#..|#..|#..|###" },
+    { 'd', "..#|..#|###|#.#|#.#|#.#|#.#|#.#|#.#|###" },
+    { 'e', "||###|#.#|#.#|###|#..|#..|#..|###" },
+    { 'f', ".##|#..|###|#..|#..|#..|#..|#..|#..|#.." },
+    { 'g', "||###|#.#|#.#|#.#|#.#|#.#|#.#|###|..#|..#|###" },
+    { 'h', "#..|#..|###|#.#|#.#|#.#|#.#|#.#|#.#|#.#" },
+    { 'i', "#||#|#|#|#|#|#|#|#" },
+    { 'j', ".#||.#|.#|.#|.#|.#|.#|.#|.#|.#|##" },
+    { 'k', "#..|#..|#.#|#.#|#.#|##.|#.#|#.#|#.#|#.#" },
+    { 'l', "#|#|#|#|#|#|#|#|#|#" },
+    { 'm', "||#####|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#" },
+    { 'n', "||###|#.#|#.#|#.#|#.#|#.#|#.#|#.#" },
+    { 'o', "||###|#.#|#.#|#.#|#.#|#.#|#.#|###" },
+    { 'p', "||###|#.#|#.#|#.#|#.#|#.#|#.#|###|#..|#..|#.." },
+    { 'q', "||###|#.#|#.#|#.#|#.#|#.#|#.#|###|..#|..#|..#" },
+    { 'r', "||###|#..|#..|#..|#..|#..|#..|#.." },
+    { 's', "||###|#..|#..|###|..#|..#|..#|###" },
+    { 't', "#..|#..|###|#..|#..|#..|#..|#..|#..|.##" },
+    { 'u', "||#.#|#.#|#.#|#.#|#.#|#.#|#.#|###" },
+    { 'v', "||#.#|#.#|#.#|#.#|#.#|#.#|#.#|.#." },
+    { 'w', "||#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#.#.#|#####" },
+    { 'x', "||#.#|#.#|#.#|.#.|.#.|#.#|#.#|#.#" },
+    { 'y', "||#.#|#.#|#.#|#.#|#.#|#.#|#.#|###|..#|..#|###" },
+    { 'z', "||###|..#|..#|.#.|.#.|#..|#..|###" },
+};
+
+#define TAB_CELL 2
+#define TAB_GAP 9 /* between letters */
+
+static const char *tab_glyph(char c)
+{
+    size_t i;
+    for (i = 0; i < XF_COUNT(g_tab_font); i++)
+        if (g_tab_font[i].c == c)
+            return g_tab_font[i].rows;
+    return NULL;
+}
+
+static int tab_glyph_width(const char *rows)
+{
+    int w = 0, n = 0;
+    for (; *rows; rows++)
+        if (*rows == '|')
+            n = 0;
+        else
+            w = XF_MAX(w, ++n);
+    return w * TAB_CELL;
+}
+
+/* A word in ASCII letters: accented letters lose their accents (and
+ * their case), the others stay as they are. */
+static void tab_fold(char *out, size_t size, const char *utf8)
+{
+    size_t n = 0;
+    while (*utf8 && n + 1 < size) {
+        size_t len = 1;
+        char one[8], folded[8];
+        while (((u8)utf8[len] & 0xC0) == 0x80 && len < sizeof(one) - 1)
+            len++;
+        if (len == 1)
+            out[n++] = *utf8;
+        else {
+            memcpy(one, utf8, len);
+            one[len] = '\0';
+            xf_fold_ascii(folded, sizeof(folded), one);
+            out[n++] = folded[0] ? folded[0] : '?';
+        }
+        utf8 += len;
+    }
+    out[n] = '\0';
+}
+
+/* Whether every letter of a word has a cell picture (ASCII letters and
+ * spaces after folding accents). */
+static int tab_word_drawable(const char *ascii)
+{
+    for (; *ascii; ascii++)
+        if (*ascii != ' ' && !tab_glyph(*ascii))
+            return 0;
+    return 1;
+}
+
+static int tab_word_width(const char *ascii)
+{
+    int w = 0;
+    for (; *ascii; ascii++)
+        w += (*ascii == ' ' ? 3 * TAB_CELL : tab_glyph_width(tab_glyph(*ascii))) + TAB_GAP;
+    return w ? w - TAB_GAP : 0;
+}
+
+static void tab_cell_put(explorer *e, int x, int y, u32 color, int alpha)
+{
+    u32 *p, c;
+    int r, g, b;
+    if (x < 0 || y < 0 || x >= SCREEN_W || y >= SCREEN_H)
+        return;
+    p = &e->fb[y * SCREEN_W + x];
+    c = *p;
+    /* the letters glow on the dark picture: the lighter of the two */
+    r = XF_MAX((int)(c >> 16 & 0xFF), (int)(color >> 16 & 0xFF) * alpha / 255);
+    g = XF_MAX((int)(c >> 8 & 0xFF), (int)(color >> 8 & 0xFF) * alpha / 255);
+    b = XF_MAX((int)(c & 0xFF), (int)(color & 0xFF) * alpha / 255);
+    *p = (u32)r << 16 | (u32)g << 8 | (u32)b;
+}
+
+/* Draws a folded (ASCII) word with its baseline at y, from x. */
+static void draw_tab_word(explorer *e, int x, int y, const char *ascii, u32 color)
+{
+    int pass;
+    for (pass = 0; pass < 2; pass++) { /* a soft edge, then the strokes */
+        int cx = x;
+        const char *c;
+        for (c = ascii; *c; c++) {
+            const char *rows = tab_glyph(*c);
+            int row = 0, col = 0;
+            if (*c == ' ' || !rows) {
+                cx += 3 * TAB_CELL + TAB_GAP;
+                continue;
+            }
+            for (; *rows; rows++) {
+                if (*rows == '|') {
+                    row++, col = 0;
+                    continue;
+                }
+                if (*rows == '#') {
+                    int px0 = cx + col * TAB_CELL, py0 = y - 10 * TAB_CELL + row * TAB_CELL, dx, dy;
+                    for (dy = -1 + pass; dy < TAB_CELL + 1 - pass; dy++)
+                        for (dx = -1 + pass; dx < TAB_CELL + 1 - pass; dx++)
+                            tab_cell_put(e, px0 + dx, py0 + dy, color, pass ? 255 : 70);
+                }
+                col++;
+            }
+            cx += tab_glyph_width(tab_glyph(*c)) + TAB_GAP;
+        }
+    }
+}
+
 static void draw_lang_rows(explorer *e)
 {
     const xf_langs *l = &e->g->langs;
@@ -1054,8 +1228,13 @@ static void draw_lang_rows(explorer *e)
     {
         /* the tab's name, lit while its panel is open */
         const char *title = lang_row_name(e, -1);
-        u32 color = lang_panel_shown(e) ? 0xD8F0FF : hit == 1 ? 0xA8D0F0 : 0x4F94CD;
-        draw_spaced(e, 21, LANG_TAB_X1 - spaced_width(e, 21, title, 5), LANG_TAB_Y1 - 8, title, 5, color);
+        char ascii[64];
+        u32 color = lang_panel_shown(e) ? 0x8FD0F8 : hit == 1 ? 0x4F9CD8 : 0x215473;
+        tab_fold(ascii, sizeof(ascii), title);
+        if (tab_word_drawable(ascii)) /* as the clip's own tab words */
+            draw_tab_word(e, LANG_TAB_X1 - 4 - tab_word_width(ascii), LANG_TAB_Y1 - 4, ascii, color);
+        else
+            draw_spaced(e, 21, LANG_TAB_X1 - spaced_width(e, 21, title, 5), LANG_TAB_Y1 - 8, title, 5, color);
     }
     if (!lang_panel_shown(e))
         return;

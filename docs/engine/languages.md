@@ -75,7 +75,11 @@ lacks the file, it comes from the language's fallback, then English.
 ## Choosing
 
 When the game folder holds several languages, the Options screen has a
-fourth tab, **Language**, under Game Play. Its panel, drawn like the
+fourth tab, **Language**, under Game Play. The other tabs' names are
+pictures in the clip, so the engine draws this one in the same style:
+square letters of 2-pixel strokes, 20 pixels high, about 10 pixels
+apart (`g_tab_font` in `explore.c`). A name with letters outside that
+set, such as Japanese, uses the dialogue font. Its panel, drawn like the
 Audio panel, has two rows: **Voices** and **Text**; the arrows at the
 ends of a row choose the previous or next language that has them. The choice is saved with the preferences. The
 environment variables `XF_VOICES` and `XF_TEXT` (a folder name such as
