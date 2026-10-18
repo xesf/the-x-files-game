@@ -35,7 +35,9 @@ alternatives: the first enabled one is the picture and the others are
 not shown. Willmore's desk (view 1237) lists Cook at the desk, the desk
 with the letter and files (disc 1), then the empty desk (every disc);
 both of the last two are enabled at the start of the game. Smaller loops
-and the navigation still are drawn as well.
+and the navigation still are drawn as well. A looping clip with a sound track plays its
+sound and starts again at its end (the Comity Inn rooms' TV, view 72623,
+`KeystoneCopsA.mov`); silent loops only step their pictures.
 
 ## VCView
 

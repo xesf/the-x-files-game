@@ -93,6 +93,8 @@ typedef struct {
     u32 asset;            /* the media reference it shows */
     xf_player player;
     int use_player, ended;
+    char path[1024];      /* a looping player starts again from it */
+    u32 range_start, range_end;
 } view_anim;
 
 static const xf_video *anim_video(const view_anim *an) { return an->use_player ? &an->player.video : &an->video; }
@@ -335,6 +337,17 @@ static void set_volume(explorer *e, const xf_player *p, u32 pref);
 
 /* Opens a movie range as a view animation. Times are movie time in ms;
  * 0..0 means the whole movie. */
+static int movie_has_sound(const char *path)
+{
+    xf_mov m;
+    int has;
+    if (xf_mov_open(&m, path) != 0)
+        return 0;
+    has = xf_mov_find(&m, XF_TRACK_AUDIO) != NULL;
+    xf_mov_close(&m);
+    return has;
+}
+
 static int open_anim(explorer *e, const char *path, u32 start, u32 end, int loop)
 {
     view_anim *an = &e->anims[e->anim_count];
@@ -342,11 +355,19 @@ static int open_anim(explorer *e, const char *path, u32 start, u32 end, int loop
     if (e->anim_count >= MAX_ANIMS)
         return -1;
     memset(an, 0, sizeof(*an));
-    if (!loop && xf_player_open_range(&an->player, path, plat_ticks_ms(), start, end) == 0) {
+    /* a clip that plays once, or a loop with a sound track (the Comity
+     * Inn's TV), has a full player; a silent loop only its pictures */
+    if ((!loop || movie_has_sound(path)) && xf_player_open_range(&an->player, path, plat_ticks_ms(), start, end) == 0) {
         if (!an->player.has_video) {
             xf_player_close(&an->player);
             return -1;
         }
+        an->loop = loop;
+        if (loop)
+            xf_debug("view clip %s loops with its sound", path);
+        snprintf(an->path, sizeof(an->path), "%s", path);
+        an->range_start = start;
+        an->range_end = end;
         an->use_player = 1;
         an->start_ms = start;
         an->length_ms = XF_MAX(an->player.duration_ms, 1);
@@ -384,9 +405,19 @@ static void update_anim(explorer *e, view_anim *an, u32 now)
     u32 t = now - an->started;
     u64 movie_time, media;
     if (an->use_player) {
-        if (!xf_player_update(&an->player, now) && !an->ended) {
-            an->ended = 1;
-            game_view_clip_end(e->g, an->asset);
+        if (!xf_player_update(&an->player, now)) {
+            xf_player again;
+            if (an->loop && xf_player_open_range(&again, an->path, now, an->range_start, an->range_end) == 0) {
+                /* a sound loop starts again */
+                xf_player_close(&an->player);
+                an->player = again;
+                set_volume(e, &an->player, 976);
+            } else if (an->loop) {
+                an->loop = 0; /* cannot reopen: holds its last picture */
+            } else if (!an->ended) {
+                an->ended = 1;
+                game_view_clip_end(e->g, an->asset);
+            }
         }
         return;
     }
