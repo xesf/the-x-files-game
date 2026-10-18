@@ -2,6 +2,16 @@
 
 All notable changes to this project.
 
+## 0.2.4 - 2026-10-18
+
+- Views show only their first enabled full-picture loop: Willmore's desk has its letter and files again.
+- Close-ups with pages: the page strips (next, previous) and zoom areas take the pointer before the full-screen "back up" area, so documents page and zoom again.
+- The PDA map shows open places as red dots: a layout item draws its enabled pictures in order.
+- Language folders must be named by a 2- or 3-letter code (maybe with a region), so `media` and `saves` are not taken for languages.
+- Vita: a finger moves the pointer and highlights what is under it; a short tap clicks. The sticks start at 120 pixels a second past a smaller dead zone, up to 900.
+- IDA: 82 names from `tools/ida/names.txt` applied to the database.
+- Tests: window scripts for pages and the PDA map; the play command `items`.
+
 ## 0.2.3 - 2026-10-17
 
 - Languages: a game folder can hold several releases in folders named by language (`en`, `de`, `fr`, ...); the Options screen chooses the voices and the text apart (`XF_VOICES`, `XF_TEXT`). Captions for dubbed clips come from the English clips.
