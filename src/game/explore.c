@@ -1927,21 +1927,13 @@ static void draw_inventory(explorer *e, int mx, int my)
         if (e->inv_ids[i] == e->held_inv)
             held = i;
     for (i = 0; i < e->inv_count; i++) {
-        /* the item in hand stays lit, in a frame; the object's first
+        /* the item in hand stays lit; the object's first
          * picture is the lit one, its rollover picture the plain one */
         const xf_image *img = &e->inv_img[i][(i == hover || i == held) || !e->inv_img[i][1].pixels ? 0 : 1];
         if (held >= 0 && i != held)
             continue; /* in hand: only that item shows */
         inv_pos(e, i, &x, &y);
         blit_keyed(e, img, x, y);
-        if (i == held) {
-            vc_region fr;
-            fr.left = (i16)(x - 2);
-            fr.top = (i16)(y - 2);
-            fr.right = (i16)(x + INV_W + 2);
-            fr.bottom = (i16)(y + INV_H + 2);
-            frame_rect(e, &fr, 0x8FC8EF);
-        }
     }
     if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
         char name[96];

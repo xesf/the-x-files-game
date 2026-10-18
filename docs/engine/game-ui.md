@@ -169,7 +169,7 @@ with a few names that differ (`PhotoM&S` and `PhotoMulderScully`,
 `Videotape` and `8mmTape`, the faxes and `Fax`). The exe's own table for
 this is not found yet. Items with no cursor (the PDA, the phone) keep the
 usual pointers. While an item is in hand, the bar shows that item
-alone, lit and in a frame, so the player sees what is in hand. Moving
+alone and lit, so the player sees what is in hand. Moving
 the pointer back to the bar, or a right click, puts it away.
 ## Cursors
 
