@@ -189,7 +189,8 @@ typedef struct {
     } photo_cache[GAME_MAX_PHOTOS]; /* the photo screen's pictures */
     u32 pause_from;       /* when the pause started, 0 when running */
     /* dialogue box */
-    xf_image dlg_talk, dlg_history, dlg_up, dlg_down;
+    xf_image dlg_talk, dlg_history, dlg_up, dlg_down, dlg_bar, dlg_thumb;
+    int talk_count; /* questions in the open tab */
     int talk_scroll;
     int talk_tab;         /* 0 TALK: questions not asked yet; 1 HISTORY: asked */
     /* emotion and action icons */
@@ -1420,6 +1421,9 @@ static void stop_sound(explorer *e)
 #define DLG_TALK 34761
 #define DLG_HISTORY 34760
 #define DLG_UP 34759
+#define DLG_BAR 34762   /* scrollbar.pic, 12x68 */
+#define DLG_THUMB 34763 /* thumb.pic, 12x10 */
+#define DLG_BAR_Y 34    /* the bar, between the arrows */
 #define DLG_DOWN 34764
 #define DLG_Y 285
 #define DLG_W 246
@@ -1546,6 +1550,7 @@ static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
         if ((game_times_asked(e->g, all[i]) > 0) == (e->talk_tab == 1))
             ids[n++] = all[i];
     *more = 0;
+    e->talk_count = n;
     e->talk_scroll = XF_CLAMP(e->talk_scroll, 0, XF_MAX(n - 1, 0));
     for (i = e->talk_scroll; i < n && k < max; i++) {
         char q[256] = "";
@@ -1656,6 +1661,8 @@ static void draw_dialog(explorer *e, int mx, int my)
     if (!e->dlg_up.pixels) {
         load_asset_image(e, DLG_UP, &e->dlg_up);
         load_asset_image(e, DLG_DOWN, &e->dlg_down);
+        load_asset_image(e, DLG_BAR, &e->dlg_bar);
+        load_asset_image(e, DLG_THUMB, &e->dlg_thumb);
     }
     blit_keyed(e, e->talk_tab ? &e->dlg_history : &e->dlg_talk, x0, DLG_Y);
     if (!e->have_font)
@@ -1666,20 +1673,26 @@ static void draw_dialog(explorer *e, int mx, int my)
         int starts[8], lens[8], lines;
         int over = mx >= x0 + DLG_TEXT_X && mx < x0 + DLG_TEXT_X + DLG_TEXT_W && my >= ent[i].y - DLG_LINE + 3 &&
                    my < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4;
-        /* DialogBox_init (0x482D00): TALK in blue (46, 107, 140), lighter
-         * (65, 140, 175) under the pointer; HISTORY, the questions asked,
-         * in grey (205, 205, 205) */
-        u32 color = e->talk_tab ? (over ? 0xFFFFFF : 0xCDCDCD) : (over ? 0x418CAF : 0x2E6B8C);
+        /* TALK in white, blue (65, 140, 175) under the pointer; HISTORY,
+         * the questions asked, in grey (205, 205, 205) */
+        u32 color = e->talk_tab ? (over ? 0xFFFFFF : 0xCDCDCD) : (over ? 0x418CAF : 0xFFFFFF);
         game_question_text(e->g, ent[i].id, q, sizeof(q));
         lines = wrap_lines_font(courier(e), q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
         for (l = 0; l < lines; l++)
             xf_text_draw(&s, courier(e), DLG_PX, x0 + DLG_TEXT_X, ent[i].y + l * DLG_LINE, q + starts[l],
                          (size_t)lens[l], color);
     }
-    if (e->talk_scroll > 0)
+    if (e->talk_scroll > 0 || more) {
+        /* more questions than the box holds: the arrows, the bar and
+         * its thumb at the scroll position */
+        int left = e->talk_count - e->talk_scroll - n, span = e->talk_scroll + left;
+        int room = (e->dlg_bar.pixels ? e->dlg_bar.height : 68) - (e->dlg_thumb.pixels ? e->dlg_thumb.height : 10);
         blit_keyed(e, &e->dlg_up, x0 + DLG_W - 17, DLG_Y + 22);
-    if (more)
+        blit_keyed(e, &e->dlg_bar, x0 + DLG_W - 17, DLG_Y + DLG_BAR_Y);
+        blit_keyed(e, &e->dlg_thumb, x0 + DLG_W - 17,
+                   DLG_Y + DLG_BAR_Y + (span > 0 ? room * e->talk_scroll / span : 0));
         blit_keyed(e, &e->dlg_down, x0 + DLG_W - 17, DLG_Y + 104);
+    }
 }
 
 /* Returns 1 when the click hit the dialogue box. */
@@ -3857,6 +3870,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     free(e->dlg_history.pixels);
     free(e->dlg_up.pixels);
     free(e->dlg_down.pixels);
+    free(e->dlg_bar.pixels);
+    free(e->dlg_thumb.pixels);
     if (e->pff_open)
         xf_pff_close(&e->pff);
     menu_close(e);

@@ -67,7 +67,10 @@ soon as an answer has played, with the remaining questions.
 The TALK tab lists the questions not asked yet; the HISTORY tab lists
 the ones already asked. Clicking a tab label switches between them. The
 box closes with Escape, the close box at the top right, or a click
-outside it.
+outside it. When a tab holds more questions than the box shows, the
+right edge shows the up and down arrows with `scrollbar.pic` between
+them and `thumb.pic` at the scroll position; the arrows scroll one
+question at a time.
 
 The text of a question is its icons field, a type 6 media reference:
 the number of a string in `xfilest.dll`. That DLL holds 1015 strings in
@@ -79,11 +82,13 @@ the number of a string in `xfilest.dll`. That DLL holds 1015 strings in
 the engine ignores the call.
 
 
-`DialogBox_init` (0x482D00) gives the question lists Courier New 12 and
-their colours: TALK, the questions not asked yet, in blue (46, 107, 140),
-lighter (65, 140, 175) under the pointer; HISTORY, the questions asked,
-in grey (205, 205, 205). The colours are set at start-up (0x4A74C0,
-0x4A6BF0, 0x4A6C30).
+`DialogBox_init` (0x482D00) gives the question lists Courier New 12.
+The colours set at start-up (0x4A74C0, 0x4A6BF0, 0x4A6C30) are blue
+(46, 107, 140), a lighter blue (65, 140, 175) and grey (205, 205, 205).
+The shipped game shows TALK, the questions not asked yet, in white, so
+our engine draws TALK in white, the lighter blue under the pointer, and
+HISTORY, the questions asked, in grey. Where the darker blue goes is
+not known yet.
 
 Asking a question queues Willmore's question clip first, then runs the
 question's triggers (what they queue plays after it), then queues the
@@ -706,7 +711,7 @@ view's media. It is off by default.
 
 ## Not yet like the original
 
-- The scroll bar thumb and idea icons are not drawn.
+- The idea icons are not drawn.
 - The photo download screen is not drawn.
 - The question text colour and spacing in the box are estimates.
 - The position of the inventory bar comes from the help texts, not
