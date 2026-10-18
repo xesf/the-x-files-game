@@ -1919,20 +1919,25 @@ static void draw_credit(explorer *e)
     }
 }
 
+#define AI_ICON_X 567
+#define AI_ICON_Y 68
+
+static int ai_icon_at(const explorer *e, int x, int y);
+
+/* The menu icon shows while the pointer is in the top-right corner above
+ * the picture, but not on the AI icon just under it, which keeps its
+ * pointer and its clicks. */
 static int menu_icon_shown(const explorer *e, int mx, int my)
 {
     const game *g = e->g;
     return e->in_menu == 0 && g->view && !g->iface_count && !g->slot_mode && !g->ask && my < PICTURE_Y &&
-           mx >= MENU_ICON_REVEAL_X;
+           mx >= MENU_ICON_REVEAL_X && !ai_icon_at(e, mx, my);
 }
 
 static int menu_icon_at(const explorer *e, int x, int y)
 {
     return menu_icon_shown(e, x, y) && x >= MENU_ICON_X - 22 && x < MENU_ICON_X + 22 && y < MENU_ICON_Y + 22;
 }
-
-#define AI_ICON_X 567
-#define AI_ICON_Y 68
 
 static int ai_icon_shown(const explorer *e)
 {
