@@ -3220,6 +3220,8 @@ static void handle_event(explorer *e, plat_event ev)
         game_key(e->g, key);
     }
     else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_MOVE) {
+        e->mx = ev.x; /* the menu draws the cross there */
+        e->my = ev.y;
         menu_set_hover(e, menu_item_at(ev.x, ev.y));
         menu_set_top_hover(e, ev.x, ev.y);
     }
