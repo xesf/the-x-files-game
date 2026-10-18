@@ -1,0 +1,10 @@
+# Fast travel with the keyboard: in a view, the arrow keys take its exits
+# by their cursors (Left, Forward, Right; Down the way back). Ctrl+arrows,
+# or an arrow with no such exit, step the pointer as before.
+new
+icon 18172                        # Cook's question, so the view takes moves
+play 300
+key left
+expect view 705
+key right                         # from the west view, back towards Cook
+play 300

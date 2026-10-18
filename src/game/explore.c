@@ -2946,10 +2946,42 @@ static void nav_click(explorer *e)
 }
 
 /* Returns 1 when the key was used for navigation. */
+/* Fast travel: in a view, the arrow keys take its exits by their
+ * cursors: Left (284), Up the forward ones (286, 59950, 288), Right (285),
+ * Down the way back (287, 4474). Returns 1 when one was taken. */
+static int nav_exit(explorer *e, int key)
+{
+    static const u32 left[] = { 284 }, right[] = { 285 }, up[] = { 286, 59950, 288 }, down[] = { 287, 4474 };
+    const u32 *want = key == PLAT_KEY_LEFT ? left : key == PLAT_KEY_RIGHT ? right : key == PLAT_KEY_UP ? up : down;
+    size_t n = key == PLAT_KEY_UP ? XF_COUNT(up) : key == PLAT_KEY_DOWN ? XF_COUNT(down) : 1, k;
+    game *g = e->g;
+    int i;
+    if (!g->view || g->iface_count || g->talking || g->ask || e->in_menu || e->playing || g->slot_mode)
+        return 0;
+    for (k = 0; k < n; k++)
+        for (i = 0; i < g->spot_count; i++) {
+            const game_spot *s = &g->spots[i];
+            if (s->kind == SPOT_NAV && s->region.cursor == want[k]) {
+                int x = (s->region.left + s->region.right) / 2, y = (s->region.top + s->region.bottom) / 2;
+                xf_info("key: exit %u", s->id);
+                nav_point_to(e, x, y);
+                game_click(g, x, y);
+                return 1;
+            }
+        }
+    return 0;
+}
+
 static int nav_key(explorer *e, const plat_event *ev)
 {
     const game *g = e->g;
     int typing = g->iface_count && g->focus_item; /* a text field has the focus */
+    /* plain arrows take the view's exits; Ctrl+arrows (or no such exit)
+     * step the pointer between the things that take a click */
+    if ((ev->key == PLAT_KEY_LEFT || ev->key == PLAT_KEY_RIGHT || ev->key == PLAT_KEY_UP ||
+         ev->key == PLAT_KEY_DOWN) &&
+        !(ev->mods & PLAT_MOD_CTRL) && nav_exit(e, ev->key))
+        return 1;
     switch (ev->key) {
     case PLAT_KEY_LEFT: nav_move(e, -1, 0, 0); return 1;
     case PLAT_KEY_RIGHT: nav_move(e, 1, 0, 0); return 1;

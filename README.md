@@ -45,7 +45,7 @@ d-pad:
 
 | Keyboard | Vita | What it does |
 |---|---|---|
-| Arrow keys | D-pad | Move to the nearest thing that takes a click in that direction |
+| Arrow keys | D-pad | In a view: take its left, forward or right exit, Down the way back; elsewhere, or with Ctrl, move to the nearest thing that takes a click in that direction |
 | Tab, Shift+Tab | R, L | The next or previous one |
 | Enter, Space | Cross, Square | Click |
 | I | Triangle | Show the inventory |
