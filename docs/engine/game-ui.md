@@ -293,6 +293,12 @@ label on a layout item: `font` is `'H'` (`Hcd.ttr`) or `'c'` (Courier),
 `'c'` or `'r'`. `RelocateIFace(left, top, right, bottom, event)` moves
 the item whose trigger is running.
 
+The letters, from 0x47D560: colour `'w'` is white and `'b'` (and any
+other) black; font `'H'` (Helvetica) is Arial (`Font_select` font 3), any
+other Courier New (font 4); `ScrollTextList` (0x480850) chooses its font
+the same way. The ING's field names and its search options are such
+labels, black on its white page.
+
 ## ING searches
 
 `INGSearch(category, database)` runs on the computer's search button.
@@ -682,7 +688,6 @@ view's media. It is off by default.
 
 - The scroll bar thumb and idea icons are not drawn.
 - `FadeBack` and the photo download screen are not drawn.
-- The colours of `SetIItemText` labels are guesses (`'b'` is drawn white).
 - The question text colour and spacing in the box are estimates.
 - The position of the inventory bar comes from the help texts, not
   from the engine code.

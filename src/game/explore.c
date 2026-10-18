@@ -637,8 +637,8 @@ static void draw_scroll_box(explorer *e)
     int y, line = 0, pos = 0, len, lh;
     if (!sb || e->g->text_off || !(it = game_find_item(e->g, sb->item)) || !e->have_font)
         return;
-    f = sb->font == 'H' && e->have_hcd_font ? &e->hcd_font
-      : sb->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
+    /* TextFile_show (0x480850): 'H' (Helvetica) is Arial, the rest Courier New */
+    f = sb->font == 'H' && e->have_caption_font ? &e->caption_font : courier(e);
     px = (float)(sb->size ? sb->size : 12); /* pixels: 0x53D560 makes lfHeight -size */
     lh = (int)(px * 1.2f);
     y = it->item.region.top + (int)px;
@@ -766,9 +766,10 @@ static void draw_label(explorer *e, const game_iface_item *it, const game_item_l
 {
     const vc_region *r = &it->item.region;
     xf_surface sf = screen_surface(e);
-    const xf_font *f = l->font == 'H' && e->have_hcd_font ? &e->hcd_font
-                     : l->font == 'P' && e->have_phn_font ? &e->phn_font
-                     : l->font == 'c' && e->have_card_font ? &e->card_font : &e->font;
+    /* SetIItemText (0x47D560): 'H' (Helvetica) is Arial (Font_select 3),
+     * the rest Courier New (4); 'P', the phone display, is ours */
+    const xf_font *f = l->font == 'P' && e->have_phn_font ? &e->phn_font
+                     : l->font == 'H' && e->have_caption_font ? &e->caption_font : courier(e);
     float px = (float)l->size;
     if (l->align == 'w') {
         /* a page of text: wrapped to the item, from its top */
@@ -804,7 +805,8 @@ static void draw_label(explorer *e, const game_iface_item *it, const game_item_l
                 w = xf_text_width(f, px, line, len);
             }
             x = l->align == 'c' ? (r->left + r->right - w) / 2 : l->align == 'r' ? r->right - w : r->left;
-            xf_text_draw(&sf, f, px, x, y, line, len, l->color == 'b' ? 0xFFFFFF : 0x000000);
+            /* 0x47D560: 'w' is white, 'b' and the rest black */
+            xf_text_draw(&sf, f, px, x, y, line, len, l->color == 'w' ? 0xFFFFFF : 0x000000);
             y += lh;
             line = nl ? nl + 1 : NULL;
         }

@@ -2836,7 +2836,7 @@ static void slot_show(game *g)
         game_item_label *l;
         set_item_text(g, item, g->slot_names[i]);
         if ((l = (game_item_label *)game_item_label_of(g, item))) {
-            l->color = 'b'; /* white, on the dark slots */
+            l->color = 'w'; /* white, on the dark slots */
             l->size = 18; /* SaveSlots_layout (0x4CBDB0): Courier New 18 */
             l->bold = 'y';
         }
