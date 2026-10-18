@@ -2,6 +2,25 @@
 
 All notable changes to this project.
 
+## 0.2.5 - 2026-10-18
+
+- Main menu: RIGHT.mov's sound with the labels coming in and with each rollover; the game's cross cursor, which follows the pointer. The menu holds the game: clicks, Backspace and typing no longer reach the view behind it.
+- Loading a game (Previous, Load) no longer fades the picture to black.
+- Options: a Language tab and panel like the Audio panel; the tab's name is drawn in the letter style of the other tabs.
+- Help screen: each part shows its own text and highlight while the rest of the screen dims; the Artificial Intuition text no longer covers it.
+- Inventory: the plain picture by default and the lit one under the pointer; names under the icons in Courier New 10; the item in hand shows its own cursor and is the only item in the bar; moving back to the bar or a right click puts it away.
+- The Artificial Intuition icon shows only while a hint is there; the menu icon no longer covers it.
+- Dialogue box: TALK questions in white, HISTORY in grey; a scroll bar with its thumb when the questions overflow; the box stays inside the clip's picture; a translation's tab words sit 2 pixels higher.
+- Arrow keys take the view's exits (Left, Forward, Right, Back); Ctrl+arrows step the pointer.
+- Layouts hold the scene: with the computer, a close-up or the PDA up, the view's hotspots take no clicks.
+- The computer's labels in the exe's colours and fonts (the ING's field names were white on white); Portuguese no longer moves the computer's items.
+- A close-up during a conversation gets its own cursors (Skinner's travel requisition shows the zoom eye).
+- The PDA's pictures key out their white background.
+- Questions: Willmore's question clip plays before what the question's triggers queue (the Comity Inn clerk's rooms).
+- Looping view clips with a sound track play it (the Comity Inn TV).
+- Timer triggers no longer skip a layout when another closes (two hint overlays on the same timer).
+- Tests: play script `ai-overlays.txt`; script commands `rpress`; window scripts' `point` moves the pointer as a real move does.
+
 ## 0.2.4 - 2026-10-18
 
 - Views show only their first enabled full-picture loop: Willmore's desk has its letter and files again.
