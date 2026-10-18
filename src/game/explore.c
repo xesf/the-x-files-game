@@ -539,6 +539,14 @@ static void load_asset_picture(explorer *e, u32 asset, int w, int h, xf_image *i
             if (data && xf_pict_decode(data, size, img) != 0)
                 memset(img, 0, sizeof(*img));
             free(data);
+            if (img->pixels && strstr(a.logical, "pda pieces")) {
+                /* the PDA's pieces (map dots and rings, the frame) have a
+                 * white background where the others have blue */
+                size_t k;
+                for (k = 0; k < (size_t)img->width * (size_t)img->height; k++)
+                    if ((img->pixels[k] & 0xFFFFFF) == 0xFFFFFF)
+                        img->pixels[k] = KEY_BLUE;
+            }
         } else if (open_nav_file(e, m->path) == 0 && w > 0 && h > 0) {
             /* The whole frame: a close-up's item can be smaller than its
              * picture, which then showed cut at the bottom. */

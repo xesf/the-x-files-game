@@ -413,7 +413,9 @@ are enabled, and an item draws its enabled pictures in order, so an open
 place shows red. A place's hotspot, over its dot, is enabled when the
 story opens the place: pointing at it shows the place's NSEW ring and its
 name (kind 4 triggers), a click travels there. A closed place's hotspot
-is disabled, so a click there falls through to the map's "back up" area.
+is disabled, so a click there falls through to the map's "back up" area. The PDA's
+pictures (`pda pieces` in their names) have a white background where
+the game's other pictures have blue: our engine keys out white in them.
 
 ## Books
 
