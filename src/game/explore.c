@@ -1412,7 +1412,7 @@ static void relabel_tabs(explorer *e, xf_image *img, int active)
         sf.height = img->height;
         sf.pitch = img->width;
         w = xf_text_width(&e->font, px, word[t], strlen(word[t]));
-        xf_text_draw(&sf, &e->font, px, (x0 + x1) / 2 - w / 2, 11, word[t], strlen(word[t]), ink);
+        xf_text_draw(&sf, &e->font, px, (x0 + x1) / 2 - w / 2, 9, word[t], strlen(word[t]), ink);
     }
 }
 
