@@ -2342,7 +2342,10 @@ static int menu_icon_at(const explorer *e, int x, int y)
 static int ai_icon_shown(const explorer *e)
 {
     const game *g = e->g;
-    return e->ai_ready && e->ai_frames > 0 && e->in_menu == 0 && g->view && !g->iface_count && !g->slot_mode;
+    /* only while a hint is there for the player: SetAIGlow, or an
+     * action of the hint list whose condition holds */
+    return e->ai_ready && e->ai_frames > 0 && e->in_menu == 0 && g->view && !g->iface_count && !g->slot_mode &&
+           game_ai_glowing(e->g);
 }
 
 static int ai_icon_at(const explorer *e, int x, int y)
@@ -2352,19 +2355,17 @@ static int ai_icon_at(const explorer *e, int x, int y)
            y >= AI_ICON_Y - im->height / 2 && y < AI_ICON_Y + (im->height + 1) / 2;
 }
 
-/* The Artificial Intuition icon, top right: it spins while a hint is
- * close (SetAIGlow), and a click shows the hint. */
+/* The Artificial Intuition icon, top right: it shows, spinning, while
+ * a hint is there, and a click shows the hint. */
 static void draw_ai_icon(explorer *e, int mx, int my)
 {
-    int glow;
     const xf_image *img;
     refresh_inventory(e); /* it says whether a hint list is set */
     if (!ai_icon_shown(e))
         return;
-    glow = game_ai_glowing(e->g);
     (void)mx;
     (void)my;
-    img = &e->ai_img[glow ? (plat_ticks_ms() / 100) % (u32)e->ai_frames : 0];
+    img = &e->ai_img[(plat_ticks_ms() / 100) % (u32)e->ai_frames];
     blit_keyed(e, img, AI_ICON_X - img->width / 2, AI_ICON_Y - img->height / 2);
     ui_piece(e, AI_ICON_X - 40, AI_ICON_Y - 30, SCREEN_W - (AI_ICON_X - 40), 60, SCR_ANCHOR_TOP_RIGHT);
 }

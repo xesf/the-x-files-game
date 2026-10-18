@@ -568,10 +568,12 @@ clip, or at the clip's first rectangle.
 ## Artificial Intuition
 
 The AI icon (evidence icon 56185) sits in the top-right corner, under
-the main menu icon, while a hint is set; the Help screen shows it there.
-It has no still picture: its rollover list names `AI.pff` (56700), eight
-frames of a spinning disc. It shows the first frame, and spins while the
-hint is close. `SetAIList(trigger, list)` (0x460170) sets the hint: a click on
+the main menu icon; the Help screen shows it there. It has no still
+picture: its rollover list names `AI.pff` (56700), eight frames of a
+spinning disc. Our engine shows it, spinning, only while a hint is
+there for the player: `SetAIGlow` is on, or one of the hint list's
+conditions holds. A hint list stays set most of the game, so showing
+it whenever a list is set would keep the icon up all the time. `SetAIList(trigger, list)` (0x460170) sets the hint: a click on
 the icon runs the action list with the trigger's parameters, which often
 shows an action icon ("climb the railroad pole"). The engine makes the
 icon glow while one of the list's conditions holds (0x4FE820).
