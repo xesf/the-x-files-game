@@ -74,9 +74,10 @@ lacks the file, it comes from the language's fallback, then English.
 
 ## Choosing
 
-The Options screen shows two rows when the game folder holds several
-languages: **Voices** and **Text**. A click moves to the next language
-that has them. The choice is saved with the preferences. The
+When the game folder holds several languages, the Options screen has a
+fourth tab, **Language**, under Game Play. Its panel, drawn like the
+Audio panel, has two rows: **Voices** and **Text**; the arrows at the
+ends of a row choose the previous or next language that has them. The choice is saved with the preferences. The
 environment variables `XF_VOICES` and `XF_TEXT` (a folder name such as
 `de`) override it.
 

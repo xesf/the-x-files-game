@@ -77,6 +77,12 @@ the number of a string in `xfilest.dll`. That DLL holds 1015 strings in
 `RegDlgAss` names six dialogue assets in the data, but this build of
 the engine ignores the call.
 
+
+`DialogBox_init` (0x482D00) gives the question lists Courier New 12 and
+their colours: TALK, the questions not asked yet, in blue (46, 107, 140),
+lighter (65, 140, 175) under the pointer; HISTORY, the questions asked,
+in grey (205, 205, 205). The colours are set at start-up (0x4A74C0,
+0x4A6BF0, 0x4A6C30).
 ## Opening credits
 
 The first scene in the Field Office rolls the opening credits. Answering

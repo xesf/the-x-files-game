@@ -438,6 +438,8 @@ int game_save_file_name(const char *path, char *name, size_t name_size);
 void game_open_slots(game *g, int save);
 /* Opens an interface layout, as the menu's Options and Help items do. */
 void game_open_layout(game *g, u32 layout);
+/* Closes an interface layout, as an action with control 1 does. */
+void game_close_layout(game *g, u32 layout);
 void game_close_slots(game *g);
 /* Back to a fresh start, as before game_new. */
 int game_reset(game *g);

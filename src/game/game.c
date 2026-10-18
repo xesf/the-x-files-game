@@ -2948,6 +2948,11 @@ void game_open_layout(game *g, u32 layout)
     host_interface(g, layout, 0);
 }
 
+void game_close_layout(game *g, u32 layout)
+{
+    host_interface(g, layout, 1);
+}
+
 void game_close_slots(game *g)
 {
     if (g->slot_mode)

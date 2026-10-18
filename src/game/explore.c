@@ -140,6 +140,7 @@ typedef struct {
     u32 card_start, card_until;
     /* the main menu */
     int in_menu;
+    int lang_panel;       /* the Options screen's Language panel is open */
     int media_paused;     /* the game's clips and sounds hold while the menu is up */
     u32 media_pause_from;
     int from_menu;        /* Options or Help, opened from the menu during a game */
@@ -839,60 +840,96 @@ static void draw_iface_layer(explorer *e, int k)
     }
 }
 
-/* Our own rows on the Options screen (layout 49738), when the game
- * folder holds language folders: the voice and the text language. A
- * click moves to the next language that has them. */
+/* The Options screen (layout 49738) has three tabs, Audio, Graphics and
+ * Game Play, each opening a panel layout. When the game folder holds
+ * language folders, our engine adds a fourth, Language, under them: its
+ * panel has a Voices and a Text row, drawn like the Audio panel's rows
+ * (the control on the left, the letter-spaced name, a line). */
 #define OPTIONS_MAIN 49738
-#define LANG_ROW_X 40
-#define LANG_ROW_W 260
-#define LANG_ROW_Y 300 /* the first row's top; rows 34 pixels apart */
-#define LANG_ROW_H 26
+#define LANG_TAB_X0 492 /* the tab's name, right-aligned like Game Play's */
+#define LANG_TAB_X1 624
+#define LANG_TAB_Y0 160 /* under Game Play, also when it takes two lines (Spanish) */
+#define LANG_TAB_Y1 190
+#define LANG_ROW_Y 164 /* the first row's top, as the Audio panel's; rows 48 apart */
+#define LANG_ROW_H 18
+#define LANG_CTRL_X0 57 /* the control: < name >, where the Audio sliders are */
+#define LANG_CTRL_X1 192
+#define LANG_LABEL_X 207
+static const u32 g_option_panels[] = { 49781, 49783, 49785 }; /* Audio, Graphics, Game Play */
+static const u32 g_option_tab_lights[] = { 49744, 49746, 49748 };
 
-static int lang_rows_shown(const explorer *e)
+static int options_layer(const explorer *e)
 {
     const game *g = e->g;
-    return g->langs.count > 1 && g->iface_count && g->ifaces[g->iface_count - 1].layout == OPTIONS_MAIN &&
-           e->have_font && !g->ask;
-}
-
-/* The row under a point: 0 voices, 1 text, or -1. */
-static int lang_row_at(const explorer *e, int x, int y)
-{
     int k;
-    if (!lang_rows_shown(e) || x < LANG_ROW_X || x >= LANG_ROW_X + LANG_ROW_W)
-        return -1;
-    for (k = 0; k < 2; k++)
-        if (y >= LANG_ROW_Y + 34 * k && y < LANG_ROW_Y + 34 * k + LANG_ROW_H)
+    for (k = 0; k < g->iface_count; k++)
+        if (g->ifaces[k].layout == OPTIONS_MAIN)
             return k;
     return -1;
+}
+
+static int lang_tab_shown(const explorer *e)
+{
+    const game *g = e->g;
+    int k = options_layer(e);
+    return g->langs.count > 1 && k >= 0 && k >= g->iface_count - 2 && e->have_font && !g->ask;
+}
+
+static int lang_panel_shown(const explorer *e)
+{
+    const game *g = e->g;
+    return e->lang_panel && lang_tab_shown(e) && g->ifaces[g->iface_count - 1].layout == OPTIONS_MAIN;
+}
+
+/* What is under a point: 1 the tab, 2 or 3 a row (voices, text) with -1
+ * for its < arrow; 0 nothing. */
+static int lang_hit(const explorer *e, int x, int y, int *dir)
+{
+    int k;
+    *dir = 1;
+    if (!lang_tab_shown(e))
+        return 0;
+    if (x >= LANG_TAB_X0 && x < LANG_TAB_X1 && y >= LANG_TAB_Y0 && y < LANG_TAB_Y1)
+        return 1;
+    if (!lang_panel_shown(e))
+        return 0;
+    for (k = 0; k < 2; k++)
+        if (y >= LANG_ROW_Y + 48 * k - 4 && y < LANG_ROW_Y + 48 * k + LANG_ROW_H + 4 && x >= LANG_CTRL_X0 && x < 450) {
+            if (x < LANG_CTRL_X0 + 18)
+                *dir = -1;
+            return 2 + k;
+        }
+    return 0;
 }
 
 /* The row names in the text language. */
 static const char *lang_row_name(const explorer *e, int row)
 {
     static const struct {
-        const char *code, *voices, *text;
+        const char *code, *title, *voices, *text;
     } names[] = {
-        { "de", "Stimmen", "Text" }, { "fr", "Voix", "Texte" },  { "it", "Voci", "Testo" },
-        { "es", "Voces", "Texto" },  { "pt", "Vozes", "Texto" },
+        { "de", "Sprache", "Stimmen", "Text" }, { "fr", "Langue", "Voix", "Texte" },
+        { "it", "Lingua", "Voci", "Testo" },    { "es", "Idioma", "Voces", "Texto" },
+        { "pt", "Idioma", "Vozes", "Texto" },
     };
     const xf_langs *l = &e->g->langs;
     size_t i;
     for (i = 0; l->text >= 0 && i < XF_COUNT(names); i++)
         if (strcmp(names[i].code, l->langs[l->text].code) == 0)
-            return row ? names[i].text : names[i].voices;
-    return row ? "Text" : "Voices";
+            return row < 0 ? names[i].title : row ? names[i].text : names[i].voices;
+    return row < 0 ? "Language" : row ? "Text" : "Voices";
 }
 
 static void load_game_fonts(explorer *e);
 
-/* The next language with voices (row 0) or text (row 1). */
-static void lang_row_click(explorer *e, int row)
+/* The next (dir 1) or previous (-1) language with voices (row 0) or text
+ * (row 1). */
+static void lang_row_click(explorer *e, int row, int dir)
 {
     const xf_langs *l = &e->g->langs;
     int cur = row ? l->text : l->voices, k, next = -1;
     for (k = 1; k <= l->count && next < 0; k++) {
-        int i = (cur + k) % l->count;
+        int i = ((cur + dir * k) % l->count + l->count) % l->count;
         if (row ? l->langs[i].text : l->langs[i].voices)
             next = i;
     }
@@ -909,21 +946,78 @@ static void lang_row_click(explorer *e, int row)
     }
 }
 
+/* A click on the Language tab: the other panels close and their tab
+ * names go dark, as choosing a tab does; ours opens. */
+static void lang_tab_click(explorer *e)
+{
+    size_t i;
+    for (i = 0; i < XF_COUNT(g_option_panels); i++) {
+        game_close_layout(e->g, g_option_panels[i]);
+        vc_set_enabled(&e->g->interp, g_option_tab_lights[i], 0);
+    }
+    e->lang_panel = 1;
+    xf_info("options: language panel");
+}
+
+/* Letter-spaced text, as the Options screen's own labels. */
+static int draw_spaced(explorer *e, float px, int x, int y, const char *text, int gap, u32 color)
+{
+    xf_surface sf = screen_surface(e);
+    const char *c = text;
+    while (*c) {
+        size_t n = 1;
+        while (((u8)c[n] & 0xC0) == 0x80)
+            n++;
+        xf_text_draw(&sf, &e->font, px, x, y, c, n, color);
+        x += xf_text_width(&e->font, px, c, n) + gap;
+        c += n;
+    }
+    return x;
+}
+
+static int spaced_width(explorer *e, float px, const char *text, int gap)
+{
+    const char *c = text;
+    int w = 0;
+    while (*c) {
+        size_t n = 1;
+        while (((u8)c[n] & 0xC0) == 0x80)
+            n++;
+        w += xf_text_width(&e->font, px, c, n) + gap;
+        c += n;
+    }
+    return w - gap;
+}
+
 static void draw_lang_rows(explorer *e)
 {
     const xf_langs *l = &e->g->langs;
-    xf_surface sf;
-    int k;
-    if (!lang_rows_shown(e))
+    int k, dir, hit = lang_hit(e, e->mx, e->my, &dir);
+    if (options_layer(e) < 0)
+        e->lang_panel = 0; /* Options closed: the next opening starts without it */
+    if (!lang_tab_shown(e))
         return;
-    sf = screen_surface(e);
+    {
+        /* the tab's name, lit while its panel is open */
+        const char *title = lang_row_name(e, -1);
+        u32 color = lang_panel_shown(e) ? 0xD8F0FF : hit == 1 ? 0xA8D0F0 : 0x4F94CD;
+        draw_spaced(e, 21, LANG_TAB_X1 - spaced_width(e, 21, title, 5), LANG_TAB_Y1 - 8, title, 5, color);
+    }
+    if (!lang_panel_shown(e))
+        return;
     for (k = 0; k < 2; k++) {
-        int idx = k ? l->text : l->voices, y = LANG_ROW_Y + 34 * k + 18;
-        u32 color = lang_row_at(e, e->mx, e->my) == k ? 0xFFFFFF : 0x4F94CD;
-        char value[48];
-        snprintf(value, sizeof(value), "< %s >", idx >= 0 ? l->langs[idx].name : "-");
-        xf_text_draw(&sf, &e->font, 17, LANG_ROW_X, y, lang_row_name(e, k), strlen(lang_row_name(e, k)), color);
-        xf_text_draw(&sf, &e->font, 17, LANG_ROW_X + 110, y, value, strlen(value), color);
+        int idx = k ? l->text : l->voices, y = LANG_ROW_Y + 48 * k, x, w;
+        const char *name = idx >= 0 ? l->langs[idx].name : "-";
+        u32 grey = hit == 2 + k ? 0xFFFFFF : 0xC0C0C0;
+        xf_surface sf = screen_surface(e);
+        /* the control: arrows at its ends, the language between them */
+        xf_text_draw(&sf, &e->font, 16, LANG_CTRL_X0, y + 14, "<", 1, hit == 2 + k && dir < 0 ? 0xFFFFFF : 0x4F94CD);
+        xf_text_draw(&sf, &e->font, 16, LANG_CTRL_X1 - 10, y + 14, ">", 1, hit == 2 + k && dir > 0 ? 0xFFFFFF : 0x4F94CD);
+        w = xf_text_width(&e->font, 15, name, strlen(name));
+        xf_text_draw(&sf, &e->font, 15, (LANG_CTRL_X0 + LANG_CTRL_X1) / 2 - w / 2, y + 14, name, strlen(name), grey);
+        x = draw_spaced(e, 14, LANG_LABEL_X, y + 13, lang_row_name(e, k), 3, grey);
+        for (x += 8; x < 450; x++) /* the row's line */
+            e->fb[(y + 9) * SCREEN_W + x] = 0x34495A;
     }
 }
 
@@ -1335,7 +1429,10 @@ static void draw_dialog(explorer *e, int mx, int my)
         int starts[8], lens[8], lines;
         int over = mx >= x0 + DLG_TEXT_X && mx < x0 + DLG_TEXT_X + DLG_TEXT_W && my >= ent[i].y - DLG_LINE + 3 &&
                    my < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4;
-        u32 color = over ? 0xFFFFFF : 0xD8D8D8;
+        /* DialogBox_init (0x482D00): TALK in blue (46, 107, 140), lighter
+         * (65, 140, 175) under the pointer; HISTORY, the questions asked,
+         * in grey (205, 205, 205) */
+        u32 color = e->talk_tab ? (over ? 0xFFFFFF : 0xCDCDCD) : (over ? 0x418CAF : 0x2E6B8C);
         game_question_text(e->g, ent[i].id, q, sizeof(q));
         lines = wrap_lines_font(courier(e), q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
         for (l = 0; l < lines; l++)
@@ -2702,9 +2799,11 @@ static int nav_targets(explorer *e, nav_point *t, int max)
                 (r->right - r->left < SCREEN_W || r->bottom - r->top < SCREEN_H))
                 NAV_ADD((r->left + r->right) / 2, (r->top + r->bottom) / 2);
         }
-        if (lang_rows_shown(e))
+        if (lang_tab_shown(e))
+            NAV_ADD((LANG_TAB_X0 + LANG_TAB_X1) / 2, (LANG_TAB_Y0 + LANG_TAB_Y1) / 2);
+        if (lang_panel_shown(e))
             for (i = 0; i < 2; i++)
-                NAV_ADD(LANG_ROW_X + 60, LANG_ROW_Y + 34 * i + LANG_ROW_H / 2);
+                NAV_ADD(LANG_LABEL_X + 40, LANG_ROW_Y + 48 * i + LANG_ROW_H / 2);
         return n;
     }
     if (g->talking) {
@@ -3060,9 +3159,14 @@ static void handle_event(explorer *e, plat_event ev)
         int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
         int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
         const game_iface_item *it = game_iface_item_at(e->g, ev.x, ev.y);
-        if (lang_row_at(e, ev.x, ev.y) >= 0) {
-            lang_row_click(e, lang_row_at(e, ev.x, ev.y));
+        int dir, hit = lang_hit(e, ev.x, ev.y, &dir);
+        if (hit == 1) {
+            lang_tab_click(e);
+        } else if (hit >= 2) {
+            lang_row_click(e, hit - 2, dir);
         } else if (it) {
+            if (it->id == 49749 || it->id == 49750 || it->id == 49751)
+                e->lang_panel = 0; /* another tab */
             u32 clicked = it->id;
             game_click(e->g, ev.x, ev.y);
             ask_text(e, clicked);
