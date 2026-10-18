@@ -207,7 +207,8 @@ Scripts in `tests/window` need the window: `menu.txt` opens the main
 menu with Escape and with the X icon during a clip, and returns;
 `keyboard.txt` moves and clicks with the keys; `credits.txt` checks the
 opening credits and their music; `book.txt` turns the pages of a
-close-up by clicking their edges. Play scripts click items by number;
+close-up by clicking their edges; `pda-map.txt` points at and clicks the
+PDA map's places. Play scripts click items by number;
 these press screen points, so they also test which item takes the
 pointer. The play command `items` lists the top layout's items, their
 rectangles and cursors, and the item each one's centre gives.

@@ -97,6 +97,7 @@ typedef struct {
 static const xf_video *anim_video(const view_anim *an) { return an->use_player ? &an->player.video : &an->video; }
 
 #define MAX_ANIMS 4
+#define KEY_BLUE 0x0000FF
 #define MAX_ICONS 6
 #define MAX_INV 32
 #define MAX_CURSORS 24
@@ -550,14 +551,34 @@ static void load_asset_picture(explorer *e, u32 asset, int w, int h, xf_image *i
     }
 }
 
+/* An item's enabled pictures, each drawn over the one before (the PDA
+ * map's places list the green dot, then the red one: an open place is
+ * red). With none enabled, the first picture. */
 static void load_item_picture(explorer *e, const game_iface_item *it, xf_image *img)
 {
     u32 ids[8];
-    int n = vc_read_list(&e->g->db, it->item.assets, ids, 8), i;
+    int n = vc_read_list(&e->g->db, it->item.assets, ids, 8), i, w = it->item.region.right - it->item.region.left,
+        h = it->item.region.bottom - it->item.region.top;
     memset(img, 0, sizeof(*img));
+    for (i = 0; i < n; i++) {
+        xf_image over;
+        size_t k;
+        if (!vc_is_enabled(&e->g->interp, ids[i]))
+            continue;
+        if (!img->pixels) {
+            load_asset_picture(e, ids[i], w, h, img);
+            continue;
+        }
+        memset(&over, 0, sizeof(over));
+        load_asset_picture(e, ids[i], w, h, &over);
+        if (over.pixels && over.width == img->width && over.height == img->height)
+            for (k = 0; k < (size_t)img->width * (size_t)img->height; k++)
+                if (over.pixels[k] != KEY_BLUE)
+                    img->pixels[k] = over.pixels[k];
+        free(over.pixels);
+    }
     for (i = 0; i < n && !img->pixels; i++)
-        load_asset_picture(e, ids[i], it->item.region.right - it->item.region.left,
-                           it->item.region.bottom - it->item.region.top, img);
+        load_asset_picture(e, ids[i], w, h, img);
 }
 
 static void free_iface_pictures(explorer *e)
@@ -1078,7 +1099,6 @@ static void stop_sound(explorer *e)
 #define DLG_TEXT_BOTTOM 114
 #define DLG_LINE 15
 #define DLG_PX 12 /* 0x482D00: the question lists in Courier New 12 */
-#define KEY_BLUE 0x0000FF
 
 /* Emotion and action icons: 80x60 animated clips below the video, each
  * with its name underneath on rollover. */

@@ -1,0 +1,17 @@
+# The PDA map (layout 34008): an open place is a red dot (its item lists
+# the green and the red picture, both enabled; the red one is drawn over
+# the green). Pointing at it shows its NSEW ring and its name; a closed
+# place takes no click of its own: the click falls through to the
+# close-up's "back up" area and the PDA closes, without travelling.
+new
+open 34008
+point 239 322                     # Seattle, open from the start
+expect enabled 34199 1            # its ring
+expect enabled 71999 1            # its name
+point 600 300
+expect enabled 34199 0
+press 278 192                     # Everett, not open yet
+expect view 691                   # still at the field office
+open 34008
+press 239 322                     # Seattle
+expect iface 34010

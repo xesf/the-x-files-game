@@ -389,6 +389,16 @@ The PDA's address book (layout 32823) shows a card at a time
 (`PDAInitAddr`, `PDAFlipAddr`, 0x4C9AD0) from the enabled media of item
 45307: name, mail address and street address.
 
+## PDA map
+
+The PDA's maps (layouts 34008, 34010 and others) mark each place with an
+item that lists two pictures, the green dot and then the red one; both
+are enabled, and an item draws its enabled pictures in order, so an open
+place shows red. A place's hotspot, over its dot, is enabled when the
+story opens the place: pointing at it shows the place's NSEW ring and its
+name (kind 4 triggers), a click travels there. A closed place's hotspot
+is disabled, so a click there falls through to the map's "back up" area.
+
 ## Books
 
 Willmore's journal on his nightstand (layout 45360, `JournalInit`,
