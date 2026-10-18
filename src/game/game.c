@@ -1239,10 +1239,13 @@ int game_ask(game *g, u32 conversation)
         vc_read_name(&g->db, c.name, name, sizeof(name));
         xf_info("ask %u: %s%s", conversation, name, repeat ? " (again)" : "");
     }
-    vc_run_triggers(&g->interp, c.triggers, 0);
-    vc_run_triggers(&g->interp, c.triggers, 8);
+    /* Willmore asking comes first, then what the question's triggers
+     * queue: asking the Comity Inn clerk for the rooms (22650) queues her
+     * "Here we go" at the room (19937) and goes there */
     if (c.question)
         queue_list_media(g, c.question, 0);
+    vc_run_triggers(&g->interp, c.triggers, 0);
+    vc_run_triggers(&g->interp, c.triggers, 8);
     queue_list_media(g, repeat && c.repeat ? c.repeat : c.answer, conversation);
     after_triggers(g);
     return 1;

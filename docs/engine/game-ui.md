@@ -83,6 +83,12 @@ their colours: TALK, the questions not asked yet, in blue (46, 107, 140),
 lighter (65, 140, 175) under the pointer; HISTORY, the questions asked,
 in grey (205, 205, 205). The colours are set at start-up (0x4A74C0,
 0x4A6BF0, 0x4A6C30).
+
+Asking a question queues Willmore's question clip first, then runs the
+question's triggers (what they queue plays after it), then queues the
+answer. Asking the Comity Inn clerk for the rooms (question 22650) has
+no answer of its own: its triggers queue her "Here we go" at the room
+(clip 19937) and go there.
 ## Opening credits
 
 The first scene in the Field Office rolls the opening credits. Answering
