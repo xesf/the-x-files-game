@@ -2569,6 +2569,7 @@ static void drop_game_media(explorer *e)
     pause_game_media(e, 0);
     stop_media(e);
     stop_sound(e);
+    e->fade_start = 0; /* a FadeToBlack ends with its game */
     e->from_menu = 0;
 }
 

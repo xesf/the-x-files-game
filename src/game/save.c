@@ -319,7 +319,7 @@ int game_reset(game *g)
     }
     g->iface_serial = serials[0] + 1;
     g->sound_serial = serials[1] + 1;
-    g->fade_serial = serials[2] + 1;
+    g->fade_serial = serials[2]; /* a change would start a FadeToBlack */
     g->overlay_serial = serials[3] + 1;
     g->checkpoint = cp;
     g->checkpoint_size = cp_size;
