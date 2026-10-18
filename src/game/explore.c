@@ -20,6 +20,7 @@
 #include "platform/plat.h"
 #include "xf_file.h"
 #include "xf_log.h"
+#include "xf_text.h"
 
 #define SCREEN_W 640
 #define SCREEN_H 480
@@ -199,7 +200,9 @@ typedef struct {
     cursor_art cross;     /* the default pointer */
     u32 cross_px[CROSS_SIZE * CROSS_SIZE];
     int cursor_count;
-    u32 held_inv;         /* VCInventory taken in hand, for its cursor */
+    u32 held_inv;         /* VCInventory taken in hand */
+    u32 inv_cursor[48];   /* the VCCursor of each inventory value (Inventory_i... = n) */
+    int inv_cursors_built;
     /* inventory icons: normal and rollover */
     xf_image inv_img[MAX_INV][2];
     u32 inv_ids[MAX_INV];
@@ -1665,14 +1668,30 @@ static int inv_at(explorer *e, int x, int y)
     return -1;
 }
 
+static u32 held_cursor(explorer *e);
+static void frame_rect(explorer *e, const vc_region *r, u32 color);
+
 static void draw_inventory(explorer *e, int mx, int my)
 {
     xf_surface s = screen_surface(e);
     int i, x, y, hover = inv_at(e, mx, my);
+    int held = held_cursor(e) ? -1 : -2;
+    for (i = 0; held == -1 && i < e->inv_count; i++)
+        if (e->inv_ids[i] == e->held_inv)
+            held = i;
     for (i = 0; i < e->inv_count; i++) {
-        const xf_image *img = &e->inv_img[i][i == hover && e->inv_img[i][1].pixels ? 1 : 0];
+        /* the item in hand stays lit, in a frame */
+        const xf_image *img = &e->inv_img[i][(i == hover || i == held) && e->inv_img[i][1].pixels ? 1 : 0];
         inv_pos(e, i, &x, &y);
         blit_keyed(e, img, x, y);
+        if (i == held) {
+            vc_region fr;
+            fr.left = (i16)(x - 2);
+            fr.top = (i16)(y - 2);
+            fr.right = (i16)(x + INV_W + 2);
+            fr.bottom = (i16)(y + INV_H + 2);
+            frame_rect(e, &fr, 0x8FC8EF);
+        }
     }
     if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
         char name[96];
@@ -1758,20 +1777,57 @@ static void free_cursors(explorer *e)
 }
 
 /* The cursor of the item in hand: field 5 of its VCInventory. */
+/* Each inventory item has a cursor, shown while it is in hand: the
+ * cursors are named after the items (InventoryLockpick), as the GAM's
+ * inventory values are (Inventory_iLockpick = 12). Pairs them by name,
+ * with the few names that differ. */
+static void build_inventory_cursors(explorer *e)
+{
+    static const char *const alias[][2] = {
+        { "photom&s", "photomulderscully" }, { "videotape", "8mmtape" }, { "faxleadsphere", "fax" },
+        { "faxlogtranslation", "fax" },      { "josechung", "josechungbook" }, { "travelreq", "travelreqs" },
+    };
+    const game *g = e->g;
+    u32 i, k;
+    e->inv_cursors_built = 1;
+    memset(e->inv_cursor, 0, sizeof(e->inv_cursor));
+    for (i = 0; i < g->interp.var_count; i++) {
+        const char *v = g->interp.vars[i].name;
+        i32 value = g->interp.vars[i].value;
+        char want[48];
+        size_t a;
+        if (strncmp(v, "Inventory_i", 11) != 0 || value <= 0 || value >= (i32)XF_COUNT(e->inv_cursor))
+            continue;
+        xf_fold_ascii(want, sizeof(want), v + 11);
+        for (a = 0; a < XF_COUNT(alias); a++)
+            if (strcmp(want, alias[a][0]) == 0)
+                snprintf(want, sizeof(want), "%s", alias[a][1]);
+        for (k = 0; k < g->db.count && !e->inv_cursor[value]; k++) {
+            xf_neo_reader r;
+            char name[64], folded[64];
+            if (g->db.entries[k].class_id != 0x3D || xf_neo_object(&g->db, g->db.entries[k].id, &r, NULL, NULL) != 0)
+                continue;
+            xf_neo_u32(&r); /* hot spot */
+            name[0] = '\0';
+            vc_read_name(&g->db, xf_neo_u32(&r), name, sizeof(name));
+            xf_fold_ascii(folded, sizeof(folded), name);
+            if (strncmp(folded, "inventory", 9) == 0 && strcmp(folded + 9, want) == 0)
+                e->inv_cursor[value] = g->db.entries[k].id;
+        }
+    }
+}
+
+/* The cursor of the item in hand, or 0. */
 static u32 held_cursor(explorer *e)
 {
-    xf_neo_reader r;
-    int i;
-    if (!e->held_inv ||
-        game_reg_value(e->g, "RegCurrInvVar", 0) == game_reg_value(e->g, "RegCurrInvVar", 1)) {
+    i32 value = game_reg_value(e->g, "RegCurrInvVar", 0);
+    if (value == game_reg_value(e->g, "RegCurrInvVar", 1)) {
         e->held_inv = 0;
         return 0;
     }
-    if (xf_neo_object(&e->g->db, e->held_inv, &r, NULL, NULL) != 0)
-        return 0;
-    for (i = 0; i < 4; i++)
-        xf_neo_u32(&r);
-    return xf_neo_u32(&r);
+    if (!e->inv_cursors_built)
+        build_inventory_cursors(e);
+    return value > 0 && value < (i32)XF_COUNT(e->inv_cursor) ? e->inv_cursor[value] : 0;
 }
 
 /* The default pointer, wherever no hotspot or item names one (the
@@ -3175,6 +3231,9 @@ static void handle_event(explorer *e, plat_event ev)
             ;
         else if (inv >= e->inv_items) {
             game_click_evidence(e->g, e->inv_ids[inv]);
+        } else if (inv >= 0 && e->inv_ids[inv] == e->held_inv && held_cursor(e)) {
+            game_hold(e->g, NULL); /* the item in hand, clicked again: put away */
+            e->held_inv = 0;
         } else if (inv >= 0) {
             game_click_inventory(e->g, e->inv_ids[inv]);
             if (e->inv_ids[inv] != GAME_AI_ICON)

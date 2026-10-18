@@ -146,6 +146,16 @@ of the screen, and the item in hand stays on screen. The explorer shows
 the icons of the items the player carries along the bottom when the
 pointer is below y 420.
 
+
+An item in hand shows its own cursor. The cursors are named after the
+items (`InventoryLockpick`, VCCursor 31907), as are the GAM's inventory
+values (`Inventory_iLockpick` = 12, the value `OnInvClick` puts in the
+variable that `RegCurrInvVar` registers); our engine pairs them by name,
+with a few names that differ (`PhotoM&S` and `PhotoMulderScully`,
+`Videotape` and `8mmTape`, the faxes and `Fax`). The exe's own table for
+this is not found yet. Items with no cursor (the PDA, the phone) keep the
+usual pointers. The item in hand stays lit in the bar, in a frame;
+clicking it again, or a right click, puts it away.
 ## Cursors
 
 A `VCCursor` holds the hot spot x and y (16 bits each), a name and a
