@@ -277,6 +277,9 @@ void game_back(game *g);
 /* Click at a screen point: the top interface layout takes it when one is
  * up, otherwise the hotspot under it. Returns 1 when something ran. */
 int game_click(game *g, int x, int y);
+/* Whether a layout holds the scene (anything but SetIFLAsView layouts):
+ * the scene's hotspots take no clicks and show no cursors then. */
+int game_scene_held(const game *g);
 /* Clicks the hotspot or interface item with this object ID. */
 int game_click_object(game *g, u32 id);
 /* A key press: runs the kind 3 triggers of the layout item with focus,

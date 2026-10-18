@@ -900,6 +900,8 @@ u32 game_cursor_at(game *g, int x, int y)
     const game_spot *s;
     if (it) /* a close-up's backdrop has the "back up" cursor */
         return it->item.region.cursor;
+    if (game_scene_held(g))
+        return 0;
     s = game_spot_at(g, x, y);
     if (!s)
         return 0;
@@ -1353,6 +1355,17 @@ int game_key(game *g, int key)
     return 1;
 }
 
+/* A layout that is not part of the view (SetIFLAsView) holds the
+ * scene: the computer, a close-up, the PDA. */
+int game_scene_held(const game *g)
+{
+    int k;
+    for (k = 0; k < g->iface_count; k++)
+        if (!g->ifaces[k].as_view)
+            return 1;
+    return 0;
+}
+
 int game_click(game *g, int x, int y)
 {
     const game_iface_item *it = game_iface_item_at(g, x, y);
@@ -1361,6 +1374,8 @@ int game_click(game *g, int x, int y)
         click_iface_item(g, &copy);
         return 1;
     }
+    if (game_scene_held(g))
+        return 0; /* the scene behind takes no clicks */
     {
         const game_spot *s = game_spot_at(g, x, y);
         if (!s)
