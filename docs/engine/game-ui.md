@@ -147,12 +147,14 @@ Intuition on.
 ## Inventory
 
 `VCInventory` objects hold a name, the icon, the rollover icon, 0, a
-cursor and a trigger list. The icons are 30×40 pictures in `x.pff`. The
+cursor and a trigger list. The first picture is the lit one, which
+shows under the pointer and for the item in hand; the "rollover"
+picture is the plain one, which the bar shows otherwise. The icons are 30×40 pictures in `x.pff`. The
 help text says the inventory shows when the pointer moves to the bottom
 of the screen, and the item in hand stays on screen. The explorer shows
-the icons of the items the player carries along the bottom when the
-pointer is below y 420.
-
+the icons of the items the player carries along the bottom, at y 422,
+when the pointer is below y 410. The name of the item under the
+pointer shows under its icon in Courier New 12.
 
 An item in hand shows its own cursor. The cursors are named after the
 items (`InventoryLockpick`, VCCursor 31907), as are the GAM's inventory
@@ -161,8 +163,9 @@ variable that `RegCurrInvVar` registers); our engine pairs them by name,
 with a few names that differ (`PhotoM&S` and `PhotoMulderScully`,
 `Videotape` and `8mmTape`, the faxes and `Fax`). The exe's own table for
 this is not found yet. Items with no cursor (the PDA, the phone) keep the
-usual pointers. The item in hand stays lit in the bar, in a frame;
-clicking it again, or a right click, puts it away.
+usual pointers. While an item is in hand, the bar shows that item
+alone, lit and in a frame, so the player sees what is in hand. Moving
+the pointer back to the bar, or a right click, puts it away.
 ## Cursors
 
 A `VCCursor` holds the hot spot x and y (16 bits each), a name and a
@@ -704,7 +707,7 @@ view's media. It is off by default.
 ## Not yet like the original
 
 - The scroll bar thumb and idea icons are not drawn.
-- `FadeBack` and the photo download screen are not drawn.
+- The photo download screen is not drawn.
 - The question text colour and spacing in the box are estimates.
 - The position of the inventory bar comes from the help texts, not
   from the engine code.

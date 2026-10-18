@@ -203,6 +203,7 @@ typedef struct {
     u32 cross_px[CROSS_SIZE * CROSS_SIZE];
     int cursor_count;
     u32 held_inv;         /* VCInventory taken in hand */
+    int inv_inside;       /* the pointer is over the inventory's rows */
     u32 inv_cursor[48];   /* the VCCursor of each inventory value (Inventory_i... = n) */
     int inv_cursors_built;
     /* inventory icons: normal and rollover */
@@ -1258,12 +1259,14 @@ static void stop_sound(explorer *e)
 #define ICON_GAP 24
 
 /* Inventory: 30x40 icons along the bottom, shown when the pointer is
- * near the bottom of the screen. */
-#define INV_Y 436
+ * near the bottom of the screen, with the hovered item's name under
+ * them. */
+#define INV_Y 422
+#define INV_NAME_PX 12
 #define INV_W 30
 #define INV_H 40
 #define INV_GAP 8
-#define INV_REVEAL 420
+#define INV_REVEAL 410
 #define INV_ROW_GAP 6
 
 static int load_asset_image(explorer *e, u32 asset, xf_image *img)
@@ -1732,8 +1735,11 @@ static void draw_inventory(explorer *e, int mx, int my)
         if (e->inv_ids[i] == e->held_inv)
             held = i;
     for (i = 0; i < e->inv_count; i++) {
-        /* the item in hand stays lit, in a frame */
-        const xf_image *img = &e->inv_img[i][(i == hover || i == held) && e->inv_img[i][1].pixels ? 1 : 0];
+        /* the item in hand stays lit, in a frame; the object's first
+         * picture is the lit one, its rollover picture the plain one */
+        const xf_image *img = &e->inv_img[i][(i == hover || i == held) || !e->inv_img[i][1].pixels ? 0 : 1];
+        if (held >= 0 && i != held)
+            continue; /* in hand: only that item shows */
         inv_pos(e, i, &x, &y);
         blit_keyed(e, img, x, y);
         if (i == held) {
@@ -1747,9 +1753,12 @@ static void draw_inventory(explorer *e, int mx, int my)
     }
     if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
         char name[96];
+        int w;
         game_object_label(e->g, e->inv_ids[hover], name, sizeof(name));
-        inv_pos(e, e->inv_items < e->inv_count ? e->inv_items : 0, &x, &y);
-        xf_text_draw(&s, courier(e), ROLLOVER_PX, 10, y - 6, name, strlen(name), 0xFFFFFF);
+        w = xf_text_width(courier(e), INV_NAME_PX, name, strlen(name));
+        inv_pos(e, hover, &x, &y);
+        x = XF_CLAMP(x + INV_W / 2 - w / 2, 4, SCREEN_W - 4 - w);
+        xf_text_draw(&s, courier(e), INV_NAME_PX, x, INV_Y + INV_H + INV_NAME_PX, name, strlen(name), 0xFFFFFF);
     }
 }
 
@@ -2322,9 +2331,10 @@ static void draw(explorer *e, int mx, int my)
         ui_piece(e, x0, DLG_Y - 6, DLG_W, 130, SCR_ANCHOR_UNDER);
     }
     refresh_inventory(e);
-    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V') && !g->iface_count) { /* Pref_cInventory */
-        /* the rows, with room above for the item's name */
-        int top = (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_Y) - 24;
+    /* Pref_cInventory; the item in hand stays in view */
+    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && held_cursor(e))) && !g->iface_count) {
+        /* the rows, with the item's name under them */
+        int top = (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_Y) - 4;
         int cols = XF_MAX(e->inv_items, e->inv_count - e->inv_items);
         draw_inventory(e, mx, my);
         ui_piece(e, 0, top, XF_MIN(SCREEN_W, 10 + cols * (INV_W + INV_GAP) + 60), SCREEN_H - top,
@@ -3279,6 +3289,12 @@ static void handle_event(explorer *e, plat_event ev)
         if (!e->playing) {
             int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
             int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
+            int inside = ev.y >= inv_reveal(e) && !e->g->iface_count;
+            if (inside && !e->inv_inside && e->held_inv) {
+                game_hold(e->g, NULL); /* back to the inventory: the item goes back */
+                e->held_inv = 0;
+            }
+            e->inv_inside = inside;
             game_hover(e->g, e->mx, e->my);
             game_hover_inventory(e->g, inv >= 0 ? e->inv_ids[inv] : 0, inv >= e->inv_items);
         }
@@ -3468,11 +3484,15 @@ static void script_settle(void *user)
 static void script_point(void *user, int x, int y)
 {
     explorer *e = user;
+    plat_event ev; /* as the pointer moves: hovers, the inventory */
+    memset(&ev, 0, sizeof(ev));
+    ev.type = PLAT_EV_MOUSE_MOVE;
+    ev.x = x;
+    ev.y = y;
     e->mx = x;
     e->my = y;
     scr_to_output(&e->layout, x, y, &e->out_mx, &e->out_my);
-    if (!e->playing)
-        game_hover(e->g, x, y);
+    handle_event(e, ev);
 }
 
 static void script_input(void *user, int key, int x, int y)
