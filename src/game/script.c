@@ -1014,7 +1014,11 @@ int script_run(script *s, const char *path, int quiet)
             u32 i;
             for (i = 0; i < g->interp.var_count; i++)
                 if (g->interp.vars[i].id == (u32)a)
-                    printf("  var %ld %s = %d\n", a, g->interp.vars[i].name, g->interp.vars[i].value);
+                    printf("  var %ld %s = %d%s%s\n", a, g->interp.vars[i].name, g->interp.vars[i].value,
+                           vc_string_get(&g->interp, (u32)g->interp.vars[i].value) ? " " : "",
+                           vc_string_get(&g->interp, (u32)g->interp.vars[i].value)
+                               ? vc_string_get(&g->interp, (u32)g->interp.vars[i].value)
+                               : "");
         } else if (strcmp(cmd, "solve") == 0 && sscanf(line, "%*s %ld var %ld %ld", &a, &b, &c) == 3) {
             /* solve <depth> var <id> <value> | view <id>: search for moves */
             solve(s, (int)a, (u32)b, (i32)c);

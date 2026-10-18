@@ -132,6 +132,13 @@ Some strings are words the player searches for in the ING and the media
 search. A search matches the translated word and the release's own
 word, so either works.
 
+The game's language word, string 1091 of `xfilest.dll` ("english",
+"german", ...), goes into `scGameLanguage` (`SetLanguage`). 88 layout
+actions move items when it is not "english", for the localized
+pictures' longer words. A translation shows its fallback's pictures, so
+the word comes from the release's own table, whatever the translation
+says, and changes with the text language.
+
 Mails start with three header lines in the order To, From, Subject. A
 translation can name them in its language (`Para:`, `De:`,
 `Assunto:`): the mail list reads them by position.

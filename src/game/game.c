@@ -2444,6 +2444,7 @@ const char *game_credit(const game *g)
 }
 
 static void load_text(game *g);
+static void apply_language(game *g);
 static const char *original_text(game *g, u32 asset, char *buf, size_t size);
 
 static void prefs_save(game *g)
@@ -3744,9 +3745,9 @@ static int host_call_function(void *user, const vc_action *a)
      * variable names. Layouts compare it with scGameLanguageEnglish and
      * move items for the longer translations (RelocateIFace). */
     if (strcmp(name, "SetLanguage") == 0 && argc == 2) {
-        char text[64];
-        game_text(g, (u32)arg_value(g, &args[0]), text, sizeof(text));
-        vc_string_set(&g->interp, (u32)arg_value(g, &args[1]), text);
+        g->language_text = (u32)arg_value(g, &args[0]);
+        g->language_var = (u32)arg_value(g, &args[1]);
+        apply_language(g);
         return 1;
     }
     /* 0x48A360 fn_FixJumpCut: does nothing in this build (0x48A470 ends
@@ -4651,6 +4652,21 @@ static void load_table(game *g, xf_strings *t, const char *dll, const char *txt)
         xf_strings_load_text(t, path);
 }
 
+/* The game's language word (string 1091: "english", "german", ...)
+ * into the variable SetLanguage named. It must name the language of the
+ * pictures: 88 layout actions move items when it is not English, for the
+ * longer words of the localized pictures. A translation shows the
+ * release's pictures, so the release's own word counts, not its own. */
+static void apply_language(game *g)
+{
+    char text[64];
+    if (!g->language_var)
+        return;
+    if (!original_text(g, g->language_text, text, sizeof(text)))
+        game_text(g, g->language_text, text, sizeof(text));
+    vc_string_set(&g->interp, g->language_var, text);
+}
+
 static void load_text(game *g)
 {
     char path[1024];
@@ -4673,6 +4689,7 @@ void game_set_languages(game *g, int voices, int text)
     if (text >= 0 && text < g->langs.count && g->langs.langs[text].text && text != g->langs.text) {
         g->langs.text = text;
         load_text(g);
+        apply_language(g);
     }
     prefs_save(g);
 }

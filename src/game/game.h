@@ -162,6 +162,7 @@ typedef struct {
     int pending_mail_count;
     char login[2][32];    /* computer login: name and password */
     xf_strings strings;   /* xfilest.dll: the game's text */
+    u32 language_text, language_var; /* SetLanguage: the word's reference and the variable */
     xf_strings base_strings; /* the release's xfilest.dll under a translation: search words match both */
     game_item_label labels[GAME_MAX_LABELS];
     int label_count;
