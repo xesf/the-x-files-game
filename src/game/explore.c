@@ -1445,7 +1445,7 @@ static void stop_sound(explorer *e)
  * near the bottom of the screen, with the hovered item's name under
  * them. */
 #define INV_Y 422
-#define INV_NAME_PX 12
+#define INV_NAME_PX 10
 #define INV_W 30
 #define INV_H 40
 #define INV_GAP 8

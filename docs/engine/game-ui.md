@@ -159,7 +159,7 @@ help text says the inventory shows when the pointer moves to the bottom
 of the screen, and the item in hand stays on screen. The explorer shows
 the icons of the items the player carries along the bottom, at y 422,
 when the pointer is below y 410. The name of the item under the
-pointer shows under its icon in Courier New 12.
+pointer shows under its icon in Courier New 10.
 
 An item in hand shows its own cursor. The cursors are named after the
 items (`InventoryLockpick`, VCCursor 31907), as are the GAM's inventory
