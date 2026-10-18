@@ -1335,14 +1335,16 @@ static int wrap_lines_font(const xf_font *f, const char *text, float px, int w, 
     return xf_text_wrap(f, px, text, w, starts, lens, max);
 }
 
-/* Where the dialogue box goes: centred on the character, on screen. */
+/* Where the dialogue box goes (DialogBox_place, 0x4810A0): centred on
+ * the character, kept inside the clip's picture (the rectangle at
+ * 0x6C0EE0), so it never reaches the screen's edges. */
 static int dialog_x(explorer *e)
 {
     int i, cx = SCREEN_W / 2;
     for (i = 0; i < e->g->spot_count; i++)
         if (e->g->spots[i].id == e->g->talking)
             cx = (e->g->spots[i].region.left + e->g->spots[i].region.right) / 2;
-    return XF_CLAMP(cx - DLG_W / 2, 0, SCREEN_W - DLG_W);
+    return XF_CLAMP(cx - DLG_W / 2, PICTURE_X, PICTURE_X + PICTURE_W - DLG_W);
 }
 
 typedef struct {

@@ -60,7 +60,8 @@ the engine (`DialogBox_load_media`, 0x482610), all in `x.pff`:
 
 Pure blue (0x0000FF) is transparent in these pictures.
 `DialogBox_place` (0x4810A0) centres the folder on the character,
-keeps it on screen, and puts its top at y 285. The box shows again as
+keeps it inside the clip's picture (the rectangle at 0x6C0EE0, x 20 to
+620), and puts its top at y 285. The box shows again as
 soon as an answer has played, with the remaining questions.
 
 The TALK tab lists the questions not asked yet; the HISTORY tab lists
