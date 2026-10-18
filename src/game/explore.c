@@ -3166,6 +3166,9 @@ static void handle_event(explorer *e, plat_event ev)
         menu_enter(e); /* the main menu over the game, a clip included: it waits */
     else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE)
         ; /* a clip is playing: a click skips it */
+    else if (e->in_menu == 1 && ev.type != PLAT_EV_MOUSE_MOVE &&
+             !(ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT))
+        ; /* the menu holds the game: no right click, keys or typing reach it */
     else if (ev.type == PLAT_EV_KEY_DOWN && ev.key == 'd' &&
              (ev.mods & (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) == (PLAT_MOD_CTRL | PLAT_MOD_SHIFT)) {
         e->debug = !e->debug;
@@ -3432,14 +3435,14 @@ static void script_input(void *user, int key, int x, int y)
     explorer *e = user;
     plat_event ev;
     memset(&ev, 0, sizeof(ev));
-    if (key) {
+    if (key > 0) {
         ev.type = PLAT_EV_KEY_DOWN;
         ev.key = key;
         handle_event(e, ev);
     } else {
         int types[3] = { PLAT_EV_MOUSE_MOVE, PLAT_EV_MOUSE_DOWN, PLAT_EV_MOUSE_UP }, i;
         scr_to_output(&e->layout, x, y, &ev.x, &ev.y);
-        ev.button = PLAT_MOUSE_LEFT;
+        ev.button = key < 0 ? PLAT_MOUSE_RIGHT : PLAT_MOUSE_LEFT;
         for (i = 0; i < 3; i++) {
             ev.type = types[i];
             handle_event(e, ev);

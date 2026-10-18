@@ -20,3 +20,11 @@ press 565 29                      # the X icon in the top-right corner
 expect window menu 1
 press 550 240
 expect window menu 0
+
+# The menu holds the game: a right click or Backspace behind it does
+# not go back in the view.
+key escape
+expect window menu 1
+rpress 300 200
+key backspace
+expect window menu 1

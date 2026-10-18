@@ -22,6 +22,7 @@ typedef struct {
     /* Sends an input event as the platform would: `key` is a PLAT_KEY_*
      * code or a character for key presses, 0 for a left click at (x, y)
      * in 640x480 screen positions. */
+    /* a key, or with key 0 a left click at (x, y), -1 a right click */
     void (*input)(void *user, int key, int x, int y);
     /* The window's own state: "menu" (1 while the main menu is up),
      * "paused" (1 while the game's clips and sounds hold), "playing" (1

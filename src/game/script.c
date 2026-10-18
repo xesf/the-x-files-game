@@ -1046,11 +1046,13 @@ int script_run(script *s, const char *path, int quiet)
                 s->host.input(s->host.user, key, 0, 0);
             else
                 ok = key != 27 && game_key(g, key); /* without a window: to the field with focus */
-        } else if (strcmp(cmd, "press") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
-            /* press <x> <y>: a left click in the window, through its input */
+        } else if ((strcmp(cmd, "press") == 0 || strcmp(cmd, "rpress") == 0) &&
+                   sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
+            /* press <x> <y>: a left click in the window, through its input;
+             * rpress: a right click */
             ok = s->host.input != NULL;
             if (ok)
-                s->host.input(s->host.user, 0, (int)a, (int)b);
+                s->host.input(s->host.user, cmd[0] == 'r' ? -1 : 0, (int)a, (int)b);
         } else if (strcmp(cmd, "expect") == 0 && sscanf(line, "%*s window %31s %ld", what, &a) == 2) {
             int got = s->host.window ? s->host.window(s->host.user, what) : -1;
             ok = got == a;
