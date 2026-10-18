@@ -639,6 +639,22 @@ and the location card stop where they are, and the game clock stops.
 They also hold on the Options, Help, Save and Load screens opened from
 the menu. They go on from the same place when the player returns.
 
+### The Help screen
+
+The Help screen is layout 50460, a picture of the game screen. When it
+opens, its actions put one `ScrollTextList` text on each of its text
+items (51090 to 51108, and 80255 for the Artificial Intuition icon).
+Each text item starts switched off. Hovering a part of the picture (an
+area item such as 50495, the emotion icons) switches on that part's
+highlight (50472) and its text item (51104), and runs `FadeBack(1)`.
+`FadeBack` dims the screen behind the layout's front items, the ones
+with a draw order below 0x7F. Leaving the part switches them off again
+and runs `FadeBack(0)`.
+
+Our engine keeps one text per item, removes an item's text when its
+layout closes, and draws a text only while its item is switched on.
+The last `ScrollTextList` is the one `MainScroll` scrolls.
+
 During a game the menu shows `return.pic` (72895) over the Previous
 row: `MainMenu_load_media` adds it at (472, 215)-(640, 273) when
 `g_game_in_progress` is set. That row then returns to the game. The

@@ -97,6 +97,7 @@ enum { GAME_ASK_OK, GAME_ASK_SAVE, GAME_ASK_RESTORE };
 #define GAME_MAX_NOTES 128
 #define GAME_MAX_EMAILS 64
 #define GAME_EMAIL_ROWS 8
+#define GAME_MAX_TEXTS 16
 
 /* A scrolling text box on a layout item (ScrollTextList): a mail, a
  * field note, a help page. `line` is the first line shown. */
@@ -162,6 +163,7 @@ typedef struct {
     int pending_mail_count;
     char login[2][32];    /* computer login: name and password */
     xf_strings strings;   /* xfilest.dll: the game's text */
+    int fade_back;           /* FadeBack: the top layout dims behind its front items */
     u32 language_text, language_var; /* SetLanguage: the word's reference and the variable */
     xf_strings base_strings; /* the release's xfilest.dll under a translation: search words match both */
     game_item_label labels[GAME_MAX_LABELS];
@@ -192,6 +194,11 @@ typedef struct {
     int email_count, email_scroll;
     char email_mode;                  /* EmailInit: 'C' computer, 'P' PDA */
     game_scroll scroll;               /* ScrollTextList, InitEmailRead */
+    /* Every ScrollTextList text of the open layouts, one per item: the
+     * help screen puts a text on each of its parts and shows the one
+     * whose item is enabled. `scroll` is the one that scrolls. */
+    game_scroll texts[GAME_MAX_TEXTS];
+    int text_count;
     u32 ing_notes;                    /* media of the ING record's field notes */
     int show_evidence;                /* DispEvIcons */
     int kit_open;                     /* RollOnEvKit: the kit's evidence popup */
@@ -314,8 +321,8 @@ u32 game_photo_at(game *g, int slot);
 /* Extra start time of a clip in ms (PrepBombTime), 0 for most. */
 u32 game_clip_offset(const game *g, u32 asset);
 
-/* The scrolling text box, or NULL when there is none. */
-const game_scroll *game_scroll_box(game *g);
+/* The scrolling text box on an item, or NULL when there is none. */
+const game_scroll *game_scroll_box(game *g, u32 item);
 
 /* Gunfights: the HOT rectangle of a clip at a point of the video frame
  * and a clip time (0 for none), and a shot at one. game_shoot returns 0

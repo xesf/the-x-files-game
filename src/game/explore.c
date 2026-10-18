@@ -658,15 +658,13 @@ static int wrap_lines_font(const xf_font *f, const char *text, float px, int w, 
 /* The scrolling text box (ScrollTextList, a mail): the text's own lines,
  * each wrapped to the item's width, from the first line shown down to the
  * bottom of the item. */
-static void draw_scroll_box(explorer *e)
+static void draw_scroll_box(explorer *e, const game_iface_item *it, const game_scroll *sb)
 {
-    const game_scroll *sb = game_scroll_box(e->g);
-    const game_iface_item *it;
     const xf_font *f;
     xf_surface sf = screen_surface(e);
     float px;
     int y, line = 0, pos = 0, len, lh;
-    if (!sb || e->g->text_off || !(it = game_find_item(e->g, sb->item)) || !e->have_font)
+    if (e->g->text_off || !e->have_font)
         return;
     /* TextFile_show (0x480850): 'H' (Helvetica) is Arial, the rest Courier New */
     f = sb->font == 'H' && e->have_caption_font ? &e->caption_font : courier(e);
@@ -850,21 +848,32 @@ static void draw_label(explorer *e, const game_iface_item *it, const game_item_l
 static void draw_iface_layer(explorer *e, int k)
 {
     const game_iface *d = &e->g->ifaces[k];
-    const game_scroll *sb = game_scroll_box(e->g);
+    const game_scroll *sb;
     int i, order;
     char buf[64];
-    for (order = 255; order >= 0; order--) /* a low order is in front */
+    for (order = 255; order >= 0; order--) { /* a low order is in front */
+        if (order == 0x7F && e->g->fade_back && k == e->g->iface_count - 1) {
+            /* FadeBack: the screen dims behind the front items, so the
+             * help screen's hovered part, its highlight and its text
+             * stand out */
+            size_t p;
+            for (p = 0; p < (size_t)SCREEN_W * SCREEN_H; p++) {
+                u32 c = e->fb[p];
+                e->fb[p] = ((c >> 16 & 0xFF) * 3 / 10) << 16 | ((c >> 8 & 0xFF) * 3 / 10) << 8 | (c & 0xFF) * 3 / 10;
+            }
+        }
         for (i = 0; i < d->count; i++)
             if ((d->items[i].item.flags & 0xFF) == order && vc_is_enabled(&e->g->interp, d->items[i].id))
                 blit_keyed(e, &e->iface_img[k][i], d->items[i].item.region.left, d->items[i].item.region.top);
+    }
     for (i = 0; i < d->count; i++) {
         const game_item_label *l = game_item_label_of(e->g, d->items[i].id);
         if (l && l->text[0] && vc_is_enabled(&e->g->interp, d->items[i].id))
             draw_label(e, &d->items[i], l);
     }
-    for (i = 0; sb && i < d->count; i++)
-        if (d->items[i].id == sb->item)
-            draw_scroll_box(e);
+    for (i = 0; i < d->count; i++) /* a text shows with its item */
+        if ((sb = game_scroll_box(e->g, d->items[i].id)) && vc_is_enabled(&e->g->interp, d->items[i].id))
+            draw_scroll_box(e, &d->items[i], sb);
     for (i = 0; e->have_font && i < d->count; i++) {
         const game_iface_item *it = &d->items[i];
         const vc_region *r = &it->item.region;

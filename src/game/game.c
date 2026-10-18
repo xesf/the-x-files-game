@@ -281,7 +281,14 @@ int game_view_media(game *g, u32 *ids, int max)
 static void remove_layout(game *g, int k)
 {
     game_iface d = g->ifaces[k];
-    int i;
+    int i, t;
+    g->fade_back = 0;
+    for (t = 0; t < g->text_count; t++)
+        for (i = 0; i < d.count; i++)
+            if (g->texts[t].item == d.items[i].id) {
+                g->texts[t--] = g->texts[--g->text_count];
+                break;
+            }
     memmove(&g->ifaces[k], &g->ifaces[k + 1], sizeof(g->ifaces[0]) * (size_t)(g->iface_count - k - 1));
     g->iface_count--;
     g->iface_serial++;
@@ -3393,9 +3400,30 @@ static int email_function(game *g, const char *name, int argc, const vc_operand 
     return 0;
 }
 
-const game_scroll *game_scroll_box(game *g)
+/* Keeps a ScrollTextList text for its item, replacing the item's old one. */
+static void keep_text(game *g, const game_scroll *sb)
 {
-    return g->scroll.item && g->scroll.text[0] ? &g->scroll : NULL;
+    int t;
+    for (t = 0; t < g->text_count && g->texts[t].item != sb->item; t++)
+        ;
+    if (t == GAME_MAX_TEXTS)
+        return;
+    g->texts[t] = *sb;
+    if (t == g->text_count)
+        g->text_count++;
+}
+
+const game_scroll *game_scroll_box(game *g, u32 item)
+{
+    int t;
+    if (!item)
+        return NULL;
+    if (g->scroll.item == item)
+        return g->scroll.text[0] ? &g->scroll : NULL;
+    for (t = 0; t < g->text_count; t++)
+        if (g->texts[t].item == item)
+            return g->texts[t].text[0] ? &g->texts[t] : NULL;
+    return NULL;
 }
 
 /* What the ING shows when nothing is found (0x4653B9): "No Data Found"
@@ -3717,10 +3745,13 @@ static int host_call_function(void *user, const vc_action *a)
         g->fade_serial++;
         return 1;
     }
-    /* 0x48A2B0 fn_FadeBack(on): 0x40BC30 shows or hides a set of screen
-     * layers; not drawn yet. */
-    if (strcmp(name, "FadeBack") == 0)
+    /* 0x48A2B0 fn_FadeBack(on): the Help screen's parts call it on
+     * mouse over (1) and off (0); the screen dims behind the part's
+     * highlight and text (our drawing of 0x40BC30's screen layers). */
+    if (strcmp(name, "FadeBack") == 0) {
+        g->fade_back = argc > 0 && arg_value(g, &args[0]) != 0;
         return 1;
+    }
     /* 0x460170 fn_SetAIList(trigger, action list): 0x4688D0 keeps the
      * pair as the Artificial Intuition hint. The icon glows while an
      * action of the list has a condition that holds (0x4FE820); a click
@@ -4105,6 +4136,7 @@ static int host_call_function(void *user, const vc_action *a)
         g->scroll.color = (char)arg_value(g, &args[2]);
         g->scroll.font = (char)arg_value(g, &args[3]);
         g->scroll.size = arg_value(g, &args[4]);
+        keep_text(g, &g->scroll);
         return 1;
     }
     if (strcmp(name, "ScrollTextInit") == 0 && argc == 1) {
@@ -4121,6 +4153,7 @@ static int host_call_function(void *user, const vc_action *a)
     }
     if (strcmp(name, "ScrollTextKill") == 0) {
         memset(&g->scroll, 0, sizeof(g->scroll));
+        g->text_count = 0;
         return 1;
     }
     /* 0x491190 fn_PlayAssetAt(media, x, y): plays a small clip over the
