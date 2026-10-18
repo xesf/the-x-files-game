@@ -150,6 +150,9 @@ typedef struct {
     xf_mov right_mov;     /* RIGHT.mov is stepped by frame */
     xf_video right;
     int right_open, right_frame, right_target;
+    xf_player right_sound;  /* RIGHT.mov's sound for the frames shown: the labels coming in, a rollover */
+    int right_sound_open;
+    char right_path[1024];
     u32 right_next_ms;
     /* sounds beside the clips; loops repeat */
     xf_player sound;
@@ -2357,9 +2360,28 @@ static void drop_game_media(explorer *e)
     e->from_menu = 0;
 }
 
+/* Plays RIGHT.mov's sound for frames first..last: the picture and the
+ * sound share the movie's time, so each rollover has its own sound. */
+static void menu_right_sound(explorer *e, int first, int last)
+{
+    const xf_mov_track *t = e->right.track;
+    u32 t0, t1;
+    if (e->right_sound_open)
+        xf_player_close(&e->right_sound);
+    e->right_sound_open = 0;
+    if (!e->right_open || !t || first < 0 || (u32)first >= t->sample_count)
+        return;
+    t0 = (u32)((u64)t->sample_time[first] * 1000 / t->timescale);
+    t1 = (u32)((u64)((u32)last + 1 < t->sample_count ? t->sample_time[last + 1] : t->duration) * 1000 / t->timescale);
+    e->right_sound_open = xf_player_open_range(&e->right_sound, e->right_path, plat_ticks_ms(), t0, t1) == 0;
+}
+
 static void menu_close(explorer *e)
 {
     int i;
+    if (e->right_sound_open)
+        xf_player_close(&e->right_sound);
+    e->right_sound_open = 0;
     if (e->right_open) {
         xf_video_close(&e->right);
         xf_mov_close(&e->right_mov);
@@ -2391,10 +2413,12 @@ static void menu_enter(explorer *e)
             xf_mov_open(&e->right_mov, path) == 0) {
             xf_mov_track *t = xf_mov_find(&e->right_mov, XF_TRACK_VIDEO);
             e->right_open = t && xf_video_open(&e->right, &e->right_mov, t) == 0;
+            snprintf(e->right_path, sizeof(e->right_path), "%s", path);
         }
         e->right_frame = -1;
         e->right_target = RIGHT_INTRO_END;
         e->right_next_ms = plat_ticks_ms();
+        menu_right_sound(e, 0, RIGHT_INTRO_END - 1); /* the labels coming in */
     }
     e->in_menu = 1;
     e->menu_hover = -1;
@@ -2437,6 +2461,7 @@ static void menu_set_hover(explorer *e, int item)
     if (item >= 0) {
         e->right_frame = g_menu_rollover[item].first - 1;
         e->right_target = g_menu_rollover[item].last;
+        menu_right_sound(e, g_menu_rollover[item].first, g_menu_rollover[item].last);
     } else {
         e->right_frame = RIGHT_INTRO_END - 1;
         e->right_target = RIGHT_INTRO_END;
@@ -2488,11 +2513,14 @@ static void menu_update(explorer *e)
         /* Finished parts keep showing their last frame. */
     }
     menu_step_right(e);
+    if (e->right_sound_open && !xf_player_update(&e->right_sound, plat_ticks_ms())) {
+        xf_player_close(&e->right_sound);
+        e->right_sound_open = 0;
+    }
 }
 
 static void menu_draw(explorer *e)
 {
-    plat_show_cursor(1);
     int i, y;
     memset(e->fb, 0, sizeof(e->scene_fb));
     for (i = 0; i < MENU_PARTS; i++) {
@@ -2518,6 +2546,7 @@ static void menu_draw(explorer *e)
                 memcpy(&e->fb[(215 + y) * SCREEN_W + 472], e->return_img.pixels + y * e->return_img.width,
                        (size_t)XF_MIN(e->return_img.width, SCREEN_W - 472) * 4);
     }
+    draw_cursor(e, e->mx, e->my); /* the game's cross, as everywhere else */
 }
 
 static int menu_item_at(int x, int y)
