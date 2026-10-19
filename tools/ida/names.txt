@@ -560,3 +560,7 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x42FF60 Font_assign  assigns one font object to another
 0x482D00 DialogBox_init  loads the dialogue folder; its question lists in Courier New 12
 0x48F870 App_init_screen  start-up: display list, the rollover text object (0x6BD2F8) in Courier New 14
+0x4BFF40 PageTurnSound_run  runs list 92468 (trigger 92463): one of five page sounds
+0x5069E0 InitAddrList_empty  fn_InitAddrList's body: returns at once
+0x506A00 PswdInit_empty  fn_PswdInit's body: returns at once
+0x506A10 PwbkInit_empty  fn_PwbkInit's body: returns at once

@@ -560,5 +560,9 @@ static main()
     set_name(0x42FF60, "Font_assign", SN_NOWARN);
     set_name(0x482D00, "DialogBox_init", SN_NOWARN);
     set_name(0x48F870, "App_init_screen", SN_NOWARN);
+    set_name(0x4BFF40, "PageTurnSound_run", SN_NOWARN);
+    set_name(0x5069E0, "InitAddrList_empty", SN_NOWARN);
+    set_name(0x506A00, "PswdInit_empty", SN_NOWARN);
+    set_name(0x506A10, "PwbkInit_empty", SN_NOWARN);
     msg("names applied\n");
 }
