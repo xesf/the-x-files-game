@@ -586,3 +586,13 @@ data 0x65CFF8 g_cycle_flash_beam  "MWS"
 0x568C20 key_shift_down  GetAsyncKeyState(VK_SHIFT)
 0x568C50 key_alt_down  GetAsyncKeyState(VK_MENU)
 0x568C80 key_ctrl_down  GetAsyncKeyState(VK_CONTROL)
+0x41AEA0 tool_assets_register  start-up: the dialogue box, X cursor and each tool's assets
+0x4DDEB0 Camera_ctor  the camera's object over the view (vtable 0x659F10)
+0x4C2AD0 Gun_ctor  the gun's object (vtable 0x6583A8)
+0x49E680 Flashlight_ctor  the flashlight's object (vtable 0x656070)
+0x5109C0 NightVision_ctor  the night vision goggles' object (vtable 0x65DDF0)
+0x491E30 camera_assets_set  moveableviewfinder.pic 34749, Camera.amv 34747, DeadShtr.amv 57104
+0x4762A0 gun_assets_set  Gunsight cursor 7158, gun.amv 34743
+0x41B0C0 flashlight_assets_set  flashlightmask.pic 34745
+0x41B090 nightvision_assets_set  nightvisiongogmask.pic 34751
+0x466AA0 binoculars_assets_set  binocularmask.pic 34753

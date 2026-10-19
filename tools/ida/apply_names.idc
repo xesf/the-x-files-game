@@ -586,5 +586,15 @@ static main()
     set_name(0x568C20, "key_shift_down", SN_NOWARN);
     set_name(0x568C50, "key_alt_down", SN_NOWARN);
     set_name(0x568C80, "key_ctrl_down", SN_NOWARN);
+    set_name(0x41AEA0, "tool_assets_register", SN_NOWARN);
+    set_name(0x4DDEB0, "Camera_ctor", SN_NOWARN);
+    set_name(0x4C2AD0, "Gun_ctor", SN_NOWARN);
+    set_name(0x49E680, "Flashlight_ctor", SN_NOWARN);
+    set_name(0x5109C0, "NightVision_ctor", SN_NOWARN);
+    set_name(0x491E30, "camera_assets_set", SN_NOWARN);
+    set_name(0x4762A0, "gun_assets_set", SN_NOWARN);
+    set_name(0x41B0C0, "flashlight_assets_set", SN_NOWARN);
+    set_name(0x41B090, "nightvision_assets_set", SN_NOWARN);
+    set_name(0x466AA0, "binoculars_assets_set", SN_NOWARN);
     msg("names applied\n");
 }
