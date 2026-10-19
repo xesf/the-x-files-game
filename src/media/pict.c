@@ -19,6 +19,8 @@ typedef struct {
     const u8 *p, *end;
     rect16 frame;
     xf_image *img;
+    u8 *alpha;          /* the alpha plane of 32-bit pixmaps, per pixel */
+    int alpha_clear, alpha_solid; /* which alpha values the picture has */
 } pict_dec;
 
 static rect16 read_rect(const u8 *p)
@@ -70,6 +72,27 @@ static void put_row(pict_dec *d, const rect16 *dst, int y, const u32 *row, int w
         int ix = dst->left - d->frame.left + x;
         if (ix >= 0 && ix < d->img->width)
             d->img->pixels[iy * d->img->width + ix] = row[x];
+    }
+}
+
+/* Keeps a row's alpha plane: the viewfinder cursor is white with its
+ * frame lines opaque and the rest clear. */
+static void keep_alpha(pict_dec *d, const rect16 *dst, int y, const u8 *a, int w)
+{
+    int x, iy = dst->top - d->frame.top + y;
+    if (iy < 0 || iy >= d->img->height)
+        return;
+    if (!d->alpha && !(d->alpha = calloc((size_t)d->img->width * d->img->height, 1)))
+        return;
+    for (x = 0; x < w; x++) {
+        int ix = dst->left - d->frame.left + x;
+        if (ix < 0 || ix >= d->img->width)
+            continue;
+        d->alpha[iy * d->img->width + ix] = a[x];
+        if (a[x])
+            d->alpha_solid = 1;
+        else
+            d->alpha_clear = 1;
     }
 }
 
@@ -182,6 +205,8 @@ static int op_bits(pict_dec *d, int direct)
             int skip = cmp_count == 4 ? w : 0;
             for (x = 0; x < w; x++)
                 row[x] = (u32)buf[skip + x] << 16 | (u32)buf[skip + w + x] << 8 | buf[skip + 2 * w + x];
+            if (cmp_count == 4)
+                keep_alpha(d, &dst, y, buf, w);
         } else if (direct && pixel_size == 16) {
             for (x = 0; x < w; x++) {
                 u16 v = xf_be16(buf + x * 2);
@@ -307,6 +332,8 @@ int xf_pict_decode(const u8 *data, size_t size, xf_image *img)
     if (!img->pixels)
         return -1;
     d.frame = read_rect(data + 2);
+    d.alpha = NULL;
+    d.alpha_clear = d.alpha_solid = 0;
     d.p = data + 10;
     d.end = data + size;
     d.img = img;
@@ -381,6 +408,21 @@ int xf_pict_decode(const u8 *data, size_t size, xf_image *img)
         }
     }
 done:
+    /* A picture without the blue key whose alpha plane mixes zero and
+     * non-zero values is cut out by it, the non-zero pixels being the
+     * clear ones: the camera's viewfinder cursor (cursor-viewfinder.pic)
+     * is white everywhere, its corner marks and reticle at alpha 0. The
+     * pictures that already use the blue key keep it. */
+    if (drew && d.alpha && d.alpha_clear && d.alpha_solid) {
+        size_t k, n = (size_t)img->width * img->height;
+        int keyed = 0;
+        for (k = 0; k < n && !keyed; k++)
+            keyed = img->pixels[k] == XF_PICT_KEY;
+        for (k = 0; k < n && !keyed; k++)
+            if (d.alpha[k])
+                img->pixels[k] = XF_PICT_KEY;
+    }
+    free(d.alpha);
     if (!drew) {
         free(img->pixels);
         img->pixels = NULL;
