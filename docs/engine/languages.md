@@ -14,7 +14,7 @@ media and the text files change.
 | Kind | Files | Translated by |
 |---|---|---|
 | Voices | `XV/*.xmv` (clips), `XS/*` (voice sounds), `vob/*.vob` | Every release dubs its clips |
-| Interface text | `XFILEST.DLL`, `XFILESE.DLL`, `XFILESC.DLL` | Every release |
+| Interface text | `XFILEST.DLL`, `XFILESE.DLL`, `XFILESC.DLL`, `XFILESS.DLL` | Every release |
 | Documents | `XT/*.xtx` (mails, notes, articles) | Every release, about 385 of 467 |
 | Pictures with text | `X.PFF`, `X7.PFF`, `XG/*` | Every release |
 | Fonts | `DLG`, `HCD`, `JRN`, `PHN` (`.TTR`, or `.TTF` in the English CD install) | None: the same files everywhere |
@@ -93,7 +93,7 @@ from its fallback language (English unless `lang.txt` says otherwise).
 | File | Content |
 |---|---|
 | `lang.txt` | `name=Português` (shown on the Options screen), `fallback=en`, `encoding=shift-jis` for Shift-JIS documents, `font=` a font file for characters the game fonts lack, and the words drawn over pictures the translation has no copy of: `talk=FALAR`, `history=HISTÓRICO` (the dialogue folder's tabs) |
-| `xfilest.txt`, `xfilese.txt`, `xfilesc.txt` | One string a line: `id<TAB>text`, UTF-8, `\n` for a line break |
+| `xfilest.txt`, `xfilese.txt`, `xfilesc.txt`, `xfiless.txt` | One string a line: `id<TAB>text`, UTF-8, `\n` for a line break |
 | `xt/<id>.xtx` | Documents, UTF-8 |
 | `xv/<id>.srt` | Captions of the clip `XV/<id>.xmv`, SRT, UTF-8 |
 

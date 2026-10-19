@@ -167,6 +167,7 @@ typedef struct {
     u32 effect_serial;
     u32 sound_serial;
     u32 fade_serial, fade_start, fade_view; /* FadeToBlack */
+    u32 subliminal_shown; /* the serial of the last subliminal word drawn */
     xf_player overlay;    /* PlayAssetAt: a small clip over the screen */
     int overlay_open;
     u32 overlay_serial;
@@ -2345,6 +2346,22 @@ static void ui_piece(explorer *e, int x, int y, int w, int h, int anchor)
 /* RollHdCredits: the opening credit cards in Typist (Hcd.ttr) 12 point,
  * centred at the bottom of the scene strip, 5 pixels in (rectangle
  * 0x6C4988, 0x458AA0). */
+/* A subliminal word (0x4681D0): Courier New 20 in dark grey (50, the
+ * preferences' byte at +0xC8), centred on the screen (0x6C48A0, the
+ * whole 640x480), for a single frame. */
+static void draw_subliminal(explorer *e)
+{
+    u32 serial;
+    const char *word = game_subliminal(e->g, &serial);
+    xf_surface s = screen_surface(e);
+    int w;
+    if (!word || serial == e->subliminal_shown || e->g->text_off || !e->have_card_font)
+        return;
+    e->subliminal_shown = serial;
+    w = xf_text_width(&e->card_font, 20, word, strlen(word));
+    xf_text_draw(&s, &e->card_font, 20, (SCREEN_W - w) / 2, SCREEN_H / 2 + 7, word, strlen(word), 0x323232);
+}
+
 static void draw_credit(explorer *e)
 {
     const char *text = game_credit(e->g), *line;
@@ -2515,6 +2532,7 @@ static void draw(explorer *e, int mx, int my)
     draw_darkness(e, mx, my);
     draw_fade(e);
     draw_credit(e);
+    draw_subliminal(e);
     if (e->debug)
         /* Ctrl+Shift+D: hotspot outlines and the view's media name. */
         for (i = 0; i < g->spot_count; i++) {

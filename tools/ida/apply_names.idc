@@ -564,5 +564,17 @@ static main()
     set_name(0x5069E0, "InitAddrList_empty", SN_NOWARN);
     set_name(0x506A00, "PswdInit_empty", SN_NOWARN);
     set_name(0x506A10, "PwbkInit_empty", SN_NOWARN);
+    set_name(0x4681D0, "Subliminal_show_word", SN_NOWARN);
+    set_name(0x443BB0, "Subliminal_period", SN_NOWARN);
+    set_name(0x45BA30, "Subliminal_shown_ms", SN_NOWARN);
+    set_name(0x4520B0, "app_subliminal", SN_NOWARN);
+    set_name(0x4025D0, "text_object_running", SN_NOWARN);
+    set_name(0x4834F0, "Subliminal_ctor", SN_NOWARN);
+    set_name(0x41F5D0, "Subliminal_dll_name", SN_NOWARN);
+    set_name(0x511300, "Subliminal_enabled", SN_NOWARN);
+    set_name(0x4E4B00, "Prefs_get_subliminal", SN_NOWARN);
+    set_name(0x4E4AF0, "Prefs_set_subliminal", SN_NOWARN);
+    set_name(0x4681C0, "Prefs_get_subliminal_grey", SN_NOWARN);
+    set_name(0x6C48A0, "g_rect_subliminal", SN_NOWARN);
     msg("names applied\n");
 }

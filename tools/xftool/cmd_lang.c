@@ -32,6 +32,7 @@ static const char *const g_tables[][2] = {
     { "XFILEST.DLL", "xfilest.txt" }, /* the game's text */
     { "XFILESE.DLL", "xfilese.txt" }, /* the engine's messages */
     { "XFILESC.DLL", "xfilesc.txt" }, /* the credits */
+    { "XFILESS.DLL", "xfiless.txt" }, /* the subliminal words */
 };
 /* The folders whose clips can have captions. */
 static const char *const g_clip_dirs[] = { "XV", "XG", "XS" };

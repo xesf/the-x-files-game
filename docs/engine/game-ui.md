@@ -565,6 +565,23 @@ draw Courier. A click on the note ends the game.
 Play scripts use `shoot [id]`: a shot at that rectangle of the view's
 clip, or at the clip's first rectangle.
 
+## Subliminal messages
+
+The Options screen's Subliminal Messages (`Pref_bSubliminalMessages`,
+variable 985, off by default) flashes words from `xfiless.dll` over the
+game. The engine's second text object (app +0x108, vtable `0x65DE88`,
+whose DLL slot names `XFilesS.dll`) runs while the preference is on
+(`0x4E4FD0`). Every 6000 ms (slot 4, `0x443BB0`) its slot 9
+(`0x4681D0`) draws a number from 1 to 4; unless it is 4, the object
+shows a word for 0 ms (slot 5, `0x45BA30`), so for a single frame. The
+word is in Courier New 20 (`Font_select(4, 20)`), dark grey (50, 50,
+50: the preferences' byte at +0xC8), centred in the rectangle at
+`0x6C48A0`, which is the whole screen. `TextOn(0)` hides it with the
+other engine texts.
+
+Our engine picks the word at random from the whole table, as far as the
+draw is read; the exe's choice of string is not traced further.
+
 ## Artificial Intuition
 
 The AI icon (evidence icon 56185) sits in the top-right corner, under

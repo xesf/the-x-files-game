@@ -680,6 +680,41 @@ static void start_credits(game *g)
     }
 }
 
+/* Subliminal Messages (Pref_bSubliminalMessages, var 985): the text
+ * object at app +0x108 (vtable 0x65DE88, XFilesS.dll) runs while the
+ * preference is on (0x4E4FD0). Every 6000 ms (slot 4, 0x443BB0) slot 9
+ * (0x4681D0) draws 1 to 4 and, unless it is 4, shows a word for 0 ms
+ * (slot 5, 0x45BA30): one frame. */
+#define SUBLIMINAL_PERIOD 6000
+
+static void subliminal_tick(game *g)
+{
+    if (!game_pref(g, 985) || !g->subliminal_strings.count) {
+        g->subliminal_due = 0;
+        return;
+    }
+    if (!g->subliminal_due) {
+        g->subliminal_due = g->now + SUBLIMINAL_PERIOD;
+        return;
+    }
+    if ((i32)(g->now - g->subliminal_due) < 0)
+        return;
+    g->subliminal_due = g->now + SUBLIMINAL_PERIOD;
+    g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+    if ((g->rand_seed >> 16) % 4 == 3)
+        return; /* the draw came out 4 */
+    g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+    g->subliminal_id = g->subliminal_strings.ids[(g->rand_seed >> 16) % g->subliminal_strings.count];
+    g->subliminal_serial++;
+    xf_debug("subliminal: %s", xf_strings_get(&g->subliminal_strings, g->subliminal_id));
+}
+
+const char *game_subliminal(const game *g, u32 *serial)
+{
+    *serial = g->subliminal_serial;
+    return g->subliminal_serial ? xf_strings_get(&g->subliminal_strings, g->subliminal_id) : NULL;
+}
+
 void game_tick(game *g, u32 now_ms)
 {
     int i;
@@ -694,6 +729,7 @@ void game_tick(game *g, u32 now_ms)
     }
     if (g->game_over)
         return; /* the game has ended: nothing runs on */
+    subliminal_tick(g);
     for (i = 0; i < g->timer_count; i++) {
         game_timer *t = &g->timers[i];
         const vc_place *p;
@@ -4740,6 +4776,7 @@ static void load_text(game *g)
         xf_warn("game: no xfilest.dll, interface texts are missing");
     load_table(g, &g->engine_strings, "XFILESE.DLL", "xfilese.txt"); /* empty: English fallbacks */
     load_table(g, &g->credit_strings, "XFILESC.DLL", "xfilesc.txt");
+    load_table(g, &g->subliminal_strings, "XFILESS.DLL", "xfiless.txt");
 }
 
 void game_set_languages(game *g, int voices, int text)
@@ -4807,6 +4844,7 @@ void game_close(game *g)
     xf_strings_free(&g->base_strings);
     xf_strings_free(&g->engine_strings);
     xf_strings_free(&g->credit_strings);
+    xf_strings_free(&g->subliminal_strings);
     vc_place_map_free(&g->places);
     vc_interp_free(&g->interp);
     xf_neo_close(&g->gam);

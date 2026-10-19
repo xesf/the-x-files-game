@@ -564,3 +564,15 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x5069E0 InitAddrList_empty  fn_InitAddrList's body: returns at once
 0x506A00 PswdInit_empty  fn_PswdInit's body: returns at once
 0x506A10 PwbkInit_empty  fn_PwbkInit's body: returns at once
+0x4681D0 Subliminal_show_word  slot 9: 1 to 4 at random; unless 4, a word in Courier New 20, grey, centred
+0x443BB0 Subliminal_period  slot 4: a word every 6000 ms
+0x45BA30 Subliminal_shown_ms  slot 5: shown 0 ms (one frame)
+0x4520B0 app_subliminal  the subliminal text object (app + 0x108)
+0x4025D0 text_object_running  whether a text object (credits, subliminal) runs
+0x4834F0 Subliminal_ctor  vtable 0x65DE88
+0x41F5D0 Subliminal_dll_name  slot 3: "XFilesS.dll"
+0x511300 Subliminal_enabled  slot 2: Pref_bSubliminalMessages
+0x4E4B00 Prefs_get_subliminal  preferences +0x4C
+0x4E4AF0 Prefs_set_subliminal  preferences +0x4C
+0x4681C0 Prefs_get_subliminal_grey  preferences +0xC8, 50 by default
+data 0x6C48A0 g_rect_subliminal  (0, 0)-(640, 480): the subliminal word's centre

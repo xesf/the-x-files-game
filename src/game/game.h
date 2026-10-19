@@ -248,6 +248,10 @@ typedef struct {
     int credits_first;    /* the first card's string: 4 after the intro, else 1 */
     u32 credits_sound;    /* the credits music, waiting for the first card */
     xf_strings credit_strings; /* xfilesc.dll: the credit cards */
+    xf_strings subliminal_strings; /* xfiless.dll: the subliminal words */
+    u32 subliminal_due;        /* game time of the next try */
+    u32 subliminal_id;         /* the word to flash */
+    u32 subliminal_serial;     /* changes for each flash */
     u32 played[GAME_PLAYED]; /* the last clips started, for tests */
     u32 played_count;
     u8 *checkpoint;          /* SaveGameState: the state to go back to after a death */
@@ -417,6 +421,9 @@ int game_ai_glowing(game *g);
  * its GAM variable. */
 /* The credit card on screen now (RollHdCredits), or NULL. */
 const char *game_credit(const game *g);
+/* The subliminal word flashed last and its serial, which changes for each
+ * flash (shown for one frame); NULL when there is none. */
+const char *game_subliminal(const game *g, u32 *serial);
 void game_prefs_load(game *g);
 /* Turns the wide layout on or off, and saves the preferences. */
 void game_set_screen_wide(game *g, int on);
