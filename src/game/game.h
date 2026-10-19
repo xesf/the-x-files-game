@@ -424,6 +424,8 @@ const char *game_credit(const game *g);
 /* The subliminal word flashed last and its serial, which changes for each
  * flash (shown for one frame); NULL when there is none. */
 const char *game_subliminal(const game *g, u32 *serial);
+/* Plays a short sound over the ambience (a tool's gunshot, the shutter). */
+void game_play_effect(game *g, u32 asset);
 void game_prefs_load(game *g);
 /* Turns the wide layout on or off, and saves the preferences. */
 void game_set_screen_wide(game *g, int on);

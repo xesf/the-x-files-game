@@ -256,25 +256,25 @@ estimates.
 Clicking a tool in the inventory runs its `On...Click` (0x4B7390 to
 0x4B7780). Each puts the tool in hand (0x49AB40) and, while something is
 in hand, creates the tool's own object over the view: the camera's
-(0x518DA0), the flashlight's beam (0x49E680), the gun's (0x4C2AD0) and
-the night vision goggles' (0x5190D0); the binoculars show the view's
-close-up. The tools have no item cursor of their own. Our engine shows:
+(0x4DDEB0), the flashlight's (0x49E680), the gun's (0x4C2AD0) and the
+night vision goggles' (0x5109C0); the binoculars show the view's
+close-up. At start-up 0x41AEA0 registers each tool's assets:
 
-| Tool | In hand |
-|---|---|
-| Camera | The `ViewFinder` cursor (7161), centred on the pointer |
-| Gun | The `Gunsight` cursor (7158) |
-| Flashlight | A lit circle around the pointer, also in lit views, where the rest dims at alpha 0xC8 (`FLight_darken`) |
-| Night vision goggles | The view in green, in any view |
-| Binoculars | The view's close-up, when it has one |
+| Tool | Assets | In hand |
+|---|---|---|
+| Camera | `moveableviewfinder.pic` (34749), `Camera.amv` (34747), `DeadShtr.amv` (57104) | The viewfinder follows the pointer inside the picture; a click sounds the shutter |
+| Gun | `Gunsight` cursor (7158), `gun.amv` (34743) | The gunsight; a click fires |
+| Flashlight | `flashlightmask.pic` (34745) | The view lit through the beam picture, scaled by the beam preference; in a lit view the rest dims at alpha 0xC8 (`FLight_darken`) |
+| Night vision goggles | `nightvisiongogmask.pic` (34751) | The view in green under the goggles' frame |
+| Binoculars | `binocularmask.pic` (34753) | The view, or its close-up, through the binoculars' mask |
 
-While a tool or any item is in hand, the inventory bar shows that item
-alone.
-
-`cursor-viewfinder.pic` is white all over; its alpha plane cuts it out,
-the corner marks and the reticle at alpha 0 and the rest non-zero. The
-PICT decoder applies such a plane to a picture that has no blue key.
-
+With a tool in hand the view's hotspots show no cursors of their own,
+and with the camera or the gun a click on a move does not walk away. A
+hotspot whose triggers check the tool in hand runs them as usual; a
+photo is taken where the scene allows it, by a clip that calls
+`TakePhoto`. While a tool or any item is in hand, the inventory bar
+shows that item alone. When the camera plays `DeadShtr.amv` is not
+traced yet, nor the green of the goggles.
 
 ## Computer
 

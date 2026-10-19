@@ -168,6 +168,8 @@ typedef struct {
     u32 sound_serial;
     u32 fade_serial, fade_start, fade_view; /* FadeToBlack */
     u32 subliminal_shown; /* the serial of the last subliminal word drawn */
+    xf_image tool_img[6]; /* the tools' masks, loaded when first in hand */
+    int tool_img_tried[6];
     xf_player overlay;    /* PlayAssetAt: a small clip over the screen */
     int overlay_open;
     u32 overlay_serial;
@@ -1968,6 +1970,8 @@ static int inv_at(explorer *e, int x, int y)
 
 static u32 held_cursor(explorer *e);
 static int holding(explorer *e);
+enum { TOOL_NONE, TOOL_FLASHLIGHT, TOOL_CAMERA, TOOL_GUN, TOOL_NIGHTVISION, TOOL_BINOCULARS };
+static int tool_in_hand(explorer *e);
 static void frame_rect(explorer *e, const vc_region *r, u32 color);
 
 /* The middle of what a picture shows: some item pictures sit in the
@@ -2128,10 +2132,9 @@ static void build_inventory_cursors(explorer *e)
             xf_fold_ascii(folded, sizeof(folded), name);
             if (strncmp(folded, "inventory", 9) == 0 && strcmp(folded + 9, want) == 0)
                 e->inv_cursor[value] = g->db.entries[k].id;
-            /* the tools have no item cursor: the camera shows the
-             * viewfinder (VCCursor 7161), the gun the gunsight (7158) */
-            if ((strcmp(want, "camera") == 0 && strcmp(folded, "viewfinder") == 0) ||
-                (strcmp(want, "gun") == 0 && strcmp(folded, "gunsight") == 0))
+            /* the tools have no item cursor: the gun shows the gunsight
+             * (VCCursor 7158, registered with gun.amv by 0x4762A0) */
+            if (strcmp(want, "gun") == 0 && strcmp(folded, "gunsight") == 0)
                 e->inv_cursor[value] = g->db.entries[k].id;
         }
     }
@@ -2200,9 +2203,14 @@ static const cursor_art *current_cursor(explorer *e, int mx, int my)
 {
     u32 id = held_cursor(e);
     const cursor_art *c;
+    int tool = e->in_menu == 1 ? TOOL_NONE : tool_in_hand(e);
+    /* the camera's viewfinder follows the pointer in place of a cursor;
+     * with a tool in hand the hotspots show no cursors of their own */
+    if (tool == TOOL_CAMERA && !e->g->iface_count && my >= PICTURE_Y && my < PICTURE_Y + PICTURE_H)
+        return NULL;
     /* a close-up shown during a conversation (Skinner's travel papers)
      * has its own cursors, its zoom eye included */
-    if (!id && !e->playing && e->in_menu != 1 && (!e->g->talking || e->g->iface_count))
+    if (!id && !tool && !e->playing && e->in_menu != 1 && (!e->g->talking || e->g->iface_count))
         id = game_cursor_at(e->g, mx, my);
     c = id ? get_cursor(e, id) : NULL;
     if (!c)
@@ -2214,17 +2222,8 @@ static const cursor_art *current_cursor(explorer *e, int mx, int my)
 static void draw_cursor(explorer *e, int mx, int my)
 {
     const cursor_art *c = current_cursor(e, mx, my);
-    const xf_image *f;
-    if (!c)
-        return;
-    f = &c->frames[(plat_ticks_ms() / 100) % (u32)c->count];
-    /* The camera's viewfinder (160x120) is drawn by the camera's own
-     * object, its reticle on the pointer; its hot spot (14, 18) is a
-     * cursor's. Pictures that large are centred on the pointer. */
-    if (f->width > 64 || f->height > 64)
-        blit_keyed(e, f, mx - f->width / 2, my - f->height / 2);
-    else
-        blit_keyed(e, f, mx - c->hot_x, my - c->hot_y);
+    if (c)
+        blit_keyed(e, &c->frames[(plat_ticks_ms() / 100) % (u32)c->count], mx - c->hot_x, my - c->hot_y);
 }
 
 /* --- Drawing --------------------------------------------------------- */
@@ -2272,60 +2271,124 @@ static void draw_card(explorer *e, int clip_x, int clip_y, int clip_w, int clip_
     }
 }
 
-/* SetFLightProps mode 2: the view is dark (0x49EA10 darkens it by alpha
- * 0xEE or 0xC8, from the beam setting). The flashlight in hand lights a
- * circle around the pointer; night vision shows the whole view in green.
- * The beam picture is scaled by Pref_cFlashlightBeam (0x49EE90): inside,
- * Wide keeps it whole, Medium 0.72, Small 0.45 (0x656058, 0x656060);
- * outside, Medium and Wide 0.6, Small 0.45 (0x656068). Our radius at
- * Medium inside (70) and the green are estimates. */
-#define BEAM_RADIUS_MEDIUM 70
+/* The tools in hand (0x41AEA0 registers their assets): the flashlight's
+ * beam (flashlightmask.pic, 34745), the camera's movable viewfinder
+ * (34749), the night vision goggles' frame (34751) and the binoculars'
+ * mask (34753); the gun fires gun.amv (34743), the camera's shutter is
+ * Camera.amv (34747). */
+#define TOOL_MASK_FLASHLIGHT 34745
+#define TOOL_MASK_CAMERA 34749
+#define TOOL_MASK_NIGHTVISION 34751
+#define TOOL_MASK_BINOCULARS 34753
+#define TOOL_SOUND_GUN 34743
+#define TOOL_SOUND_SHUTTER 34747
 
-static int beam_radius(explorer *e)
+static int tool_in_hand(explorer *e)
 {
-    char size = (char)game_pref(e->g, 990);
-    float scale;
-    if (e->g->flight_place == 'O')
-        scale = size == 'S' ? 0.45f : 0.6f;
-    else
-        scale = size == 'S' ? 0.45f : size == 'W' ? 1.0f : 0.72f;
-    return (int)(BEAM_RADIUS_MEDIUM / 0.72f * scale + 0.5f);
+    static const char *const vars[] = { NULL, "Inventory_iFlashlight", "Inventory_iCamera", "Inventory_iGun",
+                                        "Inventory_iNightVision", "Inventory_iBinoculars" };
+    i32 hand;
+    int t;
+    if (!holding(e))
+        return TOOL_NONE;
+    hand = game_reg_value(e->g, "RegCurrInvVar", 0);
+    for (t = 1; t < (int)XF_COUNT(vars); t++) {
+        u32 v = vc_find_var(&e->g->interp, vars[t]);
+        if (v && hand == vc_get_var(&e->g->interp, v))
+            return t;
+    }
+    return TOOL_NONE;
 }
 
+static const xf_image *tool_mask(explorer *e, int tool)
+{
+    static const u32 ids[] = { 0, TOOL_MASK_FLASHLIGHT, TOOL_MASK_CAMERA, 0, TOOL_MASK_NIGHTVISION,
+                               TOOL_MASK_BINOCULARS };
+    xf_image *img = &e->tool_img[tool];
+    if (!ids[tool])
+        return NULL;
+    if (!img->pixels && !e->tool_img_tried[tool]) {
+        e->tool_img_tried[tool] = 1;
+        load_asset_image(e, ids[tool], img);
+    }
+    return img->pixels ? img : NULL;
+}
+
+/* The beam picture is scaled by Pref_cFlashlightBeam (0x49EE90): inside,
+ * Wide keeps it whole, Medium 0.72, Small 0.45 (0x656058, 0x656060);
+ * outside, Medium and Wide 0.6, Small 0.45 (0x656068). */
+static float beam_scale(explorer *e)
+{
+    char size = (char)game_pref(e->g, 990);
+    if (e->g->flight_place == 'O')
+        return size == 'S' ? 0.45f : 0.6f;
+    return size == 'S' ? 0.45f : size == 'W' ? 1.0f : 0.72f;
+}
+
+/* Scales a pixel's colour by k/255. */
+static u32 shade(u32 c, int k)
+{
+    return (u32)(((c >> 16) & 0xFF) * k / 255) << 16 | (u32)(((c >> 8) & 0xFF) * k / 255) << 8 |
+           (u32)((c & 0xFF) * k / 255);
+}
+
+/* SetFLightProps mode 2 darkens the view (FLight_darken, 0x49EA10: the
+ * room at alpha 0xEE); the flashlight in hand lights it through its beam
+ * picture, and in a lit view still dims the rest, at 0xC8. The night
+ * vision goggles turn the view green under their frame, the binoculars
+ * show it through their mask, the camera its viewfinder over the
+ * pointer. The green is an estimate. */
 static void draw_darkness(explorer *e, int mx, int my)
 {
     game *g = e->g;
-    i32 hand = game_reg_value(g, "RegCurrInvVar", 0);
-    u32 fl = vc_find_var(&g->interp, "Inventory_iFlashlight"), nv = vc_find_var(&g->interp, "Inventory_iNightVision");
-    int light = fl && hand == vc_get_var(&g->interp, fl), green = nv && hand == vc_get_var(&g->interp, nv);
-    int x, y, radius = beam_radius(e), dark = g->flight_mode == 2, rest;
-    /* FLight_darken (0x49EA10): in a dark view the room around the beam
-     * is at alpha 0xEE; in a lit one the flashlight in hand still dims it,
-     * at 0xC8. The night vision goggles' object (0x5190D0) works in any
-     * view. */
-    if (!dark && !light && !green)
-        return;
-    if (g->iface_count && !dark)
-        return; /* a close-up or the computer: the tool is not over the view */
-    rest = dark ? 17 : 55; /* 255 - 0xEE, 255 - 0xC8 */
-    for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
-        for (x = PICTURE_X; x < PICTURE_X + PICTURE_W; x++) {
-            u32 c = e->fb[y * SCREEN_W + x];
-            int r = (c >> 16) & 0xFF, gg = (c >> 8) & 0xFF, b = c & 0xFF, k = rest;
-            if (green) {
-                int l = (r * 77 + gg * 150 + b * 29) >> 8;
-                e->fb[y * SCREEN_W + x] = (u32)(l / 4) << 16 | (u32)XF_MIN(255, l * 3 / 2) << 8 | (u32)(l / 4);
-                continue;
-            }
-            if (light) {
-                int dx = x - mx, dy = y - my, d2 = dx * dx + dy * dy;
-                if (d2 < radius * radius) {
-                    int edge = radius * radius - d2; /* soft rim */
-                    k = rest + XF_MIN(255 - rest, edge * (255 - rest) / (radius * 20));
+    int tool = tool_in_hand(e), dark = g->flight_mode == 2, x, y;
+    const xf_image *m = tool ? tool_mask(e, tool) : NULL;
+    if (g->iface_count && tool != TOOL_BINOCULARS)
+        tool = TOOL_NONE; /* a close-up or the computer: the tool is not over the view */
+    if (dark || tool == TOOL_FLASHLIGHT) {
+        int rest = dark ? 17 : 55; /* 255 - 0xEE, 255 - 0xC8 */
+        float s = beam_scale(e);
+        int bw = m ? (int)(m->width * s) : 0, bh = m ? (int)(m->height * s) : 0;
+        for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
+            for (x = PICTURE_X; x < PICTURE_X + PICTURE_W; x++) {
+                int k = rest;
+                if (tool == TOOL_FLASHLIGHT && m && bw > 0 && bh > 0) {
+                    int u = (x - mx + bw / 2) * m->width / bw, v = (y - my + bh / 2) * m->height / bh;
+                    if (u >= 0 && v >= 0 && u < m->width && v < m->height) {
+                        int l = (int)((m->pixels[(size_t)v * m->width + u] >> 8) & 0xFF);
+                        k = rest + (255 - rest) * l / 255;
+                    }
                 }
+                e->fb[y * SCREEN_W + x] = shade(e->fb[y * SCREEN_W + x], k);
             }
-            e->fb[y * SCREEN_W + x] = (u32)(r * k / 255) << 16 | (u32)(gg * k / 255) << 8 | (u32)(b * k / 255);
-        }
+    }
+    if (tool == TOOL_NIGHTVISION) {
+        for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
+            for (x = PICTURE_X; x < PICTURE_X + PICTURE_W; x++) {
+                u32 c = e->fb[y * SCREEN_W + x];
+                int l = (int)((((c >> 16) & 0xFF) * 77 + ((c >> 8) & 0xFF) * 150 + (c & 0xFF) * 29) >> 8);
+                e->fb[y * SCREEN_W + x] = (u32)(l / 4) << 16 | (u32)XF_MIN(255, l * 3 / 2) << 8 | (u32)(l / 4);
+            }
+        if (m)
+            blit_keyed(e, m, PICTURE_X, PICTURE_Y);
+    } else if (tool == TOOL_BINOCULARS && m) {
+        int oy = (PICTURE_H - m->height) / 2; /* 275 rows over the 240 of the picture */
+        for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
+            for (x = PICTURE_X; x < PICTURE_X + PICTURE_W; x++) {
+                int u = (x - PICTURE_X) * m->width / PICTURE_W, v = y - PICTURE_Y - oy;
+                int l = v >= 0 && v < m->height ? (int)((m->pixels[(size_t)v * m->width + u] >> 8) & 0xFF) : 0;
+                e->fb[y * SCREEN_W + x] = shade(e->fb[y * SCREEN_W + x], l);
+            }
+    } else if (tool == TOOL_CAMERA && m) {
+        /* the viewfinder moves with the pointer, inside the picture */
+        int x0 = mx - m->width / 2, y0 = my - m->height / 2;
+        for (y = XF_MAX(y0, PICTURE_Y); y < XF_MIN(y0 + m->height, PICTURE_Y + PICTURE_H); y++)
+            for (x = XF_MAX(x0, PICTURE_X); x < XF_MIN(x0 + m->width, PICTURE_X + PICTURE_W); x++) {
+                u32 c = m->pixels[(size_t)(y - y0) * m->width + (x - x0)];
+                if (c != KEY_BLUE)
+                    e->fb[y * SCREEN_W + x] = c;
+            }
+    }
 }
 
 /* FadeToBlack: the picture goes black over 2 seconds and stays black
@@ -3681,7 +3744,17 @@ static void handle_event(explorer *e, plat_event ev)
             ;
         else {
             u32 was = e->g->talking;
-            if (!game_click(e->g, ev.x, ev.y))
+            int tool = tool_in_hand(e);
+            /* the gun fires and the camera's shutter clicks over the view
+             * (gun.amv and Camera.amv, 0x41AEA0); a hotspot that reacts
+             * to the tool runs its triggers as usual */
+            if (!e->g->iface_count && ev.y >= PICTURE_Y && ev.y < PICTURE_Y + PICTURE_H &&
+                (tool == TOOL_GUN || tool == TOOL_CAMERA))
+                game_play_effect(e->g, tool == TOOL_GUN ? TOOL_SOUND_GUN : TOOL_SOUND_SHUTTER);
+            const game_spot *sp = game_spot_at(e->g, ev.x, ev.y);
+            if ((tool == TOOL_GUN || tool == TOOL_CAMERA) && !e->g->iface_count && sp && sp->kind == SPOT_NAV)
+                ; /* aiming or framing a shot does not walk away */
+            else if (!game_click(e->g, ev.x, ev.y))
                 game_end_talk(e->g); /* a click elsewhere closes the box */
             if (e->g->talking != was) {
                 e->talk_scroll = 0;
@@ -3990,6 +4063,11 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     stop_sound(e);
     if (e->effect_open)
         xf_player_close(&e->effect);
+    {
+        int t;
+        for (t = 0; t < (int)XF_COUNT(e->tool_img); t++)
+            free(e->tool_img[t].pixels);
+    }
     close_anims(e);
     free_iface_pictures(e);
     {

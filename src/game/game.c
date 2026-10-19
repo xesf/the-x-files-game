@@ -709,6 +709,12 @@ static void subliminal_tick(game *g)
     xf_debug("subliminal: %s", xf_strings_get(&g->subliminal_strings, g->subliminal_id));
 }
 
+void game_play_effect(game *g, u32 asset)
+{
+    g->effect = asset;
+    g->effect_serial++;
+}
+
 const char *game_subliminal(const game *g, u32 *serial)
 {
     *serial = g->subliminal_serial;
