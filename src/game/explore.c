@@ -1916,6 +1916,24 @@ static int inv_at(explorer *e, int x, int y)
 static u32 held_cursor(explorer *e);
 static void frame_rect(explorer *e, const vc_region *r, u32 color);
 
+/* The middle of what a picture shows: some item pictures sit in the
+ * left part of their 30-pixel slot, on a transparent or black ground. */
+static int picture_middle(const xf_image *img)
+{
+    int x, y, lo = -1, hi = -1;
+    for (x = 0; img->pixels && x < img->width; x++)
+        for (y = 0; y < img->height; y++) {
+            u32 c = img->pixels[(size_t)y * img->width + x];
+            if (c != KEY_BLUE && (c >> 16 & 0xFF) + (c >> 8 & 0xFF) + (c & 0xFF) > 48) {
+                if (lo < 0)
+                    lo = x;
+                hi = x;
+                break;
+            }
+        }
+    return lo < 0 ? INV_W / 2 : (lo + hi + 1) / 2;
+}
+
 static void draw_inventory(explorer *e, int mx, int my)
 {
     xf_surface s = screen_surface(e);
@@ -1939,7 +1957,7 @@ static void draw_inventory(explorer *e, int mx, int my)
         game_object_label(e->g, e->inv_ids[hover], name, sizeof(name));
         w = xf_text_width(courier(e), INV_NAME_PX, name, strlen(name));
         inv_pos(e, hover, &x, &y);
-        x = XF_CLAMP(x + INV_W / 2 - w / 2, 4, SCREEN_W - 4 - w);
+        x = XF_CLAMP(x + picture_middle(&e->inv_img[hover][0]) - w / 2, 4, SCREEN_W - 4 - w);
         xf_text_draw(&s, courier(e), INV_NAME_PX, x, INV_Y + INV_H + INV_NAME_PX, name, strlen(name), 0xFFFFFF);
     }
 }
