@@ -2,6 +2,19 @@
 
 All notable changes to this project.
 
+## 0.3.0 - 2026-10-20
+
+- Tools in hand use the game's own pictures and sounds: the camera's movable viewfinder and shutter, the gun's gunsight and gunshot, the flashlight's beam picture (also in lit rooms), the night vision goggles' frame, the binoculars' mask. The bar shows the item in hand alone; hotspots show no cursors of their own while a tool is in hand.
+- Scenes react to the tool in hand where the data says so (the gun on characters, a photo where the scene allows it); aiming the gun or the camera runs a move's triggers without leaving the view.
+- Subliminal Messages: with the option on, a word from xfiless.dll flashes for one frame every 6 seconds; translations can add xfiless.txt.
+- Page turns play one of the five page sounds, over the ambience.
+- Flashlight beam size from its option (Wide, Medium, Small; smaller outside); the beam and brightness options cycle as the original's; the Best Quality and Best Performance presets set what the original's set.
+- Dialogue box: the scroll arrows and bar sit under the close box; a translation's tab words stay inside the tab.
+- Pictures cut out by their alpha plane where they have no blue key (the camera's viewfinder).
+- Fixed: timer triggers of a layout no longer get skipped when another layout closes.
+- IDA: the tool objects and assets, the subliminal text object, the flashlight and preference code, the keyboard shortcut handler, page sounds.
+- Tests: play script `gun-reaction.txt`.
+
 ## 0.2.6 - 2026-10-19
 
 - Crisp Courier New: the location card, rollover and inventory names, dialogue questions and typed fields no longer look grey and soft; captions and the other fonts keep smooth edges.
