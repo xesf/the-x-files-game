@@ -161,6 +161,11 @@ while the pointer is in (57, 0)-(409, 60), and stops it and rewinds it
 when the pointer leaves. The menu's click handler (slot 13, `0x496DC0`)
 tests the item rows only, so a click on the title does nothing more.
 
+The opening animation plays only the first time the menu opens. When
+the player comes back to it (Escape during a game, or back from
+Options, Help, Save or Load), our engine shows the background's last
+frame and the labels already in place, without the opening sounds.
+
 ### The item column
 
 `RIGHT.mov` (169 JPEG frames over 12 s) holds the item labels and their

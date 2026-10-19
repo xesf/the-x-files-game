@@ -150,6 +150,7 @@ typedef struct {
     xf_image return_img;  /* return.pic: "Return" over the Previous row */
     xf_player menu[MENU_PARTS];
     int menu_open[MENU_PARTS];
+    int menu_seen;        /* the menu's opening animation has played once */
     int menu_hover;
     xf_mov right_mov;     /* RIGHT.mov is stepped by frame */
     xf_video right;
@@ -2810,6 +2811,16 @@ static void menu_enter(explorer *e)
     /* The background animation first; the centre loop and its sound once
      * it has played (menu_update), the title's rollover on the pointer. */
     e->menu_open[MENU_LEFT] = open_asset_player(e, g_menu_parts[MENU_LEFT].asset, &e->menu[MENU_LEFT]) == 0;
+    if (e->menu_seen && e->menu_open[MENU_LEFT]) {
+        /* back to the menu: the background as it ends, without its sound */
+        xf_player *p = &e->menu[MENU_LEFT];
+        if (p->has_audio && p->channel >= 0)
+            xf_mixer_close(p->channel);
+        p->channel = -1;
+        p->has_audio = 0;
+        p->start_ticks = plat_ticks_ms() - p->duration_ms - 1000;
+        xf_player_update(p, plat_ticks_ms());
+    }
     {
         vc_asset_ref a;
         char path[1024];
@@ -2820,11 +2831,13 @@ static void menu_enter(explorer *e)
             e->right_open = t && xf_video_open(&e->right, &e->right_mov, t) == 0;
             snprintf(e->right_path, sizeof(e->right_path), "%s", path);
         }
-        e->right_frame = -1;
+        e->right_frame = e->menu_seen ? RIGHT_INTRO_END - 1 : -1; /* the labels come in once */
         e->right_target = RIGHT_INTRO_END;
         e->right_next_ms = plat_ticks_ms();
-        menu_right_sound(e, 0, RIGHT_INTRO_END - 1); /* the labels coming in */
+        if (!e->menu_seen)
+            menu_right_sound(e, 0, RIGHT_INTRO_END - 1); /* the labels coming in */
     }
+    e->menu_seen = 1;
     e->in_menu = 1;
     e->menu_hover = -1;
 }
