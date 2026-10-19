@@ -2,6 +2,13 @@
 
 All notable changes to this project.
 
+## 0.2.6 - 2026-10-19
+
+- Crisp Courier New: the location card, rollover and inventory names, dialogue questions and typed fields no longer look grey and soft; captions and the other fonts keep smooth edges.
+- Rollover names, the location card and the credits have a drop shadow instead of an outline.
+- The main menu's opening animation plays once; coming back to the menu shows it finished.
+- Inventory names are centred under what the item's picture shows.
+
 ## 0.2.5 - 2026-10-18
 
 - Main menu: RIGHT.mov's sound with the labels coming in and with each rollover; the game's cross cursor, which follows the pointer. The menu holds the game: clicks, Backspace and typing no longer reach the view behind it.
