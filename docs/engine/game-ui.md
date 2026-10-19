@@ -657,6 +657,27 @@ last scene. Nothing runs after it. When the variable is set (a death) and
 (engine string 39). Yes goes back to the checkpoint; otherwise the game
 returns to the main menu.
 
+## Keyboard shortcuts of the exe (not in our engine yet)
+
+`app_key_shortcuts` (0x46BAE0) handles keys `0` to `X` through a byte
+table at 0x46C040. It runs from `app_on_key` (0x46BAC0, a vtable slot
+at 0x657864) only when that call's fourth argument is set; what sets it
+is not traced yet, so our engine does not offer these keys.
+
+| Key | What it does |
+|---|---|
+| `0` to `9` | Sets the game volume (0x4E4A70) to a ninth of the range per step |
+| `A` | Toggles Artificial Intuition |
+| `M` | Toggles Subliminal Messages |
+| `R` | Toggles Rollover Text |
+| `T` | Toggles Transitions |
+| `V` | Toggles High Quality Video |
+| `P` | Pauses or resumes the game's media (app +0xE4) |
+| `L` | Calls 0x4AF640 on app +0x100 (not identified) |
+| `X` | Resets several display objects (not identified) |
+| `F`, `H`, `I`, `J` | Only with Shift and Alt held: developer switches |
+| `S` | Nothing |
+
 ## Keyboard and d-pad
 
 The original plays with the mouse only. Our engine adds keys that move

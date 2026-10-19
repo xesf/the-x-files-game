@@ -581,5 +581,10 @@ static main()
     set_name(0x4C1700, "prefs_best_performance", SN_NOWARN);
     set_name(0x65CFF4, "g_cycle_flash_brightness", SN_NOWARN);
     set_name(0x65CFF8, "g_cycle_flash_beam", SN_NOWARN);
+    set_name(0x46BAE0, "app_key_shortcuts", SN_NOWARN);
+    set_name(0x46BAC0, "app_on_key", SN_NOWARN);
+    set_name(0x568C20, "key_shift_down", SN_NOWARN);
+    set_name(0x568C50, "key_alt_down", SN_NOWARN);
+    set_name(0x568C80, "key_ctrl_down", SN_NOWARN);
     msg("names applied\n");
 }

@@ -581,3 +581,8 @@ data 0x6C48A0 g_rect_subliminal  (0, 0)-(640, 480): the subliminal word's centre
 0x4C1700 prefs_best_performance  PrefDefaults('P')
 data 0x65CFF4 g_cycle_flash_brightness  "MBD"
 data 0x65CFF8 g_cycle_flash_beam  "MWS"
+0x46BAE0 app_key_shortcuts  keys '0'-'X' (table 0x46C040): digits volume, A AI, M subliminal, R rollover, T transitions, V video, P pause, X ?; F H I J need Shift+Alt
+0x46BAC0 app_on_key  vtable slot (0x657864): runs app_key_shortcuts when its 4th argument is set
+0x568C20 key_shift_down  GetAsyncKeyState(VK_SHIFT)
+0x568C50 key_alt_down  GetAsyncKeyState(VK_MENU)
+0x568C80 key_ctrl_down  GetAsyncKeyState(VK_CONTROL)
