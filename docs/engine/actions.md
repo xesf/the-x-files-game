@@ -151,6 +151,19 @@ The four functions in the table that the data never calls are
 `IsoChamberStat`, `RegPreferences`, `RegShanksNode2` and
 `RegShanksNode3`.
 
+Our engine handles every name in the table. Some do nothing in this
+build of the exe, so ours do nothing either:
+
+| Function | Why |
+|---|---|
+| `SmAttack`, `InitAddrList`, `PswdInit`, `PwbkInit` | The handler calls a function that only returns. |
+| `FixJumpCut`, `WillmoreSleeps` | The handler ends in an empty function. |
+| `AddIFLExcept`, `ClearIFLExcept`, `RefNVisionAss`, `BreakPoint` | Only in the catalogue list 42584, which no story trigger runs. |
+
+`PageTurnSound` (`0x4B7950`, `PageTurnSound_run` `0x4BFF40`) runs list
+92468 with trigger 92463, which picks one of five page sounds. The sound
+plays over the ambience, which goes on.
+
 ## Our interpreter
 
 `src/vc/interp.c` runs action lists against the state loaded from

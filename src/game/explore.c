@@ -162,6 +162,9 @@ typedef struct {
     /* sounds beside the clips; loops repeat */
     xf_player sound;
     int sound_open, sound_loop;
+    xf_player effect;     /* game effect sounds (PageTurnSound) */
+    int effect_open;
+    u32 effect_serial;
     u32 sound_serial;
     u32 fade_serial, fade_start, fade_view; /* FadeToBlack */
     xf_player overlay;    /* PlayAssetAt: a small clip over the screen */
@@ -1403,6 +1406,33 @@ static void update_sound(explorer *e)
     /* A sound that ended, or has no file, runs its end triggers. */
     if (!e->sound_open && e->g->sound)
         game_sound_end(e->g);
+}
+
+/* A short effect (a page turn) plays on its own, over the ambience. */
+static void update_effect(explorer *e)
+{
+    u32 now = plat_ticks_ms();
+    if (e->effect_serial != e->g->effect_serial) {
+        vc_asset_ref a;
+        char path[1024];
+        int j;
+        e->effect_serial = e->g->effect_serial;
+        if (e->effect_open)
+            xf_player_close(&e->effect);
+        e->effect_open = 0;
+        if (vc_read_asset_ref(&e->g->db, e->g->effect, &a) == 0)
+            for (j = 0; j < a.entry_count && !e->effect_open; j++)
+                if (resolve_media(e, a.entries[j].path, path, sizeof(path)) == 0 &&
+                    xf_player_open(&e->effect, path, now) == 0) {
+                    e->effect_open = 1;
+                    set_volume(e, &e->effect, 978); /* Pref_iVolumeEffect */
+                }
+        xf_info("effect %s%s", a.logical, e->effect_open ? "" : ": no file on disk");
+    }
+    if (e->effect_open && !xf_player_update(&e->effect, now)) {
+        xf_player_close(&e->effect);
+        e->effect_open = 0;
+    }
 }
 
 static void stop_sound(explorer *e)
@@ -3622,6 +3652,7 @@ static void run_frame(explorer *e)
         start_next_media(e);
         start_title(e);
         update_sound(e);
+        update_effect(e);
         update_overlay(e);
     }
     prof_add(PROF_MEDIA, t0);
@@ -3871,6 +3902,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     }
     stop_media(e);
     stop_sound(e);
+    if (e->effect_open)
+        xf_player_close(&e->effect);
     close_anims(e);
     free_iface_pictures(e);
     {

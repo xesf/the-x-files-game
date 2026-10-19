@@ -131,6 +131,9 @@ typedef struct {
 
     u32 sound;            /* sound asset playing beside the clips */
     u32 sound_serial;     /* changes when a sound starts or stops */
+    u32 effect;           /* a short sound over the others (a page turn) */
+    u32 effect_serial;    /* changes when an effect starts */
+    int effect_mode;      /* sounds started now are effects */
     int sound_looped;     /* the sound plays looped (selector 2) */
     u32 clip_stop_serial; /* changes when a media action stops the clip */
 

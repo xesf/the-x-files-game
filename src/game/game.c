@@ -566,6 +566,11 @@ static void start_sound(game *g, u32 asset, int looped)
     vc_asset_ref a;
     if (vc_read_asset_ref(&g->db, asset, &a) != 0)
         return;
+    if (g->effect_mode) { /* over the ambience, which goes on */
+        g->effect = asset;
+        g->effect_serial++;
+        return;
+    }
     g->sound = asset;
     g->sound_looped = looped;
     g->sound_serial++;
@@ -2677,9 +2682,15 @@ static int book_function(game *g, const char *name, int argc, const vc_operand *
     }
     if (strcmp(name, "JournalDestroy") == 0)
         return 1;
-    /* 0x4B7950 fn_PageTurnSound -> 0x4BFF40: one of the page sounds */
-    if (strcmp(name, "PageTurnSound") == 0)
+    /* 0x4B7950 fn_PageTurnSound -> 0x4BFF40: vc_queue_action_list
+     * (0x47BD40) runs list 92468 with trigger 92463, which picks one of
+     * five page sounds (RandGen into var 1479). */
+    if (strcmp(name, "PageTurnSound") == 0) {
+        g->effect_mode = 1;
+        vc_run_trigger_list(&g->interp, 92463, 92468);
+        g->effect_mode = 0;
         return 1;
+    }
     return 0;
 }
 
@@ -3955,6 +3966,12 @@ static int host_call_function(void *user, const vc_action *a)
     /* Only in the catalogue list 42584, which no story trigger runs. */
     if (strcmp(name, "AddIFLExcept") == 0 || strcmp(name, "ClearIFLExcept") == 0 ||
         strcmp(name, "RefNVisionAss") == 0 || strcmp(name, "BreakPoint") == 0)
+        return 1;
+    /* Empty in this build: 0x4B6640 fn_InitAddrList (0x5069E0), 0x4B9C80
+     * fn_PswdInit (0x506A00), 0x4B9CA0 fn_PwbkInit (0x506A10) and
+     * 0x4BC5F0 fn_SmAttack (nullsub_12) only return. */
+    if (strcmp(name, "InitAddrList") == 0 || strcmp(name, "PswdInit") == 0 || strcmp(name, "PwbkInit") == 0 ||
+        strcmp(name, "SmAttack") == 0)
         return 1;
     if (strcmp(name, "SetShanksVar") == 0 && argc == 1) {
         if (args[0].kind == VC_OPND_VARIABLE)
