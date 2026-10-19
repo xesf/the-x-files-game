@@ -529,8 +529,6 @@ static main()
     set_name(0x49EA10, "FLight_darken", SN_NOWARN);
     set_name(0x49FFE0, "KitIcon_enable", SN_NOWARN);
     set_name(0x4BFF40, "PageTurnSound_play", SN_NOWARN);
-    set_name(0x4C1700, "Prefs_best_perf_a", SN_NOWARN);
-    set_name(0x4C1830, "Prefs_best_perf_b", SN_NOWARN);
     set_name(0x4CA010, "Node2_is_done", SN_NOWARN);
     set_name(0x4CA2B0, "Node6_is_done", SN_NOWARN);
     set_name(0x4CA350, "Link2_is_done", SN_NOWARN);
@@ -576,5 +574,12 @@ static main()
     set_name(0x4E4AF0, "Prefs_set_subliminal", SN_NOWARN);
     set_name(0x4681C0, "Prefs_get_subliminal_grey", SN_NOWARN);
     set_name(0x6C48A0, "g_rect_subliminal", SN_NOWARN);
+    set_name(0x49EE90, "flashlight_scale_beam", SN_NOWARN);
+    set_name(0x44B880, "SetFLightProps_apply", SN_NOWARN);
+    set_name(0x49E8B0, "flashlight_props_set", SN_NOWARN);
+    set_name(0x4C1830, "prefs_best_quality", SN_NOWARN);
+    set_name(0x4C1700, "prefs_best_performance", SN_NOWARN);
+    set_name(0x65CFF4, "g_cycle_flash_brightness", SN_NOWARN);
+    set_name(0x65CFF8, "g_cycle_flash_beam", SN_NOWARN);
     msg("names applied\n");
 }

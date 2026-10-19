@@ -526,11 +526,9 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x48FC20 MainMenu_build_a  builds the main menu (with 0x4BFEC0)
 0x4BFEC0 MainMenu_build_b  builds the main menu (with 0x48FC20)
 0x496DC0 MainMenu_click  the main menu's click handler: tests the item rows only
-0x49EA10 FLight_darken  SetFLightProps mode 2: darkens the view by alpha
+0x49EA10 FLight_darken  SetFLightProps mode 2: level 0-4 from the scene's light and Pref_cFlashlightBrightness; lighten or darken by 0xEE/0xC8
 0x49FFE0 KitIcon_enable  EnableKitIcon: enables an evidence icon in the kit
 0x4BFF40 PageTurnSound_play  PageTurnSound: plays one of the page sounds
-0x4C1700 Prefs_best_perf_a  'P' best performance settings
-0x4C1830 Prefs_best_perf_b  'P' best performance settings
 0x4CA010 Node2_is_done  SetIsNode2Done check
 0x4CA2B0 Node6_is_done  SetIsNode6Done check
 0x4CA350 Link2_is_done  SetIsLink2Done: the first RegLinkNVars variable is set
@@ -576,3 +574,10 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x4E4AF0 Prefs_set_subliminal  preferences +0x4C
 0x4681C0 Prefs_get_subliminal_grey  preferences +0xC8, 50 by default
 data 0x6C48A0 g_rect_subliminal  (0, 0)-(640, 480): the subliminal word's centre
+0x49EE90 flashlight_scale_beam  scales the beam picture by Pref_cFlashlightBeam: inside W 1, M 0.72, S 0.45; outside 0.6, S 0.45
+0x44B880 SetFLightProps_apply  dark (mode 2), outside ('O'), the scene's light ('B' 0, 'M' 1, 'D' 2)
+0x49E8B0 flashlight_props_set  stores 0x6B56B4 (dark), 0x6B56B8 (outside), 0x6B56BC (light)
+0x4C1830 prefs_best_quality  PrefDefaults('Q')
+0x4C1700 prefs_best_performance  PrefDefaults('P')
+data 0x65CFF4 g_cycle_flash_brightness  "MBD"
+data 0x65CFF8 g_cycle_flash_beam  "MWS"
