@@ -269,8 +269,7 @@ close-up. At start-up 0x41AEA0 registers each tool's assets:
 | Binoculars | `binocularmask.pic` (34753) | The view, or its close-up, through the binoculars' mask |
 
 With a tool in hand the view's hotspots show no cursors of their own,
-and with the camera or the gun a click on a move does not walk away. A
-hotspot whose triggers check the tool in hand runs them as usual; a
+but they take clicks as usual: their triggers check the tool in hand. A
 photo is taken where the scene allows it, by a clip that calls
 `TakePhoto`. While a tool or any item is in hand, the inventory bar
 shows that item alone. When the camera plays `DeadShtr.amv` is not

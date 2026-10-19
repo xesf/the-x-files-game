@@ -193,7 +193,7 @@ again (`bomb-death.txt`), the kiss (`kiss.txt`), lying to Scully
 (`scully-lie.txt`), the NSA car and the porch gunfight (`nsa-car.txt`,
 `rauch-gunfight.txt`), a death in the woods (`woods-death.txt`), Cook in
 the lab (`lab-cook-death.txt`, `lab-shoot-cook.txt`), the suicide note
-(`suicide.txt`), the Artificial Intuition hint that opens two overlays (`ai-overlays.txt`), the phone (`phone.txt`), the logins' other answers and Scully's
+(`suicide.txt`), the Artificial Intuition hint that opens two overlays (`ai-overlays.txt`), a scene reacting to the gun in hand (`gun-reaction.txt`), the phone (`phone.txt`), the logins' other answers and Scully's
 PowerBook (`passwords.txt`), the endings: a death at Smolnikoff's
 (`smolnikoff-death.txt`), the bomb's timer (`bomb-timer.txt`), the gun
 drawn on Dr. McIntyre (`shoot-doctor.txt`), the bum's guessing game
