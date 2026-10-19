@@ -1967,6 +1967,7 @@ static int inv_at(explorer *e, int x, int y)
 }
 
 static u32 held_cursor(explorer *e);
+static int holding(explorer *e);
 static void frame_rect(explorer *e, const vc_region *r, u32 color);
 
 /* The middle of what a picture shows: some item pictures sit in the
@@ -1991,7 +1992,7 @@ static void draw_inventory(explorer *e, int mx, int my)
 {
     xf_surface s = screen_surface(e);
     int i, x, y, hover = inv_at(e, mx, my);
-    int held = held_cursor(e) ? -1 : -2;
+    int held = holding(e) ? -1 : -2;
     for (i = 0; held == -1 && i < e->inv_count; i++)
         if (e->inv_ids[i] == e->held_inv)
             held = i;
@@ -2127,8 +2128,23 @@ static void build_inventory_cursors(explorer *e)
             xf_fold_ascii(folded, sizeof(folded), name);
             if (strncmp(folded, "inventory", 9) == 0 && strcmp(folded + 9, want) == 0)
                 e->inv_cursor[value] = g->db.entries[k].id;
+            /* the tools have no item cursor: the camera shows the
+             * viewfinder (VCCursor 7161), the gun the gunsight (7158) */
+            if ((strcmp(want, "camera") == 0 && strcmp(folded, "viewfinder") == 0) ||
+                (strcmp(want, "gun") == 0 && strcmp(folded, "gunsight") == 0))
+                e->inv_cursor[value] = g->db.entries[k].id;
         }
     }
+}
+
+/* Whether something is in hand (RegCurrInvVar is not its empty value). */
+static int holding(explorer *e)
+{
+    if (game_reg_value(e->g, "RegCurrInvVar", 0) == game_reg_value(e->g, "RegCurrInvVar", 1)) {
+        e->held_inv = 0;
+        return 0;
+    }
+    return 1;
 }
 
 /* The cursor of the item in hand, or 0. */
@@ -2198,8 +2214,17 @@ static const cursor_art *current_cursor(explorer *e, int mx, int my)
 static void draw_cursor(explorer *e, int mx, int my)
 {
     const cursor_art *c = current_cursor(e, mx, my);
-    if (c)
-        blit_keyed(e, &c->frames[(plat_ticks_ms() / 100) % (u32)c->count], mx - c->hot_x, my - c->hot_y);
+    const xf_image *f;
+    if (!c)
+        return;
+    f = &c->frames[(plat_ticks_ms() / 100) % (u32)c->count];
+    /* The camera's viewfinder (160x120) is drawn by the camera's own
+     * object, its reticle on the pointer; its hot spot (14, 18) is a
+     * cursor's. Pictures that large are centred on the pointer. */
+    if (f->width > 64 || f->height > 64)
+        blit_keyed(e, f, mx - f->width / 2, my - f->height / 2);
+    else
+        blit_keyed(e, f, mx - c->hot_x, my - c->hot_y);
 }
 
 /* --- Drawing --------------------------------------------------------- */
@@ -2273,13 +2298,20 @@ static void draw_darkness(explorer *e, int mx, int my)
     i32 hand = game_reg_value(g, "RegCurrInvVar", 0);
     u32 fl = vc_find_var(&g->interp, "Inventory_iFlashlight"), nv = vc_find_var(&g->interp, "Inventory_iNightVision");
     int light = fl && hand == vc_get_var(&g->interp, fl), green = nv && hand == vc_get_var(&g->interp, nv);
-    int x, y, radius = beam_radius(e);
-    if (g->flight_mode != 2)
+    int x, y, radius = beam_radius(e), dark = g->flight_mode == 2, rest;
+    /* FLight_darken (0x49EA10): in a dark view the room around the beam
+     * is at alpha 0xEE; in a lit one the flashlight in hand still dims it,
+     * at 0xC8. The night vision goggles' object (0x5190D0) works in any
+     * view. */
+    if (!dark && !light && !green)
         return;
+    if (g->iface_count && !dark)
+        return; /* a close-up or the computer: the tool is not over the view */
+    rest = dark ? 17 : 55; /* 255 - 0xEE, 255 - 0xC8 */
     for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
         for (x = PICTURE_X; x < PICTURE_X + PICTURE_W; x++) {
             u32 c = e->fb[y * SCREEN_W + x];
-            int r = (c >> 16) & 0xFF, gg = (c >> 8) & 0xFF, b = c & 0xFF, k = 17; /* 255 - 0xEE */
+            int r = (c >> 16) & 0xFF, gg = (c >> 8) & 0xFF, b = c & 0xFF, k = rest;
             if (green) {
                 int l = (r * 77 + gg * 150 + b * 29) >> 8;
                 e->fb[y * SCREEN_W + x] = (u32)(l / 4) << 16 | (u32)XF_MIN(255, l * 3 / 2) << 8 | (u32)(l / 4);
@@ -2289,7 +2321,7 @@ static void draw_darkness(explorer *e, int mx, int my)
                 int dx = x - mx, dy = y - my, d2 = dx * dx + dy * dy;
                 if (d2 < radius * radius) {
                     int edge = radius * radius - d2; /* soft rim */
-                    k = 17 + XF_MIN(238, edge * 238 / (radius * 20));
+                    k = rest + XF_MIN(255 - rest, edge * (255 - rest) / (radius * 20));
                 }
             }
             e->fb[y * SCREEN_W + x] = (u32)(r * k / 255) << 16 | (u32)(gg * k / 255) << 8 | (u32)(b * k / 255);
@@ -2617,7 +2649,7 @@ static void draw(explorer *e, int mx, int my)
     }
     refresh_inventory(e);
     /* Pref_cInventory; the item in hand stays in view */
-    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && held_cursor(e))) && !g->iface_count) {
+    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && holding(e))) && !g->iface_count) {
         /* the rows, with the item's name under them */
         int top = (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_Y) - 4;
         int cols = XF_MAX(e->inv_items, e->inv_count - e->inv_items);
@@ -3637,7 +3669,7 @@ static void handle_event(explorer *e, plat_event ev)
             ;
         else if (inv >= e->inv_items) {
             game_click_evidence(e->g, e->inv_ids[inv]);
-        } else if (inv >= 0 && e->inv_ids[inv] == e->held_inv && held_cursor(e)) {
+        } else if (inv >= 0 && e->inv_ids[inv] == e->held_inv && holding(e)) {
             game_hold(e->g, NULL); /* the item in hand, clicked again: put away */
             e->held_inv = 0;
         } else if (inv >= 0) {

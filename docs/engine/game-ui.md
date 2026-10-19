@@ -251,6 +251,30 @@ around the pointer when the flashlight is in hand, and shows the view in
 green with the night vision goggles. The circle size and the green are
 estimates.
 
+### The tools in hand
+
+Clicking a tool in the inventory runs its `On...Click` (0x4B7390 to
+0x4B7780). Each puts the tool in hand (0x49AB40) and, while something is
+in hand, creates the tool's own object over the view: the camera's
+(0x518DA0), the flashlight's beam (0x49E680), the gun's (0x4C2AD0) and
+the night vision goggles' (0x5190D0); the binoculars show the view's
+close-up. The tools have no item cursor of their own. Our engine shows:
+
+| Tool | In hand |
+|---|---|
+| Camera | The `ViewFinder` cursor (7161), centred on the pointer |
+| Gun | The `Gunsight` cursor (7158) |
+| Flashlight | A lit circle around the pointer, also in lit views, where the rest dims at alpha 0xC8 (`FLight_darken`) |
+| Night vision goggles | The view in green, in any view |
+| Binoculars | The view's close-up, when it has one |
+
+While a tool or any item is in hand, the inventory bar shows that item
+alone.
+
+`cursor-viewfinder.pic` is white all over; its alpha plane cuts it out,
+the corner marks and the reticle at alpha 0 and the rest non-zero. The
+PICT decoder applies such a plane to a picture that has no blue key.
+
 
 ## Computer
 
