@@ -480,8 +480,26 @@ game, so they outlive a new game or a load; we save them in the file
 | Skip Introduction | No opening titles |
 | Right/Command + Click to Skip Video Clip | Clips skip only with right click or Command click, and only when on |
 | Volumes | Dialogue (clips) and effects (sounds), times the game volume |
+| Subliminal Messages | Words flash over the game (see [Subliminal messages](#subliminal-messages)) |
+| Flashlight Beam | `M`edium, `W`ide, `S`mall: the size of the lit circle in the dark |
 
-The Graphics settings and the others are stored but have no effect yet.
+The lettered settings cycle in the exe's order: the beam `M`, `W`, `S`
+(0x65CFF8) and the brightness `M`, `B`right, `D`im (0x65CFF4).
+
+The two presets of the first run's Game Configuration box (`PrefDefaults`,
+0x4C1830 and 0x4C1700) set the same group of settings. Best Quality sets
+the beam to Wide and turns on transitions, translucency, smooth text,
+subliminal messages, high quality video, live environments, 3D sound and
+rollover text. Best Performance sets the beam to Small, turns those off
+(not rollover text), and turns closed captioning off. Neither touches the
+flashlight's brightness.
+
+In this exe only the registry code (0x500xxx) reads Transitions,
+Translucency, 3D Sound, High Quality Video and Live Environments; no
+other engine code does. Scripts can read them through their GAM
+variables, which our engine fills. The flashlight's brightness picks one
+of five darkness levels with the scene's own light (the third argument
+of `SetFLightProps`, 0x49EA10); our engine keeps one level for now.
 
 The Graphics tab (layout 49783) has a Closed Captioning row: button
 49939 runs `PrefClosedCap`, and lights 49889 (off) and 49891 (on) show

@@ -2589,7 +2589,7 @@ static int pref_function(game *g, const char *name, int argc, const vc_operand *
         const char *cycle; /* letters to cycle through, NULL for yes/no */
     } prefs[] = {
         { "PrefActionDiff", "SHE" }, { "PrefAutoRes", "AYN" }, { "PrefAutoDepth", "AYN" },
-        { "PrefSaveOnExit", "AYN" }, { "PrefFlashBeam", "MWN" }, { "PrefFlashBrght", "MHL" },
+        { "PrefSaveOnExit", "AYN" }, { "PrefFlashBeam", "MWS" }, { "PrefFlashBrght", "MBD" },
         { "PrefInventory", "HV" },   { "PrefArtIntuit", NULL }, { "PrefAutoRewind", NULL },
         { "PrefSkipIntro", NULL },   { "PrefSkipVideo", NULL },  { "PrefRollover", NULL },
         { "PrefClosedCap", NULL },   { "PrefSubliminal", NULL }, { "PrefTransition", NULL },
@@ -2623,18 +2623,26 @@ static int pref_function(game *g, const char *name, int argc, const vc_operand *
         game_prefs_apply(g);
         return 1;
     }
-    /* 0x4B8C30 fn_PrefDefaults(preset) -> 0x500760: 'Q' best quality,
-     * 'P' best performance (0x4C1830, 0x4C1700) */
+    /* 0x4B8C30 fn_PrefDefaults(preset) -> 0x500760: 'Q' best quality
+     * (0x4C1830), 'P' best performance (0x4C1700). Both set the beam
+     * (Wide, Small), transitions, translucency, smooth text, subliminal
+     * messages, high quality video, live environments and 3D sound; Best
+     * Quality also turns rollover text on, Best Performance closed
+     * captioning off. Neither changes the flashlight's brightness. */
     if (strcmp(name, "PrefDefaults") == 0 && argc == 1) {
         int q = (char)arg_value(g, &args[0]) == 'Q';
-        pref_set(g, 990, q ? 'W' : 'N');
-        pref_set(g, 989, q ? 'H' : 'L');
+        pref_set(g, 990, q ? 'W' : 'S');
         pref_set(g, 986, q);
         pref_set(g, 987, q);
         pref_set(g, 988, q);
+        pref_set(g, 985, q);
         pref_set(g, 4210, q);
         pref_set(g, 5046, q);
         pref_set(g, 980, q);
+        if (q)
+            pref_set(g, 982, 1);
+        else
+            pref_set(g, 2573, 0);
         return 1;
     }
     return 0;
@@ -4383,6 +4391,9 @@ static int host_call_function(void *user, const vc_action *a)
     }
     /* 0x44B4C0 fn_SetFLightProps(mode, 'I'nside or 'O'utside, 'M'):
      * mode 1 by day, 2 in the dark. */
+    /* The exe (0x44B880) keeps the third argument too: the scene's own
+     * light, 'B'right, 'M'edium or 'D'im, which with the brightness
+     * preference picks one of five darkness levels (0x49EA10). */
     if (strcmp(name, "SetFLightProps") == 0 && argc == 3) {
         g->flight_mode = arg_value(g, &args[0]);
         g->flight_place = (char)arg_value(g, &args[1]);

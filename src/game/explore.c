@@ -2228,8 +2228,22 @@ static void draw_card(explorer *e, int clip_x, int clip_y, int clip_w, int clip_
 /* SetFLightProps mode 2: the view is dark (0x49EA10 darkens it by alpha
  * 0xEE or 0xC8, from the beam setting). The flashlight in hand lights a
  * circle around the pointer; night vision shows the whole view in green.
- * The beam size and the green are estimates. */
-#define BEAM_RADIUS 70
+ * The beam picture is scaled by Pref_cFlashlightBeam (0x49EE90): inside,
+ * Wide keeps it whole, Medium 0.72, Small 0.45 (0x656058, 0x656060);
+ * outside, Medium and Wide 0.6, Small 0.45 (0x656068). Our radius at
+ * Medium inside (70) and the green are estimates. */
+#define BEAM_RADIUS_MEDIUM 70
+
+static int beam_radius(explorer *e)
+{
+    char size = (char)game_pref(e->g, 990);
+    float scale;
+    if (e->g->flight_place == 'O')
+        scale = size == 'S' ? 0.45f : 0.6f;
+    else
+        scale = size == 'S' ? 0.45f : size == 'W' ? 1.0f : 0.72f;
+    return (int)(BEAM_RADIUS_MEDIUM / 0.72f * scale + 0.5f);
+}
 
 static void draw_darkness(explorer *e, int mx, int my)
 {
@@ -2237,7 +2251,7 @@ static void draw_darkness(explorer *e, int mx, int my)
     i32 hand = game_reg_value(g, "RegCurrInvVar", 0);
     u32 fl = vc_find_var(&g->interp, "Inventory_iFlashlight"), nv = vc_find_var(&g->interp, "Inventory_iNightVision");
     int light = fl && hand == vc_get_var(&g->interp, fl), green = nv && hand == vc_get_var(&g->interp, nv);
-    int x, y;
+    int x, y, radius = beam_radius(e);
     if (g->flight_mode != 2)
         return;
     for (y = PICTURE_Y; y < PICTURE_Y + PICTURE_H; y++)
@@ -2251,9 +2265,9 @@ static void draw_darkness(explorer *e, int mx, int my)
             }
             if (light) {
                 int dx = x - mx, dy = y - my, d2 = dx * dx + dy * dy;
-                if (d2 < BEAM_RADIUS * BEAM_RADIUS) {
-                    int edge = BEAM_RADIUS * BEAM_RADIUS - d2; /* soft rim */
-                    k = 17 + XF_MIN(238, edge * 238 / (BEAM_RADIUS * 20));
+                if (d2 < radius * radius) {
+                    int edge = radius * radius - d2; /* soft rim */
+                    k = 17 + XF_MIN(238, edge * 238 / (radius * 20));
                 }
             }
             e->fb[y * SCREEN_W + x] = (u32)(r * k / 255) << 16 | (u32)(gg * k / 255) << 8 | (u32)(b * k / 255);
