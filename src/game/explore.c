@@ -1455,7 +1455,11 @@ static void stop_sound(explorer *e)
 #define DLG_UP 34759
 #define DLG_BAR 34762   /* scrollbar.pic, 12x68 */
 #define DLG_THUMB 34763 /* thumb.pic, 12x10 */
-#define DLG_BAR_Y 34    /* the bar, between the arrows */
+/* The scroll column under the folder's close box (x 234-241, y 18-24):
+ * the up arrow, the bar and the down arrow fill y 27 to 115. */
+#define DLG_UP_Y 27
+#define DLG_BAR_Y 37    /* the bar, between the arrows */
+#define DLG_DOWN_Y 105
 #define DLG_DOWN 34764
 #define DLG_Y 285
 #define DLG_W 246
@@ -1716,11 +1720,11 @@ static void draw_dialog(explorer *e, int mx, int my)
          * its thumb at the scroll position */
         int left = e->talk_count - e->talk_scroll - n, span = e->talk_scroll + left;
         int room = (e->dlg_bar.pixels ? e->dlg_bar.height : 68) - (e->dlg_thumb.pixels ? e->dlg_thumb.height : 10);
-        blit_keyed(e, &e->dlg_up, x0 + DLG_W - 17, DLG_Y + 22);
+        blit_keyed(e, &e->dlg_up, x0 + DLG_W - 17, DLG_Y + DLG_UP_Y);
         blit_keyed(e, &e->dlg_bar, x0 + DLG_W - 17, DLG_Y + DLG_BAR_Y);
         blit_keyed(e, &e->dlg_thumb, x0 + DLG_W - 17,
                    DLG_Y + DLG_BAR_Y + (span > 0 ? room * e->talk_scroll / span : 0));
-        blit_keyed(e, &e->dlg_down, x0 + DLG_W - 17, DLG_Y + 104);
+        blit_keyed(e, &e->dlg_down, x0 + DLG_W - 17, DLG_Y + DLG_DOWN_Y);
     }
 }
 
@@ -1736,15 +1740,15 @@ static int click_dialog(explorer *e, int x, int y)
         e->talk_scroll = 0;
         return 1;
     }
-    if (x >= x0 + DLG_W - 16 && y < DLG_Y + 30) { /* the close box */
+    if (x >= x0 + DLG_W - 16 && y < DLG_Y + DLG_UP_Y) { /* the close box */
         game_end_talk(e->g);
         return 1;
     }
     n = dialog_layout(e, ent, GAME_MAX_CHOICES, &more);
     if (x >= x0 + DLG_W - 18) { /* the scroll arrows */
-        if (y < DLG_Y + 60 && e->talk_scroll > 0)
+        if (y < DLG_Y + (DLG_UP_Y + DLG_DOWN_Y + 10) / 2 && e->talk_scroll > 0)
             e->talk_scroll--;
-        else if (y >= DLG_Y + 60 && more)
+        else if (y >= DLG_Y + (DLG_UP_Y + DLG_DOWN_Y + 10) / 2 && more)
             e->talk_scroll++;
         return 1;
     }

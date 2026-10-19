@@ -68,7 +68,7 @@ The TALK tab lists the questions not asked yet; the HISTORY tab lists
 the ones already asked. Clicking a tab label switches between them. The
 box closes with Escape, the close box at the top right, or a click
 outside it. When a tab holds more questions than the box shows, the
-right edge shows the up and down arrows with `scrollbar.pic` between
+right edge, under the close box, shows the up and down arrows with `scrollbar.pic` between
 them and `thumb.pic` at the scroll position; the arrows scroll one
 question at a time.
 
