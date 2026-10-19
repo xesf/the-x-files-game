@@ -3364,6 +3364,7 @@ static void load_game_fonts(explorer *e)
         e->have_phn_font = xf_font_load(&e->phn_font, path) == 0;
     if (!e->have_card_font && plat_font_path("Courier New", path, sizeof(path)) == 0)
         e->have_card_font = xf_font_load(&e->card_font, path) == 0;
+    e->card_font.crisp = 1; /* Courier New's thin strokes, sharp as Windows drew them */
     if (!e->have_caption_font &&
         (plat_font_path("Arial", path, sizeof(path)) == 0 || plat_font_path("arial", path, sizeof(path)) == 0))
         e->have_caption_font = xf_font_load(&e->caption_font, path) == 0;

@@ -54,9 +54,11 @@ Unicode character to its Mac Roman byte before the lookup.
 The rasterizer does not run the fonts' hinting programs. Windows drew
 the game's text hinted and without smoothing, so it looks crisp. Plain
 coverage would turn the thin strokes of Courier New at 10 to 14 pixels
-grey and soft. The rasterizer draws a pixel that a letter covers by a
-quarter or more at full strength, and doubles the coverage of the
-lighter edge pixels.
+grey and soft. For Courier New the rasterizer draws a pixel that a
+letter covers by a quarter or more at full strength, and doubles the
+coverage of the lighter edge pixels. The other fonts, such as Arial for
+the captions, keep plain smooth coverage, which suits their thicker
+strokes.
 
 ```sh
 xftool font DLG.TTR 24 "The truth is out there" out.bmp

@@ -501,13 +501,13 @@ int xf_font_render(const xf_font *f, int glyph, float px, xf_glyph *out)
             float v;
             sum += acc[y * (w + 2) + x];
             v = fabsf(sum);
-            /* Crisp at small sizes: without hinting, Courier New's thin
-             * strokes cover half a pixel and plain coverage turns them
-             * grey and soft. Windows drew the game's text hinted and
-             * unsmoothed; a pixel a quarter covered is drawn whole, the
-             * rest of the edge keeps a doubled coverage. */
-            v = v >= 0.25f ? 1 : v * 2;
-            out->alpha[y * w + x] = (u8)(v * 255 + 0.5f);
+            /* Crisp fonts: without hinting, Courier New's thin strokes
+             * cover half a pixel and plain coverage turns them grey and
+             * soft. A pixel a quarter covered is drawn whole, the rest of
+             * the edge keeps a doubled coverage. */
+            if (f->crisp)
+                v = v >= 0.25f ? 1 : v * 2;
+            out->alpha[y * w + x] = (u8)(v >= 1 ? 255 : v * 255 + 0.5f);
         }
     }
     out->width = w;

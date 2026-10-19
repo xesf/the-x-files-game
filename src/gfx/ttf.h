@@ -19,6 +19,9 @@ typedef struct xf_font {
     int cmap_mac_roman;    /* 1 when the cmap maps Mac Roman bytes */
     int loca_long, num_glyphs, num_hmetrics;
     int units_per_em, ascent, descent, line_gap;
+    /* 1: pixels a quarter covered draw whole (thin strokes stay sharp
+     * at small sizes); 0: plain smooth coverage. Set after loading. */
+    int crisp;
 } xf_font;
 
 typedef struct {
