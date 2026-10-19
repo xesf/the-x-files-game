@@ -1501,16 +1501,13 @@ static void blit_keyed(explorer *e, const xf_image *img, int x0, int y0)
     }
 }
 
-/* Text with a one-pixel black outline, readable over any picture. */
-static void draw_outlined(explorer *e, const xf_font *f, float px, int x, int y, const char *text, size_t len,
+/* Text with a black shadow one pixel down and right, as the game draws
+ * its rollover names, location card and credits. */
+static void draw_shadowed(explorer *e, const xf_font *f, float px, int x, int y, const char *text, size_t len,
                           u32 color)
 {
     xf_surface s = screen_surface(e);
-    int dx, dy;
-    for (dy = -1; dy <= 1; dy++)
-        for (dx = -1; dx <= 1; dx++)
-            if (dx || dy)
-                xf_text_draw(&s, f, px, x + dx, y + dy, text, len, 0x000000);
+    xf_text_draw(&s, f, px, x + 1, y + 1, text, len, 0x000000);
     xf_text_draw(&s, f, px, x, y, text, len, color);
 }
 
@@ -1813,7 +1810,7 @@ static void draw_icons(explorer *e, int mx, int my)
         {
             int cx = icon_x(e, hover) + ICON_W / 2, w = xf_text_width(courier(e), ROLLOVER_PX, name, strlen(name));
             int x = XF_CLAMP(cx - w / 2, 4, SCREEN_W - 4 - w);
-            draw_outlined(e, courier(e), ROLLOVER_PX, x, ICON_Y + ICON_H + 16, name, strlen(name), 0xFFFFFF);
+            draw_shadowed(e, courier(e), ROLLOVER_PX, x, ICON_Y + ICON_H + 16, name, strlen(name), 0xFFFFFF);
         }
     }
 }
@@ -2172,7 +2169,7 @@ static void draw_card(explorer *e, int clip_x, int clip_y, int clip_w, int clip_
         const char *nl = strchr(text + pos, '\n');
         size_t end = nl ? (size_t)(nl - text) : strlen(text);
         size_t len = XF_MIN(end, shown) - pos;
-        draw_outlined(e, f, CARD_PX, x, y, text + pos, len, 0xFFFFFF);
+        draw_shadowed(e, f, CARD_PX, x, y, text + pos, len, 0xFFFFFF);
         pos = end + 1;
         y += line_h;
     }
@@ -2314,7 +2311,7 @@ static void draw_credit(explorer *e)
         const char *nl = strchr(line, '\n');
         size_t len = nl ? (size_t)(nl - line) : strlen(line);
         int w = xf_text_width(f, px, line, len);
-        draw_outlined(e, f, px, PICTURE_X + (PICTURE_W - w) / 2, y, line, len, 0xFFFFFF);
+        draw_shadowed(e, f, px, PICTURE_X + (PICTURE_W - w) / 2, y, line, len, 0xFFFFFF);
         line = nl ? nl + 1 : NULL;
     }
 }

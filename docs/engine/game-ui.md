@@ -121,7 +121,7 @@ Cook with the "Funny" emotion icon (18172) runs `RollHdCredits` and plays
   `FOCredit.mus` comes right after `RollHdCredits`; our engine holds the
   sound until the cards start.
 
-We draw the cards in white with a black outline, over the scene, so they
+We draw the cards in white with a black shadow, over the scene, so they
 scale with it in the wide layout. They follow the game clock, so they wait
 behind the main menu.
 
