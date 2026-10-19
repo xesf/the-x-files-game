@@ -269,7 +269,12 @@ close-up. At start-up 0x41AEA0 registers each tool's assets:
 | Binoculars | `binocularmask.pic` (34753) | The view, or its close-up, through the binoculars' mask |
 
 With a tool in hand the view's hotspots show no cursors of their own,
-but they take clicks as usual: their triggers check the tool in hand. A
+but they take clicks: their triggers check the tool in hand. While the
+gun or the camera is aimed, a move runs its triggers but does not leave
+the view. Where the data has no reaction to the tool, nothing happens:
+Skinner and Shanks in Shanks's office react only to the Mulder and
+Scully photo and the travel request; the characters of the Comity Inn
+react to the gun. A
 photo is taken where the scene allows it, by a clip that calls
 `TakePhoto`. While a tool or any item is in hand, the inventory bar
 shows that item alone. When the camera plays `DeadShtr.amv` is not

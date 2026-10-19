@@ -3751,9 +3751,11 @@ static void handle_event(explorer *e, plat_event ev)
             if (!e->g->iface_count && ev.y >= PICTURE_Y && ev.y < PICTURE_Y + PICTURE_H &&
                 (tool == TOOL_GUN || tool == TOOL_CAMERA))
                 game_play_effect(e->g, tool == TOOL_GUN ? TOOL_SOUND_GUN : TOOL_SOUND_SHUTTER);
-            /* the scene's hotspots take the click as usual: their
-             * triggers check what is in hand (a shot opens a picture) */
-            if (!game_click(e->g, ev.x, ev.y))
+            /* the scene's hotspots take the click: their triggers check
+             * what is in hand (a shot opens a picture); aiming the gun or
+             * the camera does not walk away through a move */
+            if (!((tool == TOOL_GUN || tool == TOOL_CAMERA) ? game_click_aiming(e->g, ev.x, ev.y)
+                                                            : game_click(e->g, ev.x, ev.y)))
                 game_end_talk(e->g); /* a click elsewhere closes the box */
             if (e->g->talking != was) {
                 e->talk_scroll = 0;

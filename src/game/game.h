@@ -410,6 +410,9 @@ int game_view_media(game *g, u32 *ids, int max);
 void game_view_clip_end(game *g, u32 asset);
 
 const game_spot *game_spot_at(const game *g, int x, int y);
+/* A click while aiming (the gun or camera in hand): the hotspot's
+ * triggers run, but a move does not leave the view. */
+int game_click_aiming(game *g, int x, int y);
 const game_iface_item *game_iface_item_at(game *g, int x, int y);
 /* The item with this ID in an open layout, or NULL. */
 const game_iface_item *game_find_item(game *g, u32 id);

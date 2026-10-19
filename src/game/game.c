@@ -1347,9 +1347,9 @@ static void click_iface_item(game *g, const game_iface_item *it)
     after_triggers(g);
 }
 
-static void click_spot(game *g, const game_spot *s)
+static void click_spot_how(game *g, const game_spot *s, int aiming)
 {
-    u32 from = g->view, target = s->kind == SPOT_NAV ? s->target : 0, triggers = s->triggers;
+    u32 from = g->view, target = s->kind == SPOT_NAV && !aiming ? s->target : 0, triggers = s->triggers;
     u32 epoch = g->view_epoch;
     xf_info("click %s %u", s->kind == SPOT_NAV ? "move" : s->kind == SPOT_EXPLORE ? "object" : "character", s->id);
     g->talking = 0;
@@ -1377,6 +1377,22 @@ static void click_spot(game *g, const game_spot *s)
     } else {
         after_triggers(g);
     }
+}
+
+static void click_spot(game *g, const game_spot *s) { click_spot_how(g, s, 0); }
+
+int game_click_aiming(game *g, int x, int y)
+{
+    const game_spot *s;
+    if (game_iface_item_at(g, x, y) || game_scene_held(g))
+        return game_click(g, x, y);
+    if (!(s = game_spot_at(g, x, y)))
+        return 0;
+    {
+        game_spot copy = *s;
+        click_spot_how(g, &copy, 1);
+    }
+    return 1;
 }
 
 static const game_iface_item *find_item(game *g, u32 id)
