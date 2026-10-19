@@ -1607,6 +1607,19 @@ static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
  * dialogue folder erased and drawn again from lang.txt ("talk=",
  * "history="), in the colours of the words they replace. `active` is the
  * tab drawn in front (0 TALK, 1 HISTORY). */
+/* The pixel size at which the dialogue font's capital H is `cap` rows
+ * high. */
+static float tab_word_px(explorer *e, int cap)
+{
+    xf_glyph g;
+    int h = 0;
+    if (cap <= 0 || xf_font_render(&e->font, xf_font_glyph_index(&e->font, 'H'), 100, &g) != 0)
+        return 9;
+    h = g.height;
+    free(g.alpha);
+    return h > 0 ? 100.0f * (float)cap / (float)h : 9;
+}
+
 static void relabel_tabs(explorer *e, xf_image *img, int active)
 {
     const xf_langs *l = &e->g->langs;
@@ -1625,8 +1638,8 @@ static void relabel_tabs(explorer *e, xf_image *img, int active)
          * word's box from its bright pixels, the tab's colour the most
          * common one around it */
         u32 ink = t == active ? 0xFFFFFF : 0x4F8FCF, ground = 0, seen[16];
-        int counts[16], kinds = 0, x, y, k, x0 = 1000, x1 = -1, best = -1, w, avail;
-        float px = 11;
+        int counts[16], kinds = 0, x, y, k, x0 = 1000, x1 = -1, y0 = 1000, y1 = -1, best = -1, w, avail;
+        float px;
         xf_surface sf;
         for (y = 1; y < 13 && y < img->height; y++)
             for (x = 100 * t; x < 100 * t + 100 && x < img->width; x++) {
@@ -1637,6 +1650,8 @@ static void relabel_tabs(explorer *e, xf_image *img, int active)
                 if (hi >= 110) {
                     x0 = XF_MIN(x0, x);
                     x1 = XF_MAX(x1, x);
+                    y0 = XF_MIN(y0, y);
+                    y1 = XF_MAX(y1, y);
                     if (hi > best) {
                         best = hi;
                         ink = c;
@@ -1668,15 +1683,18 @@ static void relabel_tabs(explorer *e, xf_image *img, int active)
                 if (*c != KEY_BLUE && d > 24)
                     *c = ground;
             }
+        /* capitals as high as the word they replace (rows 2 to 8 of the
+         * 11-row tab), so accents stay inside the tab */
+        px = tab_word_px(e, y1 - y0 + 1);
         avail = x1 - x0 + 1 + 16; /* a little wider than the word it replaces */
-        while (px > 8 && xf_text_width(&e->font, px, word[t], strlen(word[t])) > avail)
+        while (px > 6 && xf_text_width(&e->font, px, word[t], strlen(word[t])) > avail)
             px -= 0.5f;
         sf.pixels = img->pixels;
         sf.width = img->width;
         sf.height = img->height;
         sf.pitch = img->width;
         w = xf_text_width(&e->font, px, word[t], strlen(word[t]));
-        xf_text_draw(&sf, &e->font, px, (x0 + x1) / 2 - w / 2, 9, word[t], strlen(word[t]), ink);
+        xf_text_draw(&sf, &e->font, px, (x0 + x1) / 2 - w / 2, y1 + 1, word[t], strlen(word[t]), ink);
     }
 }
 
