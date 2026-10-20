@@ -107,18 +107,19 @@ runtime. The shared layers (`src/platform`, `src/gfx`, `src/media`,
    RLE8, WAV, `smc `. Each with an `xftool` command and a unit test,
    as for the X-Files formats.
 2. **Game detection and the module interface.**
-3. **Quantum Gate** (Virtual Cinema 1.0): load `QGATE.EXE` and
-   `VIDGAME.EXE` in the disassembler; find the scene tables and the
-   media paths; write the module; play the clips and the navigation.
-   MIDI for its music.
-4. **Vortex** (Virtual Cinema 2.0): the same for `VORTEX.EXE`. Its
-   logic is entirely compiled in, so this is the longest step. What it
-   shares with The X-Files may help: compare its classes and functions
-   with `XFILES.EXE`'s.
-5. **Roland**: start from the ScummVM branch's screens (intro, menus,
+3. **Vortex** (Virtual Cinema 2.0): load `VORTEX.EXE` in the
+   disassembler; find the scene tables and the media paths; write the
+   module; play the clips and the navigation, with MIDI for its music.
+   Its logic is entirely compiled in, so this is the longest step. What
+   it shares with The X-Files may help: compare its classes and
+   functions with `XFILES.EXE`'s.
+4. **Roland**: start from the ScummVM branch's screens (intro, menus,
    chapter pages); SZDD-expand `ROLAND.EX_` and `ROLGUTS.EX_`, write the
    VB3 p-code reader for what the screens do not cover yet, and write
    the module.
+5. **Quantum Gate** (Virtual Cinema 1.0): the same as Vortex for
+   `QGATE.EXE` and `VIDGAME.EXE`, reusing what Vortex's module and
+   tools establish.
 
 ## Open questions
 
