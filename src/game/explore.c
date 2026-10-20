@@ -102,6 +102,7 @@ static const xf_video *anim_video(const view_anim *an) { return an->use_player ?
 #define MAX_ANIMS 4
 #define KEY_BLUE 0x0000FF
 #define MAX_ICONS 6
+#define MAX_IDEAS 8
 #define MAX_INV 32
 #define MAX_CURSORS 24
 #define MAX_CURSOR_FRAMES 12
@@ -206,6 +207,9 @@ typedef struct {
     u32 icon_ids[MAX_ICONS];
     int icon_count;
     u8 icon_action[MAX_ICONS]; /* an action icon (on the right), not an emotion */
+    u32 idea_ids[MAX_IDEAS], idea_convs[MAX_IDEAS]; /* the idea icons of the character talked to */
+    xf_image idea_img[MAX_IDEAS][2];
+    int idea_count;
     /* cursors */
     cursor_art cursors[MAX_CURSORS];
     cursor_art cross;     /* the default pointer */
@@ -1581,10 +1585,16 @@ static int dialog_layout(explorer *e, dlg_entry *out, int max, int *more)
 {
     u32 all[GAME_MAX_CHOICES], ids[GAME_MAX_CHOICES];
     int m = game_choices(e->g, all, GAME_MAX_CHOICES), n = 0, i, k = 0, y = DLG_Y + DLG_TEXT_TOP;
-    /* TALK lists what has not been asked yet; HISTORY what has. */
-    for (i = 0; i < m; i++)
-        if ((game_times_asked(e->g, all[i]) > 0) == (e->talk_tab == 1))
+    u32 idea_icons[MAX_IDEAS], idea_convs[MAX_IDEAS];
+    int ideas = game_ideas(e->g, idea_icons, idea_convs, MAX_IDEAS), j;
+    /* TALK lists what has not been asked yet, but the ideas (asked with
+     * their icons); HISTORY what has been asked. */
+    for (i = 0; i < m; i++) {
+        for (j = 0; j < ideas && idea_convs[j] != all[i]; j++)
+            ;
+        if ((game_times_asked(e->g, all[i]) > 0) == (e->talk_tab == 1) && j == ideas)
             ids[n++] = all[i];
+    }
     *more = 0;
     e->talk_count = n;
     e->talk_scroll = XF_CLAMP(e->talk_scroll, 0, XF_MAX(n - 1, 0));
@@ -1699,6 +1709,89 @@ static void relabel_tabs(explorer *e, xf_image *img, int active)
         w = xf_text_width(&e->font, px, word[t], strlen(word[t]));
         xf_text_draw(&sf, &e->font, px, (x0 + x1) / 2 - w / 2, y1 + 1, word[t], strlen(word[t]), ink);
     }
+}
+
+static void ui_piece(explorer *e, int x, int y, int w, int h, int anchor);
+
+/* --- Idea icons --------------------------------------------------------
+ * VCIdeaIcon: name, rollover picture, picture, 0, label, triggers. While
+ * the player talks to a character, its ideas show above the picture (the
+ * Help screen's area (24, 22)-(224, 84)); a click asks about one. */
+#define IDEA_X 24
+#define IDEA_Y 22
+#define IDEA_H 62
+#define IDEA_GAP 12
+
+static void refresh_ideas(explorer *e)
+{
+    u32 ids[MAX_IDEAS], convs[MAX_IDEAS];
+    int n = game_ideas(e->g, ids, convs, MAX_IDEAS), i;
+    if (n == e->idea_count && memcmp(ids, e->idea_ids, (size_t)n * sizeof(u32)) == 0)
+        return;
+    for (i = 0; i < e->idea_count; i++) {
+        free(e->idea_img[i][0].pixels);
+        free(e->idea_img[i][1].pixels);
+    }
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        e->idea_ids[i] = ids[i];
+        e->idea_convs[i] = convs[i];
+        memset(e->idea_img[i], 0, sizeof(e->idea_img[i]));
+        if (xf_neo_object(&e->g->db, ids[i], &r, NULL, NULL) == 0) {
+            u32 over, plain;
+            xf_neo_u32(&r); /* name */
+            over = xf_neo_u32(&r);
+            plain = xf_neo_u32(&r);
+            load_list_image(e, plain, &e->idea_img[i][0]);
+            load_list_image(e, over, &e->idea_img[i][1]);
+        }
+    }
+    e->idea_count = n;
+}
+
+static int idea_x(explorer *e, int i)
+{
+    int x = IDEA_X, k;
+    for (k = 0; k < i; k++)
+        x += (e->idea_img[k][0].pixels ? e->idea_img[k][0].width : 30) + IDEA_GAP;
+    return x;
+}
+
+static int idea_at(explorer *e, int x, int y)
+{
+    int i;
+    if (!e->g->talking || e->g->iface_count || e->playing)
+        return -1;
+    for (i = 0; i < e->idea_count; i++) {
+        const xf_image *im = &e->idea_img[i][0];
+        int w = im->pixels ? im->width : 30, h = im->pixels ? im->height : IDEA_H, x0 = idea_x(e, i);
+        int y0 = IDEA_Y + (IDEA_H - h) / 2;
+        if (x >= x0 && x < x0 + w && y >= y0 && y < y0 + h)
+            return i;
+    }
+    return -1;
+}
+
+static void draw_ideas(explorer *e, int mx, int my)
+{
+    int i, hover;
+    refresh_ideas(e);
+    if (!e->g->talking || e->g->iface_count || e->playing)
+        return;
+    hover = idea_at(e, mx, my);
+    for (i = 0; i < e->idea_count; i++) {
+        const xf_image *im = &e->idea_img[i][i == hover && e->idea_img[i][1].pixels ? 1 : 0];
+        blit_keyed(e, im, idea_x(e, i), IDEA_Y + (IDEA_H - im->height) / 2);
+    }
+    if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
+        char name[128];
+        int w, x;
+        game_object_label(e->g, e->idea_ids[hover], name, sizeof(name));
+        w = xf_text_width(courier(e), ROLLOVER_PX, name, strlen(name));
+        x = XF_CLAMP(idea_x(e, hover), 4, SCREEN_W - 4 - w);
+        draw_shadowed(e, courier(e), ROLLOVER_PX, x, IDEA_Y + IDEA_H + 2, name, strlen(name), 0xFFFFFF);
+    }
+    ui_piece(e, 0, 0, SCREEN_W / 2, PICTURE_Y, SCR_ANCHOR_TOP_LEFT);
 }
 
 static void draw_dialog(explorer *e, int mx, int my)
@@ -2742,6 +2835,7 @@ static void draw(explorer *e, int mx, int my)
     }
     if (g->talking) {
         int x0 = dialog_x(e);
+        draw_ideas(e, mx, my);
         draw_dialog(e, mx, my);
         ui_piece(e, x0, DLG_Y - 6, DLG_W, 130, SCR_ANCHOR_UNDER);
     }
@@ -3762,6 +3856,8 @@ static void handle_event(explorer *e, plat_event ev)
             game_click(e->g, ev.x, ev.y);
             ask_text(e, clicked);
         }
+        else if (idea_at(e, ev.x, ev.y) >= 0)
+            game_ask(e->g, e->idea_convs[idea_at(e, ev.x, ev.y)]); /* an idea: ask about it */
         else if (e->g->talking && click_dialog(e, ev.x, ev.y))
             ;
         else if (inv >= e->inv_items) {
@@ -4102,6 +4198,10 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         int t;
         for (t = 0; t < (int)XF_COUNT(e->tool_img); t++)
             free(e->tool_img[t].pixels);
+        for (t = 0; t < e->idea_count; t++) {
+            free(e->idea_img[t][0].pixels);
+            free(e->idea_img[t][1].pixels);
+        }
     }
     close_anims(e);
     free_iface_pictures(e);

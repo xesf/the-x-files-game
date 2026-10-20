@@ -284,6 +284,19 @@ The evidence icons draw their object on a white ground that their alpha
 plane removes (alpha 0 is clear). The PICT decoder applies such a plane
 to a picture that has no blue key.
 
+### Idea icons
+
+A `VCIdeaIcon` (class 0x4A) holds a name, its rollover picture, its
+picture, 0, its label and a trigger list. A character's `VCIdeaMapList`
+pairs ideas with conversations. While the player talks to a character,
+the ideas the player has (enabled) whose conversation is enabled and
+not asked yet show above the picture; the Help screen: "Clicking on a
+character may also bring up any available Idea Icons (found at the top
+of the video window)". A click on one asks its conversation, which then
+shows under HISTORY; the TALK list leaves these out. The rollover name
+shows under the icon. The original also lets the player drag an icon
+onto the character; our engine takes a click.
+
 ### Screen positions
 
 The Help screen (layout 50460) is a picture of the game screen with an
@@ -291,7 +304,7 @@ area per element; our engine places the elements there:
 
 | Element | Help area | Our engine |
 |---|---|---|
-| Idea icons | (24, 22)-(224, 84), above the picture | Not drawn yet |
+| Idea icons | (24, 22)-(224, 84), above the picture | From x 24, 12 apart, centred in rows 22 to 84, while talking |
 | Evidence icons (the Crime Lab) | (11, 327)-(149, 376) | From x 18, 44 apart, at y 332, always shown |
 | Emotion icons | (207, 340)-(390, 407) | From x 210, 95 apart, at y 343 |
 | Action icons | (432, 334)-(620, 403) | From x 443, 92 apart, at y 343 |
@@ -818,7 +831,6 @@ view's media. It is off by default.
 
 ## Not yet like the original
 
-- The idea icons are not drawn.
 - The photo download screen is not drawn.
 - The question text colour and spacing in the box are estimates.
 - The position of the inventory bar comes from the help texts, not

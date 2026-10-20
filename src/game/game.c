@@ -1032,7 +1032,8 @@ const char *game_object_label(game *g, u32 id, char *buf, size_t size)
     u32 list = 0, ids[4];
     int c = vc_class(&g->db, id), i;
     buf[0] = '\0';
-    if ((c != VC_EMOTION_ICON && c != VC_ACTION_ICON && c != VC_INVENTORY && c != VC_EVIDENCE_ICON) ||
+    if ((c != VC_EMOTION_ICON && c != VC_ACTION_ICON && c != VC_INVENTORY && c != VC_EVIDENCE_ICON &&
+         c != VC_IDEA_ICON) ||
         xf_neo_object(&g->db, id, &r, NULL, NULL) != 0)
         return buf;
     for (i = 0; i < 5; i++)
@@ -1268,6 +1269,35 @@ int game_choices(game *g, u32 *ids, int max)
         if (idea && vc_is_enabled(&g->interp, idea) && vc_class(&g->db, conv) == VC_CONVERSATION &&
             vc_is_enabled(&g->interp, conv))
             ids[k++] = conv;
+    }
+    return k;
+}
+
+/* The idea icons of the character talked to: its VCIdeaMaps whose idea
+ * (a VCIdeaIcon) and conversation are enabled and not asked yet. The
+ * Help screen: "Clicking on a character may also bring up any available
+ * Idea Icons (found at the top of the video window)"; clicking or
+ * dragging one onto the character asks about it. */
+int game_ideas(game *g, u32 *icons, u32 *conversations, int max)
+{
+    vc_char_view c;
+    u32 all[64];
+    int n, i, k = 0;
+    if (!g->talking || vc_read_char_view(&g->db, g->talking, &c) != 0)
+        return 0;
+    n = vc_read_list(&g->db, c.idea_maps, all, 64);
+    for (i = 0; i < n && k < max; i++) {
+        xf_neo_reader r;
+        u32 idea, conv;
+        if (vc_class(&g->db, all[i]) != VC_IDEA_MAP || xf_neo_object(&g->db, all[i], &r, NULL, NULL) != 0)
+            continue;
+        idea = xf_neo_u32(&r);
+        conv = xf_neo_u32(&r);
+        if (idea && vc_is_enabled(&g->interp, idea) && vc_class(&g->db, conv) == VC_CONVERSATION &&
+            vc_is_enabled(&g->interp, conv) && game_times_asked(g, conv) == 0) {
+            icons[k] = idea;
+            conversations[k++] = conv;
+        }
     }
     return k;
 }

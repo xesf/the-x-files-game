@@ -427,6 +427,9 @@ const char *game_credit(const game *g);
 /* The subliminal word flashed last and its serial, which changes for each
  * flash (shown for one frame); NULL when there is none. */
 const char *game_subliminal(const game *g, u32 *serial);
+/* The idea icons (VCIdeaIcon) of the character talked to that can be
+ * asked about, with their conversations. */
+int game_ideas(game *g, u32 *icons, u32 *conversations, int max);
 /* Plays a short sound over the ambience (a tool's gunshot, the shutter). */
 void game_play_effect(game *g, u32 asset);
 void game_prefs_load(game *g);
