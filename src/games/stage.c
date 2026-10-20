@@ -124,6 +124,8 @@ static int script_event(xf_stage *s, plat_event *ev)
         xf_warn("script: unknown command %s", cmd);
     }
     s->quit = 1; /* the script has ended */
+    fclose(s->script);
+    s->script = NULL;
     ev->type = PLAT_EV_QUIT;
     return 1;
 }
