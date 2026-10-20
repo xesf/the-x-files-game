@@ -7,6 +7,7 @@
 #include "audio/mixer.h"
 #include "data/szdd.h"
 #include "media/bmp.h"
+#include "media/smc.h"
 #include "media/wav.h"
 #include "gfx/screen.h"
 #include "inflate_vectors.h"
@@ -222,6 +223,21 @@ static void test_wav(void)
     xf_wav_free(&w);
 }
 
+static void test_smc(void)
+{
+    /* 8x4: block 0 filled with index 0 (white); block 1 two colours, 0
+     * and 255 (black), the top row black */
+    static const u8 f[] = { 0, 0, 0, 11, 0x60, 0, 0x80, 0, 255, 0xF0, 0x00 };
+    u32 pal[256], frame[32];
+    xf_smc s;
+    memset(&s, 0, sizeof(s));
+    xf_mac_palette(pal);
+    CHECK(pal[0] == 0xFFFFFF && pal[255] == 0 && pal[215] == 0xEE0000 && pal[254] == 0x111111);
+    CHECK(xf_smc_decode(&s, f, sizeof(f), pal, frame, 8, 4) == 0);
+    CHECK(frame[0] == 0xFFFFFF && frame[3 * 8 + 3] == 0xFFFFFF);
+    CHECK(frame[4] == 0 && frame[7] == 0 && frame[8 + 4] == 0xFFFFFF);
+}
+
 int main(void)
 {
     test_inflate();
@@ -231,6 +247,7 @@ int main(void)
     test_szdd();
     test_bmp();
     test_wav();
+    test_smc();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;

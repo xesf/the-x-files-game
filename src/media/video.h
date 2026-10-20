@@ -7,6 +7,7 @@
 #include "media/mov.h"
 
 struct xf_cinepak;
+struct xf_smc_state;
 
 typedef struct {
     xf_mov *mov;
@@ -15,6 +16,8 @@ typedef struct {
     u32 *frame;      /* current picture, 0x00RRGGBB, width x height */
     u32 next;        /* next sample to decode */
     struct xf_cinepak *cinepak;
+    struct xf_smc_state *smc;  /* Apple Graphics caches */
+    u32 palette[256];          /* 8-bit tracks: the movie's colour table */
     u8 *buf;
     size_t buf_size;
 } xf_video;
