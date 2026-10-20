@@ -64,8 +64,8 @@ keeps it inside the clip's picture (the rectangle at 0x6C0EE0, x 20 to
 620), and puts its top at y 285. The box shows again as
 soon as an answer has played, with the remaining questions.
 
-The TALK tab lists the questions not asked yet; the HISTORY tab lists
-the ones already asked. Clicking a tab label switches between them. The
+The TALK tab lists the questions not asked yet, in white; the HISTORY
+tab lists the ones already asked, in grey. Clicking a tab label switches between them. The
 box closes with Escape, the close box at the top right, or a click
 outside it. When a tab holds more questions than the box shows, the
 right edge, under the close box, shows the up and down arrows with `scrollbar.pic` between
@@ -279,6 +279,27 @@ photo is taken where the scene allows it, by a clip that calls
 `TakePhoto`. While a tool or any item is in hand, the inventory bar
 shows that item alone. When the camera plays `DeadShtr.amv` is not
 traced yet, nor the green of the goggles.
+
+The evidence icons draw their object on a white ground that their alpha
+plane removes (alpha 0 is clear). The PICT decoder applies such a plane
+to a picture that has no blue key.
+
+### Screen positions
+
+The Help screen (layout 50460) is a picture of the game screen with an
+area per element; our engine places the elements there:
+
+| Element | Help area | Our engine |
+|---|---|---|
+| Idea icons | (24, 22)-(224, 84), above the picture | Not drawn yet |
+| Evidence icons (the Crime Lab) | (11, 327)-(149, 376) | From x 18, 44 apart, at y 332, always shown |
+| Emotion icons | (207, 340)-(390, 407) | From x 210, 95 apart, at y 343 |
+| Action icons | (432, 334)-(620, 403) | From x 443, 92 apart, at y 343 |
+| Inventory | (20, 428)-(198, 468) | From x 20, 38 apart, at y 428 |
+| Main menu icon, AI icon | (547, 13)-(583, 50), (547, 55)-(601, 87) | Top right |
+
+An icon's rollover name shows under the icons, where the captions go;
+while the pointer is on an icon, the captions give way to its name.
 
 ## Computer
 
