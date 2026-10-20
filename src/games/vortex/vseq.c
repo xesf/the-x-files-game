@@ -123,7 +123,10 @@ static const char *str_at(const insn *in, int off, u32 *len)
 
 static void stop_seq(vs_state *s, int i)
 {
-    /* seg8:768C: the sprite goes, the slot is freed */
+    /* seg8:768C: the sprite and the clip go, the slot is freed */
+    if (vs_get(s, i, VC_MOVIE) && s->host.stopped)
+        s->host.stopped(s->host.user, i);
+    vs_set(s, i, VC_MOVIE, 0);
     vs_set(s, i, VC_USED, 0);
     vs_set(s, i, VC_SPRITE, 0xFFFF);
     vs_set(s, i, 0x122, 0xFFFF);

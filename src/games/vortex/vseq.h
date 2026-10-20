@@ -71,6 +71,8 @@ typedef struct vs_host {
     int (*sound_busy)(void *user, int channel);
     void (*music)(void *user, int sub, const char *file, u16 arg);
     void (*cursor)(void *user, u16 a, u16 b, u8 c, const char *file);
+    /* a sequence stopped: its clip goes with it (seg8:7788) */
+    void (*stopped)(void *user, int seq);
     /* 0x3: a sequence's state (its clip) moved to another slot */
     void (*moved)(void *user, int from, int to);
     /* 0x12E to 0x138: a screen update (transition) of a rectangle with

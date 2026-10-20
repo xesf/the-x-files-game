@@ -143,13 +143,13 @@ static void stop_clip(vortex *v, vx_clip *c)
 {
     if (!c->open)
         return;
+    xf_debug("vortex: clip of sequence %d stopped", c->seq);
     xf_player_close(&c->p);
     c->open = 0;
     vs_set(&v->vm, c->seq, VC_MOVIE, 0);
     vs_set(&v->vm, c->seq, VC_MOVIE + 2, 0);
 }
 
-/* 0x190: a clip at (x, y), top left; the sequence's own (seg8:1ED2). */
 /* The clip's window into its sequence (context + 0x50). */
 static void clip_rect(vortex *v, const vx_clip *c)
 {
@@ -159,6 +159,7 @@ static void clip_rect(vortex *v, const vx_clip *c)
     vs_set(&v->vm, c->seq, VC_MOVIE_RECT + 6, (u16)(c->y + c->p.video.height));
 }
 
+/* 0x190: a clip at (x, y), top left; the sequence's own (seg8:1ED2). */
 static int on_clip(void *user, int seq, int sub, const char *file, int x, int y, const u16 *w, u8 b0, u8 b1)
 {
     vortex *v = user;
@@ -219,6 +220,15 @@ static void on_clip_op(void *user, int seq, int action, u16 a, u16 b)
     (void)b;
     for (i = 0; i < MAX_CLIPS; i++)
         if (v->clips[i].open && v->clips[i].seq == seq && action == 9)
+            stop_clip(v, &v->clips[i]);
+}
+
+static void on_stopped(void *user, int seq)
+{
+    vortex *v = user;
+    int i;
+    for (i = 0; i < MAX_CLIPS; i++)
+        if (v->clips[i].open && v->clips[i].seq == seq)
             stop_clip(v, &v->clips[i]);
 }
 
@@ -754,6 +764,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.clip_move = on_clip_move;
     host.clip_time = on_clip_time;
     host.moved = on_moved;
+    host.stopped = on_stopped;
     host.picture = on_picture;
     host.text = on_text;
     host.text_sprite = on_text_sprite;
