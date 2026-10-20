@@ -112,10 +112,55 @@ int vexe_load(vexe *x, const char *path)
             sort_fixes(s);
         }
     }
+    /* the resource table (offset at NE + 0x24): an alignment shift, then
+     * per type a type id, a count, 4 reserved bytes and its entries
+     * (offset, length, flags, id, 4 reserved; offsets and lengths
+     * shifted) */
+    {
+        u32 rt = ne_off + xf_le16(ne + 0x24), sh, p;
+        if (rt + 2 <= x->file_size) {
+            sh = xf_le16(d + rt);
+            for (p = rt + 2; p + 8 <= x->file_size && xf_le16(d + p);) {
+                u16 type = xf_le16(d + p), count = xf_le16(d + p + 2), k;
+                p += 8;
+                for (k = 0; k < count && p + 12 <= x->file_size; k++, p += 12)
+                    if (type == 0x8006 && x->string_blocks < (int)XF_COUNT(x->strings)) {
+                        vexe_strblock *b = &x->strings[x->string_blocks++];
+                        b->off = (u32)xf_le16(d + p) << sh;
+                        b->len = (u32)xf_le16(d + p + 2) << sh;
+                        b->block = xf_le16(d + p + 6) & 0x7FFF;
+                    }
+            }
+        }
+    }
     return 0;
 fail:
     vexe_free(x);
     return -1;
+}
+
+const char *vexe_string(const vexe *x, u16 id, char *out, size_t size)
+{
+    int i, k;
+    out[0] = '\0';
+    for (i = 0; i < x->string_blocks; i++) {
+        const vexe_strblock *b = &x->strings[i];
+        u32 p = b->off;
+        if (b->block != id / 16 + 1 || b->off + b->len > x->file_size)
+            continue;
+        /* sixteen strings, each a length byte then its characters */
+        for (k = 0; k < 16 && p < b->off + b->len; k++) {
+            u32 n = x->file[p++];
+            if (k == id % 16) {
+                size_t m = n < size - 1 ? n : size - 1;
+                memcpy(out, x->file + p, m);
+                out[m] = '\0';
+                return out;
+            }
+            p += n;
+        }
+    }
+    return out;
 }
 
 void vexe_free(vexe *x)

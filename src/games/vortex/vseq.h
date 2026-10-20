@@ -50,7 +50,9 @@ typedef struct vs_host {
     /* 0x197: an action on a sequence's clip */
     void (*clip_op)(void *user, int seq, int action, u16 a, u16 b);
     void (*picture)(void *user, int seq, int sub, const char *file, int x, int y);
-    void (*text)(void *user, int seq, int x, int y, const char *s, const u16 *w);
+    /* text onto the background: a font (seg14:042E), a box (0 wide: one
+     * line at x, y), a colour 0x00RRGGBB; Windows-1252 */
+    void (*text)(void *user, int font, int x, int y, int w, int h, u32 rgb, const char *s);
     /* 0x1F5: loads a sound, returns its handle (0: none) */
     int (*sound)(void *user, int sub, const char *file, u16 arg);
     /* 0x1F6 plays handle on channel args[0] (1, 2; 3 either) at

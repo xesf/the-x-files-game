@@ -19,7 +19,14 @@ typedef struct {
 } vexe_seg;
 
 typedef struct {
+    u16 block;        /* string resources: block n holds ids 16(n-1) to 16n-1 */
+    u32 off, len;     /* in the file */
+} vexe_strblock;
+
+typedef struct {
     u8 *file;
+    vexe_strblock strings[64];
+    int string_blocks;
     size_t file_size;
     int seg_count;
     vexe_seg segs[VX_MAX_SEGS + 1]; /* 1-based */
@@ -32,6 +39,8 @@ typedef u32 vx_ptr;
 #define VX_OFF(p) ((u16)(p))
 
 int vexe_load(vexe *x, const char *path);
+/* A string resource (RT_STRING), as LoadString reads it; "" when absent. */
+const char *vexe_string(const vexe *x, u16 id, char *out, size_t size);
 void vexe_free(vexe *x);
 /* The bytes at a pointer, or NULL outside the program; `avail` gets how
  * many follow in the segment. */

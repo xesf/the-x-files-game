@@ -444,6 +444,37 @@ static int step(vs_state *s, int seq)
         return RUN;
     }
 
+    case 0x0008: { /* a string resource in a box (seg8:4312): x, y, w, h, red,
+                    * green, blue, the font, the string's id */
+        char text[256];
+        int x = w_at(&in, 2) > 0x280 ? val(&in, 2) : w_at(&in, 2);
+        int y = w_at(&in, 4) > 0x1E0 ? val(&in, 4) : w_at(&in, 4), bw = w_at(&in, 6), bh = w_at(&in, 8);
+        if (x + bw > 0x280)
+            bw = 0x280 - x;
+        if (y + bh > 0x1E0)
+            bh = 0x1E0 - y;
+        vexe_string(s->x, w_at(&in, 0x12), text, sizeof(text));
+        if (s->host.text)
+            s->host.text(s->host.user, (u8)val(&in, 0x10), x, y, bw, bh,
+                         (u32)(val(&in, 0xA) & 0xFF) << 16 | (u32)(val(&in, 0xC) & 0xFF) << 8 | (val(&in, 0xE) & 0xFF),
+                         text);
+        NEXT(20);
+        return YIELD;
+    }
+    case 0x000A: { /* a text in the instruction (seg8:3E08): x, y, the text,
+                    * then a word and red, green, blue */
+        int x = w_at(&in, 2) > 0x280 ? val(&in, 2) : w_at(&in, 2);
+        int y = w_at(&in, 4) > 0x1E0 ? val(&in, 4) : w_at(&in, 4);
+        str = str_at(&in, 6, &n);
+        if (s->host.text)
+            s->host.text(s->host.user, 0, x, y, 0, 0,
+                         (u32)(w_at(&in, 6 + (int)n + 2) & 0xFF) << 16 | (u32)(w_at(&in, 6 + (int)n + 4) & 0xFF) << 8 |
+                             (w_at(&in, 6 + (int)n + 6) & 0xFF),
+                         str);
+        NEXT(6 + n + 8);
+        return YIELD;
+    }
+
     /* flow */
     case 0x00C8: /* go to */
         GOTO(far_at(&in, 2));

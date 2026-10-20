@@ -12,6 +12,10 @@
 #include "audio/mixer.h"
 #include "media/player.h"
 #include "media/wav.h"
+#include "gfx/text.h"
+#include "gfx/ttf.h"
+#include "xf_endian.h"
+#include "xf_text.h"
 #include "xf_log.h"
 
 #define MAX_CLIPS 4
@@ -40,7 +44,52 @@ typedef struct {
         vx_ptr at;
     } logged[64];
     int logged_count;
+    xf_font fonts[16];
+    u8 font_tried[16];
 } vortex;
+
+/* The fonts (seg14:042E builds a LOGFONT by number): a height and a face.
+ * The game ships Drew, ExocetHeavy, Gill and CentBD (SYSTEM\*.TTR); Helv,
+ * Courier and Tms Rmn were Windows' own, here the system's Arial,
+ * Courier New and Times New Roman. */
+static const struct {
+    int height;
+    const char *face;
+} g_fonts[16] = {
+    [2] = { 8, "Courier" },  [3] = { 8, "Helv" },     [4] = { 8, "Tms Rmn" },  [5] = { 12, "Courier" },
+    [6] = { 12, "Helv" },    [7] = { 12, "Tms Rmn" }, [8] = { 30, "Drew" },    [9] = { 8, "Helv" },
+    [10] = { 12, "ExocetHeavy" }, [11] = { 18, "Doi" }, [12] = { 22, "Gill" }, [13] = { 22, "CentBD" },
+};
+
+static const xf_font *font_for(vortex *v, int n)
+{
+    static const struct {
+        const char *face, *file, *system;
+    } faces[] = {
+        { "Drew", "SYSTEM\\DREW4.TTR", NULL },  { "ExocetHeavy", "SYSTEM\\EXOCE5.TTR", NULL },
+        { "Gill", "SYSTEM\\GILL.TTR", NULL },   { "CentBD", "SYSTEM\\CENTBD.TTR", NULL },
+        { "Courier", NULL, "Courier New" }, { "Tms Rmn", NULL, "Times New Roman" },
+    };
+    char path[1024];
+    const char *face;
+    size_t k;
+    if (n < 2 || n > 13)
+        n = 9;
+    if (v->font_tried[n])
+        return v->fonts[n].data ? &v->fonts[n] : NULL;
+    v->font_tried[n] = 1;
+    face = g_fonts[n].face;
+    for (k = 0; k < XF_COUNT(faces); k++)
+        if (strcmp(faces[k].face, face) == 0)
+            break;
+    if (k < XF_COUNT(faces) && faces[k].file && stage_path(&v->st, faces[k].file, path, sizeof(path)) == 0 &&
+        xf_font_load(&v->fonts[n], path) == 0)
+        return &v->fonts[n];
+    if (plat_font_path(k < XF_COUNT(faces) && faces[k].system ? faces[k].system : "Arial", path, sizeof(path)) == 0 &&
+        xf_font_load(&v->fonts[n], path) == 0)
+        return &v->fonts[n];
+    return NULL;
+}
 
 static void blit(u32 *dst, const u32 *src, int w, int h, int x0, int y0)
 {
@@ -132,6 +181,64 @@ static void on_moved(void *user, int from, int to)
     for (i = 0; i < MAX_CLIPS; i++)
         if (v->clips[i].open && v->clips[i].seq == from)
             v->clips[i].seq = to;
+}
+
+/* usWinAscent and usWinDescent, when the font has an OS/2 table. */
+static void win_metrics(const xf_font *f, int *ascent, int *span)
+{
+    u32 n, i;
+    if (!f->data || f->size < 12)
+        return;
+    n = xf_be16(f->data + 4);
+    for (i = 0; i < n && 12 + 16 * (i + 1) <= f->size; i++) {
+        const u8 *e = f->data + 12 + 16 * i;
+        u32 off = xf_be32(e + 8);
+        if (memcmp(e, "OS/2", 4) == 0 && off + 78 <= f->size) {
+            *ascent = xf_be16(f->data + off + 74);
+            *span = *ascent + xf_be16(f->data + off + 76);
+            return;
+        }
+    }
+}
+
+/* Text on the background: in a box, wrapped at words from its top left
+ * (DrawText with DT_WORDBREAK); else one line from x, y. */
+static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, const char *text)
+{
+    vortex *v = user;
+    const xf_font *f = font_for(v, font);
+    xf_surface s;
+    char utf8[1024];
+    float px;
+    int starts[32], lens[32], lines, i, line_h, ascent;
+    if (!f || !*text)
+        return;
+    xf_debug("vortex: text, font %d, at (%d, %d) %dx%d: %s", font, x, y, w, h, text);
+    xf_cp1252_to_utf8(utf8, sizeof(utf8), (const u8 *)text, strlen(text));
+    {
+        /* a LOGFONT height is the cell, which Windows takes from the
+         * OS/2 table's usWinAscent + usWinDescent */
+        int cell = g_fonts[font >= 2 && font <= 13 ? font : 9].height, asc = f->ascent, span = f->ascent - f->descent;
+        win_metrics(f, &asc, &span);
+        px = span > 0 ? (float)cell * (float)f->units_per_em / (float)span : (float)cell;
+        line_h = cell;
+        ascent = span > 0 ? cell * asc / span : cell * 4 / 5;
+    }
+    s.pixels = v->bg;
+    s.width = STAGE_W;
+    s.height = STAGE_H;
+    s.pitch = STAGE_W;
+    lines = w > 0 ? xf_text_wrap(f, px, utf8, w, starts, lens, 32) : 1;
+    if (w <= 0) {
+        starts[0] = 0;
+        lens[0] = (int)strlen(utf8);
+    }
+    for (i = 0; i < lines; i++) {
+        int base = y + ascent + i * line_h;
+        if (h > 0 && base > y + h)
+            break;
+        xf_text_draw(&s, f, px, x, base, utf8 + starts[i], (size_t)lens[i], rgb);
+    }
 }
 
 /* 0x12C: pictures on the background. */
@@ -300,6 +407,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.clip_op = on_clip_op;
     host.moved = on_moved;
     host.picture = on_picture;
+    host.text = on_text;
     host.sound = on_sound;
     host.sound_op = on_sound_op;
     host.sound_busy = on_sound_busy;
@@ -329,6 +437,9 @@ done:
         stop_channel(v, i);
     for (i = 0; i < (int)XF_COUNT(v->sounds); i++)
         xf_wav_free(&v->sounds[i]);
+    for (i = 0; i < (int)XF_COUNT(v->fonts); i++)
+        if (v->fonts[i].data)
+            xf_font_free(&v->fonts[i]);
     vexe_free(&v->exe);
     stage_close(&v->st);
     free(v);
