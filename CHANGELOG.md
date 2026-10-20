@@ -2,6 +2,14 @@
 
 All notable changes to this project.
 
+## 0.3.1 - 2026-10-20
+
+- Idea icons: while talking, the character's ideas show above the picture with their names on rollover; a click asks about one, and the TALK list leaves them out.
+- Screen positions from the Help screen: emotion icons from x 210, action icons on the right, the inventory at (20, 428), the evidence row at the left of the icon band and always shown in the Crime Lab.
+- Dialogue box: HISTORY questions in grey; the scroll column centred under the close box.
+- Captions give way to an icon's rollover name.
+- Evidence icons cut out by their alpha plane.
+
 ## 0.3.0 - 2026-10-20
 
 - Tools in hand use the game's own pictures and sounds: the camera's movable viewfinder and shutter, the gun's gunsight and gunshot, the flashlight's beam picture (also in lit rooms), the night vision goggles' frame, the binoculars' mask. The bar shows the item in hand alone; hotspots show no cursors of their own while a tool is in hand.
