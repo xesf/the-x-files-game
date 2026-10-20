@@ -61,6 +61,10 @@ int xf_audio_supported(const xf_mov_track *t)
         return 1;
     if (t->codec == XF_FOURCC('t', 'w', 'o', 's'))
         return t->bits == 8 || t->bits == 16;
+    /* 'raw ' and the early files' 0 (QuickTime 1.x, the earlier HyperBole
+     * games): 8-bit unsigned PCM */
+    if (t->codec == XF_FOURCC('r', 'a', 'w', ' ') || t->codec == 0)
+        return t->bits == 8;
     if (t->codec == XF_FOURCC('Q', 'D', 'M', 'C')) {
         xf_qdmc *q = xf_qdmc_open(t->desc, t->desc_size);
         int ok = q && xf_qdmc_channels(q) == t->channels;
@@ -151,6 +155,9 @@ int xf_audio_next(xf_audio_stream *s, i16 *out)
     if (t->bits == 16) {
         for (i = 0; i < frames * ch; i++)
             out[i] = (i16)xf_be16(s->buf + i * 2);
+    } else if (t->codec != XF_FOURCC('t', 'w', 'o', 's')) { /* unsigned, 128 is silence */
+        for (i = 0; i < frames * ch; i++)
+            out[i] = (i16)(((int)s->buf[i] - 128) * 256);
     } else {
         for (i = 0; i < frames * ch; i++)
             out[i] = (i16)((i8)s->buf[i] * 256);
