@@ -17,3 +17,4 @@ the layout as found in the shipped game data, and the matching reader in
 | SZDD packed files | `*.EX_`, Quantum Gate `*.HSB` (earlier games) | [szdd.md](szdd.md) |
 | Windows bitmaps | `*.BMP`, `*.RLE`, `*.HSB` (earlier games) | [bmp.md](bmp.md) |
 | WAVE sounds | `*.WAV` (earlier games) | [wav.md](wav.md) |
+| MIDI music | `*.MID` (earlier games) | [midi.md](midi.md) |

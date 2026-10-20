@@ -408,3 +408,64 @@ int plat_save_dir(char *out, size_t size)
     mkdir(out, 0755);
     return 0;
 }
+
+/* --- MIDI ------------------------------------------------------------- */
+
+/* The DLS synthesizer (Apple's General MIDI sound set) into the default
+ * output. */
+static AudioUnit g_synth, g_midi_out;
+
+int plat_midi_open(void)
+{
+    AudioComponentDescription d = { 0 };
+    AudioComponent c;
+    AudioUnitConnection link;
+    if (g_headless)
+        return -1;
+    if (g_synth)
+        return 0;
+    d.componentType = kAudioUnitType_MusicDevice;
+    d.componentSubType = kAudioUnitSubType_DLSSynth;
+    d.componentManufacturer = kAudioUnitManufacturer_Apple;
+    if (!(c = AudioComponentFindNext(NULL, &d)) || AudioComponentInstanceNew(c, &g_synth) != noErr)
+        return -1;
+    d.componentType = kAudioUnitType_Output;
+    d.componentSubType = kAudioUnitSubType_DefaultOutput;
+    if (!(c = AudioComponentFindNext(NULL, &d)) || AudioComponentInstanceNew(c, &g_midi_out) != noErr) {
+        AudioComponentInstanceDispose(g_synth);
+        g_synth = NULL;
+        return -1;
+    }
+    link.sourceAudioUnit = g_synth;
+    link.sourceOutputNumber = 0;
+    link.destInputNumber = 0;
+    if (AudioUnitInitialize(g_synth) != noErr ||
+        AudioUnitSetProperty(g_midi_out, kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, 0, &link,
+                             sizeof(link)) != noErr ||
+        AudioUnitInitialize(g_midi_out) != noErr || AudioOutputUnitStart(g_midi_out) != noErr) {
+        plat_midi_close();
+        return -1;
+    }
+    return 0;
+}
+
+void plat_midi_send(u8 status, u8 d1, u8 d2)
+{
+    if (g_synth)
+        MusicDeviceMIDIEvent(g_synth, status, d1, d2, 0);
+}
+
+void plat_midi_close(void)
+{
+    if (g_midi_out) {
+        AudioOutputUnitStop(g_midi_out);
+        AudioUnitUninitialize(g_midi_out);
+        AudioComponentInstanceDispose(g_midi_out);
+        g_midi_out = NULL;
+    }
+    if (g_synth) {
+        AudioUnitUninitialize(g_synth);
+        AudioComponentInstanceDispose(g_synth);
+        g_synth = NULL;
+    }
+}

@@ -6,7 +6,9 @@
 #include <string.h>
 
 #include "data/szdd.h"
+#include "games/games.h"
 #include "media/bmp.h"
+#include "media/midi.h"
 #include "media/wav.h"
 #include "xf_file.h"
 #include "xftool.h"
@@ -106,7 +108,47 @@ static int cmd_wav(int argc, char **argv)
     return bad ? 1 : 0;
 }
 
+static int cmd_midi(int argc, char **argv)
+{
+    xf_midi_song m;
+    int i, bad = 0;
+
+    if (argc < 2) {
+        fputs("usage: xftool midi <files>...\n", stderr);
+        return 2;
+    }
+    for (i = 1; i < argc; i++)
+        if (xf_midi_load(argv[i], &m) != 0) {
+            printf("%s: cannot read\n", argv[i]);
+            bad++;
+        } else {
+            if (argc == 2)
+                printf("format %d, %d tracks, %d ticks a beat, %u events, %.1f s\n", m.format, m.tracks, m.division,
+                       m.count, m.length_us / 1e6);
+            xf_midi_free(&m);
+        }
+    if (argc > 2)
+        printf("%d of %d songs failed\n", bad, argc - 1);
+    return bad ? 1 : 0;
+}
+
+static int cmd_detect(int argc, char **argv)
+{
+    int i;
+    if (argc < 2) {
+        fputs("usage: xftool detect <folders>...\n", stderr);
+        return 2;
+    }
+    for (i = 1; i < argc; i++) {
+        xf_game_id g = xf_detect_game(argv[i]);
+        printf("%s: %s (%s)\n", argv[i], xf_game_name(g), xf_game_title(g));
+    }
+    return 0;
+}
+
 const xftool_cmd xftool_older_cmds[] = {
+    { "detect", "<folders>...  say which HyperBole game each folder holds", cmd_detect },
+    { "midi", "<files>...  read Standard MIDI files and report failures", cmd_midi },
     { "wav", "<files>...  decode WAVE sounds and report failures", cmd_wav },
     { "bmp", "<file> [out.bmp]  decode a Windows bitmap (RLE8, Video 1, SZDD); -c <files> checks them", cmd_bmp },
     { "expand", "<packed> [out]  unpack an SZDD (COMPRESS.EXE) file; -c <files> checks them", cmd_expand },

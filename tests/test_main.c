@@ -7,6 +7,7 @@
 #include "audio/mixer.h"
 #include "data/szdd.h"
 #include "media/bmp.h"
+#include "media/midi.h"
 #include "media/smc.h"
 #include "media/wav.h"
 #include "gfx/screen.h"
@@ -238,6 +239,21 @@ static void test_smc(void)
     CHECK(frame[4] == 0 && frame[7] == 0 && frame[8 + 4] == 0xFFFFFF);
 }
 
+static void test_midi(void)
+{
+    /* format 0, 96 ticks a beat: tempo 250000 us a beat, a note on at 0,
+     * running status note off (velocity 0) at 96 ticks, end at 192 */
+    static const u8 d[] = { 'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0, 96, 'M', 'T', 'r', 'k', 0, 0, 0, 19,
+                            0, 0xFF, 0x51, 3, 0x03, 0xD0, 0x90, 0, 0x90, 60, 100, 96, 60, 0, 96, 0xFF, 0x2F, 0 };
+    xf_midi_song m;
+    CHECK(xf_midi_parse(d, sizeof(d), &m) == 0);
+    CHECK(m.count == 2);
+    CHECK(m.count == 2 && m.events[0].us == 0 && m.events[0].status == 0x90 && m.events[0].d1 == 60);
+    CHECK(m.count == 2 && m.events[1].us == 250000 && m.events[1].d2 == 0);
+    CHECK(m.length_us == 500000);
+    xf_midi_free(&m);
+}
+
 int main(void)
 {
     test_inflate();
@@ -248,6 +264,7 @@ int main(void)
     test_bmp();
     test_wav();
     test_smc();
+    test_midi();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;
