@@ -58,6 +58,7 @@ void vs_init(vs_state *s, const vexe *x, const vs_host *host)
     s->x = x;
     s->host = *host;
     s->rand_seed = 1;
+    s->mx = s->my = -1;
     for (i = 0; i < VS_SEQS; i++)
         clear_slot(s, i);
     /* seg8:00B8: the first sequence starts at seg18:0000 */
@@ -756,7 +757,7 @@ static int step(vs_state *s, int seq)
                 who = v;
         }
         if (b_at(&in, 4) == 0x0C)
-            s->g[0xFF] = c; /* kept apart: DS:0408 */
+            s->cursor_default = c;
         else
             vs_set(s, who, 0x2C, c);
         NEXT(7);
@@ -929,6 +930,60 @@ void vs_click(vs_state *s, int x, int y, int right)
     }
     if (best >= 0)
         set32(s, best, VC_EVENTS, get32(s, best, VC_EVENTS) | (right ? 0x14u : 0x0Cu));
+}
+
+/* Whether (x, y) is in the sequence's place (sized: x, y at +0xA, +0xC,
+ * width and height at +0x10, +0x12) or in a left, top, right, bottom
+ * rectangle at `rect`. */
+static int inside(vs_state *s, int seq, u16 rect, int x, int y, int sized)
+{
+    i16 l = (i16)vs_get(s, seq, rect), t = (i16)vs_get(s, seq, rect + 2), r, b;
+    if (sized) {
+        r = (i16)(l + (i16)vs_get(s, seq, VC_W));
+        b = (i16)(t + (i16)vs_get(s, seq, VC_H));
+    } else {
+        r = (i16)vs_get(s, seq, rect + 4);
+        b = (i16)vs_get(s, seq, rect + 6);
+    }
+    return x >= l && x < r && y >= t && y < b;
+}
+
+void vs_move(vs_state *s, int x, int y)
+{
+    int i, best = -1, entered = 0, over_clip = 0;
+    i16 best_z = 0x7FFF;
+    u16 cursor = s->cursor_default;
+    for (i = 0; i < VS_SEQS; i++) {
+        int was, now;
+        if (!vs_get(s, i, VC_USED) || vs_get(s, i, VC_HALTED))
+            continue;
+        was = inside(s, i, VC_X, s->mx, s->my, 1);
+        now = inside(s, i, VC_X, x, y, 1);
+        if (was && !now && vs_get(s, i, 0x120)) { /* seg3:2CF2 */
+            vs_set(s, i, VC_SPRITE, vs_get(s, i, 0x124));
+            vs_event(s, i, 0x20000);
+        }
+        if (over_clip)
+            continue;
+        if (vs_get(s, i, VC_MOVIE) && inside(s, i, VC_MOVIE_RECT, x, y, 0)) {
+            cursor = 0xFA3;
+            over_clip = 1;
+        } else if (now && vs_get(s, i, VC_CURSOR) && (i16)vs_get(s, i, VC_Z) < best_z) {
+            best = i;
+            best_z = (i16)vs_get(s, i, VC_Z);
+            cursor = vs_get(s, i, VC_CURSOR);
+            entered = !was;
+        }
+    }
+    if (cursor != s->cursor)
+        xf_debug("cursor %04X (sequence %d)", cursor, best);
+    s->cursor = cursor;
+    if (!over_clip && best >= 0 && entered && vs_get(s, best, 0x120)) { /* seg3:2D68 */
+        vs_set(s, best, VC_SPRITE, vs_get(s, best, 0x122));
+        vs_event(s, best, 0x10000);
+    }
+    s->mx = x;
+    s->my = y;
 }
 
 void vs_key(vs_state *s, int key)

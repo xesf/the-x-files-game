@@ -35,6 +35,7 @@ enum {
     VC_EVENTS2 = 0x42,
     VC_MOVIE_AT = 0x46,  /* the clip time 0x195 waits for, 1/30 s */
     VC_MOVIE_WAIT = 0x48,
+    VC_CURSOR = 0x2C,    /* the cursor over the sequence (0x2BC) */
     VC_MOVIE_RECT = 0x50, /* the clip's window: left, top, right, bottom */
     VC_MOVIE = 0x5C,     /* the clip this sequence plays (nonzero while it does) */
     VC_LOCALS = 0x64,    /* six words */
@@ -100,6 +101,11 @@ typedef struct {
     u16 g[0x100];        /* globals (DS:39F8) */
     u32 events;          /* DS:4ED6: the events this tick */
     u32 signals;         /* DS:4F60: the running sequence's signals (context + 0x42) */
+    u16 cursor_default;  /* DS:0408 (0x2BC with 0x0C) */
+    u16 cursor;          /* the cursor now: a resource (0xFA2 wait, 0xFA3
+                          * cross) or a sprite slot (0x5D on: an image and
+                          * its mask) */
+    int mx, my;          /* the pointer at the last vs_move */
     u64 paused[11];      /* DS:2276: the sequences 0xE paused, by group */
     vx_ptr labels[13];   /* DS:46A8: 0x101's targets, set by 0x100 */
     u32 rand_seed;
@@ -123,6 +129,9 @@ void vs_event(vs_state *s, int seq, u32 bits);
  * (right). A key gives every sequence 0x400; Escape gives 0x8000 to the
  * ones that handle it. */
 void vs_click(vs_state *s, int x, int y, int right);
+/* The pointer moved (seg3:2F0E): leaving and entering sequences (events
+ * 0x20000, 0x10000, with their hover sprites) and the cursor. */
+void vs_move(vs_state *s, int x, int y);
 void vs_key(vs_state *s, int key);
 
 u16 vs_get(const vs_state *s, int seq, int off);

@@ -53,6 +53,7 @@ typedef struct {
         char (*names)[32];
         u16 (*cells)[2];    /* a song, how many times it plays */
     } score;
+    int own_cursor;         /* the system's cursor is hidden */
     int discs;              /* bit n: disc n's folders are here */
     int disc;               /* the disc in the drive */
     struct {                /* the sprite slots (DS:46DC), then the cursors */
@@ -670,6 +671,54 @@ static void draw_sprites(vortex *v)
     }
 }
 
+/* The program's two cursor resources (0xFA2, 0xFA3): '#' white, '.'
+ * black, from the hotspot at (hx, hy). */
+static const struct {
+    int hx, hy;
+    const char *rows[18];
+} g_cursors[2] = {
+    { 6, 6, { " .......... ", ".######.###.", ".######.###.", ".######.###.", ".######.###.", "............",
+              ".##########.", ".##########.", ".##########.", ".##########.", ".##########.", ".##########.",
+              ".##########.", ".##########.", ".##########.", " .########. ", "  .######.  ", "   ......   " } },
+    { 2, 2, { " .#. ", "..#..", "#####", "..#..", " .#. " } },
+};
+
+static void put(vortex *v, int x, int y, u32 c)
+{
+    if (x >= 0 && y >= 0 && x < STAGE_W && y < STAGE_H)
+        v->st.fb[y * STAGE_W + x] = c;
+}
+
+/* The cursor (seg3:2DEC): a resource, or a sprite slot from 0x5D on, an
+ * image and then its mask (black: drawn), from its top left (seg3:2886).
+ * 0 is the system's arrow. */
+static void draw_cursor(vortex *v)
+{
+    u16 c = v->vm.cursor;
+    int x, y, own = 1;
+    if (c == 0xFA2 || c == 0xFA3) {
+        int k = c - 0xFA2;
+        for (y = 0; y < (int)XF_COUNT(g_cursors[k].rows) && g_cursors[k].rows[y]; y++)
+            for (x = 0; g_cursors[k].rows[y][x]; x++)
+                if (g_cursors[k].rows[y][x] != ' ')
+                    put(v, v->st.mx - g_cursors[k].hx + x, v->st.my - g_cursors[k].hy + y,
+                        g_cursors[k].rows[y][x] == '#' ? 0xFFFFFF : 0);
+    } else if (c >= 0x5D && c + 1 < (int)XF_COUNT(v->sprites) && v->sprites[c].pixels && v->sprites[c + 1].pixels) {
+        int w = XF_MIN(v->sprites[c].w, v->sprites[c + 1].w), h = XF_MIN(v->sprites[c].h, v->sprites[c + 1].h);
+        for (y = 0; y < h; y++)
+            for (x = 0; x < w; x++) {
+                u32 m = v->sprites[c + 1].pixels[y * v->sprites[c + 1].w + x];
+                if ((m >> 16 & 0xFF) + (m >> 8 & 0xFF) + (m & 0xFF) < 384)
+                    put(v, v->st.mx + x, v->st.my + y, v->sprites[c].pixels[y * v->sprites[c].w + x]);
+            }
+    } else
+        own = 0;
+    if (own != v->own_cursor) {
+        plat_show_cursor(!own);
+        v->own_cursor = own;
+    }
+}
+
 static void draw(vortex *v)
 {
     int i;
@@ -679,6 +728,7 @@ static void draw(vortex *v)
         if (v->clips[i].open && xf_player_frame(&v->clips[i].p))
             blit(v->st.fb, xf_player_frame(&v->clips[i].p), v->clips[i].p.video.width, v->clips[i].p.video.height,
                  v->clips[i].x, v->clips[i].y);
+    draw_cursor(v);
 }
 
 int xf_vortex_run(const char *dir, const xf_game_options *opt)
@@ -727,6 +777,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
             else if (ev.type == PLAT_EV_KEY_DOWN)
                 vs_key(&v->vm, ev.key);
         }
+        vs_move(&v->vm, v->st.mx, v->st.my); /* sprites move under it too */
         update_clips(v);
         feed_channels(v);
         v->vm.now = plat_ticks_ms();
