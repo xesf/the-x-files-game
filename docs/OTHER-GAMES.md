@@ -114,12 +114,12 @@ keeps its own command-line options and runs as before.
    read yet: one Intel Indeo picture and one QuickTime Animation (`rle `)
    clip in Quantum Gate, neither used by its program.
 2. **Game detection and the module interface** (done).
-3. **Vortex** (Virtual Cinema 2.0): load `VORTEX.EXE` in the
-   disassembler; find the scene tables and the media paths; write the
-   module; play the clips and the navigation, with MIDI for its music.
-   Its logic is entirely compiled in, so this is the longest step. What
-   it shares with The X-Files may help: compare its classes and
-   functions with `XFILES.EXE`'s.
+3. **Vortex** (Virtual Cinema 2.0, in progress): `tools/ne` reads and
+   disassembles `VORTEX.EXE`; its logic is a bytecode the program
+   interprets (see `docs/vortex/README.md`), and `src/games/vortex`
+   runs it. The opening, the menus and the Day 3 scenes play. The copy
+   in the data folder is disc 3 only (VORTEX_3); days 1 and 2 need the
+   other two discs.
 4. **Roland**: start from the ScummVM branch's screens (intro, menus,
    chapter pages); SZDD-expand `ROLAND.EX_` and `ROLGUTS.EX_`, write the
    VB3 p-code reader for what the screens do not cover yet, and write
@@ -130,10 +130,9 @@ keeps its own command-line options and runs as before.
 
 ## Open questions
 
-- Which disassembler to use for the 16-bit NE executables (IDA does
-  not handle them).
-- Which MIDI path to take on each platform.
-- Whether Vortex's executable keeps any class names or tables in common
-  with The X-Files that make its logic faster to recover.
+- Which disassembler to use for the 16-bit NE executables: our own
+  (`tools/ne`, on Python's capstone) is enough for Vortex.
+- Which MIDI path to take on Linux, the Vita and DOS (macOS and Windows
+  use their own synthesizers).
 - How far the earlier `hyperbole` project (C++, SDL, MIT) helps: it
   detects the games and reads BMP and RLE8, which this plan covers in C.

@@ -109,14 +109,50 @@ The rest are tables of targets that 0x100 and 0x101 use.
 The program keeps two images: the pictures (a back buffer that 0x12C
 draws into) and the screen. Texts are drawn on the screen only, so a
 screen update (0x12E) that copies a rectangle of the pictures back
-erases the texts there. Each sequence can show one sprite (its context
-word 6) at its x, y (+0xA, +0xC) when bit 0 of its flags is set; the
-sprites are drawn over the screen, the highest z first. 0x7E4 makes a
-sprite of a text.
+erases the texts there.
+
+Sprites are slots (DS:46DC, 14 bytes each): 0 to 0x5C are sprites,
+0x5D to 0x7C cursors. 0x7D0 loads a file of bitmaps, one after the
+other (Video 1, 16-bit), into the slots from the one it names; 0x7E4
+makes a sprite of a text. Each sequence can show one sprite (context
++6) at its x, y (+0xA, +0xC) when bit 0 of its flags (+0x26) is set;
+before each instruction, the sequence's width and height (+0x10,
++0x12) become its sprite's. Sprites are drawn the lowest z (+0xE)
+first, with a clear colour (RGB555) by the drawing mode (+0x28):
+black for 0, 3, 4 and 7, white for 1, 5 and 6, none for 2; mode 8
+tints the sprite.
+
+Clips are windows over everything. 0x194 makes the sequence's place
+its clip's window; 0x195 waits until the clip reaches a time (1/30
+second).
+
+## Pointer
+
+When the pointer moves (seg3:2F0E), each running sequence it leaves or
+enters gets an event (0x20000, 0x10000) and, when +0x120 is set, its
+sprite becomes +0x124 or +0x122 (a highlight). The cursor is that of
+the sequence under the pointer with the lowest z (+0x2C, set by
+0x2BC), over a clip the cross, else the default (0x2BC with 0x0C).
+Cursors are the resources 0xFA2 (wait) and 0xFA3 (a small cross), or a
+cursor slot: an image, then its mask in the next slot, drawn from the
+pointer.
+
+## Discs and music
+
+The game is on three discs, VORTEX_1 to VORTEX_3, each with its days'
+folders (`c\1a`, `c\2a`, `c\3a`). 0xFF with 9 asks which disc is in;
+a scene on another disc shows "insert disc" until it is.
+
+0x800 plays the adaptive score: `system\midifile.txt` (read by
+`midi.c`) gives its size (49 scenes, 2 variants, 4 moods: balance,
+anger, secret, psycho), the MIDI files, then for each cell a song and
+how many times it plays.
 
 ## Status
 
-`src/games/vortex` runs the sequences: the opening clips, the title,
-the main menu and its GO TO SCENE menus play. Missing: the screen
-update effects, picture sprites, the cursors and most of the scenes'
-own opcodes.
+`src/games/vortex` runs the opening, the main menu, GO TO SCENE and
+the Day 3 scenes that the disc-3 copy holds: clips, pictures, the
+dialogue box and its choices, hover cursors and the score. Missing:
+screen update effects, sprite tints, the journal and the "uber"
+device (0x805, segment 13), and the opcodes the scenes have not
+reached yet.
