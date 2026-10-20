@@ -29,7 +29,8 @@ typedef struct {
     xf_stage st;
     vexe exe;
     vs_state vm;
-    u32 bg[STAGE_W * STAGE_H]; /* the background pictures */
+    u32 pic[STAGE_W * STAGE_H]; /* the pictures (the back buffer) */
+    u32 bg[STAGE_W * STAGE_H];  /* the screen: the pictures and the texts */
     vx_clip clips[MAX_CLIPS];
     xf_wav sounds[64];      /* loaded by 0x1F5; handle = index + 1 */
     struct {
@@ -46,7 +47,13 @@ typedef struct {
     int logged_count;
     xf_font fonts[16];
     u8 font_tried[16];
+    struct {                /* the sprite slots (DS:46DC) */
+        u32 *pixels;        /* 0x00RRGGBB; KEY is clear */
+        int w, h;
+    } sprites[VS_SPRITES];
 } vortex;
+
+#define KEY 0xFF000000u
 
 /* The fonts (seg14:042E builds a LOGFONT by number): a height and a face.
  * The game ships Drew, ExocetHeavy, Gill and CentBD (SYSTEM\*.TTR); Helv,
@@ -241,6 +248,48 @@ static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, c
     }
 }
 
+static void free_sprite(vortex *v, int slot)
+{
+    free(v->sprites[slot].pixels);
+    v->sprites[slot].pixels = NULL;
+    v->sprites[slot].w = v->sprites[slot].h = 0;
+}
+
+/* 0x7E4: a text as a sprite (seg3:10A2), one line on a clear ground. */
+static int on_text_sprite(void *user, int slot, int font, u32 rgb, const char *text, int *w, int *h)
+{
+    vortex *v = user;
+    const xf_font *f = font_for(v, font);
+    char utf8[512];
+    xf_surface s;
+    int cell = g_fonts[font >= 2 && font <= 13 ? font : 9].height, asc, span, tw;
+    size_t i;
+    float px;
+    if (!f)
+        return -1;
+    asc = f->ascent;
+    span = f->ascent - f->descent;
+    win_metrics(f, &asc, &span);
+    px = span > 0 ? (float)cell * (float)f->units_per_em / (float)span : (float)cell;
+    xf_cp1252_to_utf8(utf8, sizeof(utf8), (const u8 *)text, strlen(text));
+    tw = xf_text_width(f, px, utf8, strlen(utf8)) + 1;
+    free_sprite(v, slot);
+    if (!(v->sprites[slot].pixels = malloc((size_t)tw * cell * 4)))
+        return -1;
+    for (i = 0; i < (size_t)tw * cell; i++)
+        v->sprites[slot].pixels[i] = KEY;
+    v->sprites[slot].w = tw;
+    v->sprites[slot].h = cell;
+    s.pixels = v->sprites[slot].pixels;
+    s.width = tw;
+    s.height = cell;
+    s.pitch = tw;
+    xf_text_draw(&s, f, px, 0, span > 0 ? cell * asc / span : cell * 4 / 5, utf8, strlen(utf8), rgb);
+    *w = tw;
+    *h = cell;
+    return 0;
+}
+
 /* 0x12C: pictures on the background. */
 static void on_picture(void *user, int seq, int sub, const char *file, int x, int y)
 {
@@ -249,8 +298,10 @@ static void on_picture(void *user, int seq, int sub, const char *file, int x, in
     xf_bmp b;
     (void)seq;
     if (!file) {
-        if (sub == 2)
+        if (sub == 2) {
+            memset(v->pic, 0, sizeof(v->pic));
             memset(v->bg, 0, sizeof(v->bg));
+        }
         return;
     }
     if (stage_path(&v->st, file, path, sizeof(path)) != 0 || xf_bmp_load(path, &b) != 0) {
@@ -258,8 +309,34 @@ static void on_picture(void *user, int seq, int sub, const char *file, int x, in
         return;
     }
     xf_info("vortex: picture %s at (%d, %d), sub-type %d", file, x, y, sub);
+    blit(v->pic, b.pixels, b.width, b.height, x, y);
     blit(v->bg, b.pixels, b.width, b.height, x, y);
     xf_bmp_free(&b);
+}
+
+/* 0x12E: a rectangle of the pictures reaches the screen (seg7:33B8),
+ * over the texts drawn there. The effect (a wipe, a dissolve) is not
+ * shown yet. */
+static void on_screen(void *user, int seq, u16 op, int effect, int x, int y, int w, int h)
+{
+    vortex *v = user;
+    int row;
+    (void)seq;
+    xf_debug("vortex: screen %04X effect %d at (%d, %d) %dx%d", op, effect, x, y, w, h);
+    if (x < 0) {
+        w += x;
+        x = 0;
+    }
+    if (y < 0) {
+        h += y;
+        y = 0;
+    }
+    if (x + w > STAGE_W)
+        w = STAGE_W - x;
+    if (y + h > STAGE_H)
+        h = STAGE_H - y;
+    for (row = y; w > 0 && row < y + h; row++)
+        memcpy(v->bg + row * STAGE_W + x, v->pic + row * STAGE_W + x, (size_t)w * 4);
 }
 
 static int on_sound(void *user, int sub, const char *file, u16 arg)
@@ -375,10 +452,42 @@ static void update_clips(vortex *v)
     }
 }
 
+/* Each sequence shows its sprite at its place (seg3:13D0), the
+ * farthest first (the highest z). */
+static void draw_sprites(vortex *v)
+{
+    int order[VS_SEQS], n = 0, i, k;
+    for (i = 0; i < VS_SEQS; i++) {
+        u16 slot = vs_get(&v->vm, i, VC_SPRITE);
+        if (vs_get(&v->vm, i, VC_USED) && vs_get(&v->vm, i, VC_FLAGS) & 1 && slot < VS_SPRITES &&
+            v->sprites[slot].pixels)
+            order[n++] = i;
+    }
+    for (i = 1; i < n; i++) /* by z, highest first */
+        for (k = i; k > 0 && (i16)vs_get(&v->vm, order[k], VC_Z) > (i16)vs_get(&v->vm, order[k - 1], VC_Z); k--) {
+            int t = order[k];
+            order[k] = order[k - 1];
+            order[k - 1] = t;
+        }
+    for (i = 0; i < n; i++) {
+        int seq = order[i], x, y;
+        u16 slot = vs_get(&v->vm, seq, VC_SPRITE);
+        int x0 = (i16)vs_get(&v->vm, seq, VC_X), y0 = (i16)vs_get(&v->vm, seq, VC_Y);
+        for (y = 0; y < v->sprites[slot].h; y++)
+            for (x = 0; x < v->sprites[slot].w; x++) {
+                u32 c = v->sprites[slot].pixels[y * v->sprites[slot].w + x];
+                int sx = x0 + x, sy = y0 + y;
+                if (c != KEY && sx >= 0 && sy >= 0 && sx < STAGE_W && sy < STAGE_H)
+                    v->st.fb[sy * STAGE_W + sx] = c;
+            }
+    }
+}
+
 static void draw(vortex *v)
 {
     int i;
     memcpy(v->st.fb, v->bg, sizeof(v->bg));
+    draw_sprites(v);
     for (i = 0; i < MAX_CLIPS; i++)
         if (v->clips[i].open && xf_player_frame(&v->clips[i].p))
             blit(v->st.fb, xf_player_frame(&v->clips[i].p), v->clips[i].p.video.width, v->clips[i].p.video.height,
@@ -408,6 +517,8 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.moved = on_moved;
     host.picture = on_picture;
     host.text = on_text;
+    host.text_sprite = on_text_sprite;
+    host.screen = on_screen;
     host.sound = on_sound;
     host.sound_op = on_sound_op;
     host.sound_busy = on_sound_busy;
@@ -437,6 +548,8 @@ done:
         stop_channel(v, i);
     for (i = 0; i < (int)XF_COUNT(v->sounds); i++)
         xf_wav_free(&v->sounds[i]);
+    for (i = 0; i < VS_SPRITES; i++)
+        free_sprite(v, i);
     for (i = 0; i < (int)XF_COUNT(v->fonts); i++)
         if (v->fonts[i].data)
             xf_font_free(&v->fonts[i]);

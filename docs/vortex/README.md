@@ -90,7 +90,8 @@ string or a sub-type byte:
 | 0x01F5 | a sound: a word, a sub-type, then a file (1) or a word (3) |
 | 0x0352 | MIDI: a word, a sub-type, then a file (1) or none (6, 9, 10) |
 | 0x07D0 | two words, a byte, a cursor file |
-| 0x07E4, 0x07E5 | eleven words, a text |
+| 0x07E4, 0x07E5 | a text sprite: the sprite slot, x, y, z, two words, the font, red, green, blue, a word, the text |
+| 0x012E | a screen update: an effect, then 0x7FFE and a rectangle, 0x7FFF (the whole screen) or a sequence (its sprite's place), then a word |
 | 0x0810 | a sub-type; 1: a file and three words |
 | 0x0821 | a byte, x, y, a picture file |
 | 0x00E6 | a switch on an operand over case records: 0xE7 low, high, target; 0xE8 target; 0xE9 the end |
@@ -103,7 +104,19 @@ The decoder reads 62,572 instructions, 93% of the sequence segments'
 bytes; all but 69 of their 15,262 far pointers fall in an instruction.
 The rest are tables of targets that 0x100 and 0x101 use.
 
+## Drawing
+
+The program keeps two images: the pictures (a back buffer that 0x12C
+draws into) and the screen. Texts are drawn on the screen only, so a
+screen update (0x12E) that copies a rectangle of the pictures back
+erases the texts there. Each sequence can show one sprite (its context
+word 6) at its x, y (+0xA, +0xC) when bit 0 of its flags is set; the
+sprites are drawn over the screen, the highest z first. 0x7E4 makes a
+sprite of a text.
+
 ## Status
 
-Next: the meaning of each opcode, from its handler, and a module that
-runs the sequences.
+`src/games/vortex` runs the sequences: the opening clips, the title,
+the main menu and its GO TO SCENE menus play. Missing: the screen
+update effects, picture sprites, the cursors and most of the scenes'
+own opcodes.

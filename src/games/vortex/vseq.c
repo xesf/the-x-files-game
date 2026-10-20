@@ -359,8 +359,30 @@ static int step(vs_state *s, int seq)
     case 0x012E: case 0x012F: case 0x0130: case 0x0132: case 0x0133:
     case 0x0134: case 0x0135: case 0x0136: case 0x0137: case 0x0138: {
         static const u8 len[] = { 16, 16, 12, 0, 2, 2, 2, 18, 12, 14, 18 };
+        int x = 0, y = 0, w = 0, h = 0;
+        if (op == 0x012E) { /* seg8:1512: where, 0x7FFE a rectangle, 0x7FFF
+                             * the screen, else a sequence's sprite */
+            u16 where = w_at(&in, 4);
+            if (where == 0x7FFE) {
+                x = (i16)val(&in, 6);
+                y = (i16)val(&in, 8);
+                w = (i16)val(&in, 0xA);
+                h = (i16)val(&in, 0xC);
+            } else if (where == 0x7FFF) {
+                w = 640;
+                h = 480;
+            } else {
+                u16 who = val(&in, 4);
+                if (who < VS_SEQS) {
+                    x = (i16)vs_get(s, who, VC_X);
+                    y = (i16)vs_get(s, who, VC_Y);
+                    w = (i16)vs_get(s, who, VC_W);
+                    h = (i16)vs_get(s, who, VC_H);
+                }
+            }
+        }
         if (s->host.screen)
-            s->host.screen(s->host.user, seq, op, in.pc);
+            s->host.screen(s->host.user, seq, op, w_at(&in, 2), x, y, w, h);
         NEXT(len[op - 0x012E]);
         return YIELD;
     }
@@ -472,6 +494,30 @@ static int step(vs_state *s, int seq)
                              (w_at(&in, 6 + (int)n + 6) & 0xFF),
                          str);
         NEXT(6 + n + 8);
+        return YIELD;
+    }
+
+    case 0x07E4: case 0x07E5: { /* a text as the sequence's sprite (seg8:4A96):
+                                 * the slot, x, y, z, a box, the font, red,
+                                 * green, blue, a flag, the text */
+        u16 slot = val(&in, 2);
+        int tw = 0, th = 0;
+        u32 rgb = (u32)(val(&in, 0x10) & 0xFF) << 16 | (u32)(val(&in, 0x12) & 0xFF) << 8 | (val(&in, 0x14) & 0xFF);
+        str = str_at(&in, 0x18, &n);
+        vs_set(s, seq, VC_SPRITE, slot);
+        vs_set(s, seq, VC_X, val(&in, 4));
+        vs_set(s, seq, VC_Y, val(&in, 6));
+        vs_set(s, seq, VC_Z, val(&in, 8));
+        vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) | 1));
+        if (slot < VS_SPRITES && s->host.text_sprite &&
+            s->host.text_sprite(s->host.user, slot, (u8)val(&in, 0xE), rgb, str, &tw, &th) == 0) {
+            vs_set(s, seq, VC_W, (u16)tw);
+            vs_set(s, seq, VC_H, (u16)th);
+        } else {
+            vs_set(s, seq, VC_SPRITE, 0xFFFF);
+            vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) & ~1));
+        }
+        NEXT(0x18 + n);
         return YIELD;
     }
 

@@ -12,6 +12,7 @@
 #define VS_SEQS 45
 #define VS_CTX_WORDS (0x136 / 2)
 #define VS_GLOBALS 0xE1
+#define VS_SPRITES 0x5D  /* sprite slots (DS:46DC, 14 bytes each) */
 
 /* Context fields, as byte offsets (seg8). */
 enum {
@@ -64,8 +65,13 @@ typedef struct vs_host {
     void (*cursor)(void *user, u16 a, u16 b, u8 c, const char *file);
     /* 0x3: a sequence's state (its clip) moved to another slot */
     void (*moved)(void *user, int from, int to);
-    /* 0x12E to 0x138: a screen update (transition) */
-    void (*screen)(void *user, int seq, u16 op, vx_ptr at);
+    /* 0x12E to 0x138: a screen update (transition) of a rectangle with
+     * an effect; for the others than 0x12E, the rectangle is 0, 0, 0, 0
+     * for now */
+    void (*screen)(void *user, int seq, u16 op, int effect, int x, int y, int w, int h);
+    /* 0x7E4, 0x7E5: makes sprite `slot` an image of a text; its size into
+     * *w, *h. Returns 0, or -1. */
+    int (*text_sprite)(void *user, int slot, int font, u32 rgb, const char *text, int *w, int *h);
     /* 0x805: a call into segment 13 (the "uber" device), by sub-command */
     u16 (*uber)(void *user, int seq, int sub, vx_ptr at);
 } vs_host;
