@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "audio/mixer.h"
+#include "data/szdd.h"
 #include "gfx/screen.h"
 #include "inflate_vectors.h"
 #include "xf_inflate.h"
@@ -151,12 +152,29 @@ static void test_text(void)
     CHECK(strcmp(out, "fenomeno") == 0);
 }
 
+static void test_szdd(void)
+{
+    /* "ABC", a match of 6 from the window position the first literal went
+     * to (4080), then "X" */
+    static const u8 packed[] = { 'S', 'Z', 'D', 'D', 0x88, 0xF0, 0x27, 0x33, 'A', 'T', 10, 0, 0, 0,
+                                 0x17, 'A', 'B', 'C', 0xF0, 0xF3, 'X' };
+    u8 out[16];
+    CHECK(xf_szdd_is(packed, sizeof(packed)));
+    CHECK(xf_szdd_size(packed, sizeof(packed)) == 10);
+    CHECK(xf_szdd_last_char(packed, sizeof(packed)) == 'T');
+    CHECK(xf_szdd_expand(packed, sizeof(packed), out, sizeof(out)) == 10);
+    CHECK(memcmp(out, "ABCABCABCX", 10) == 0);
+    CHECK(xf_szdd_expand(packed, sizeof(packed), out, 9) < 0);       /* too small */
+    CHECK(xf_szdd_expand(packed, sizeof(packed) - 3, out, 16) < 0);  /* truncated */
+}
+
 int main(void)
 {
     test_inflate();
     test_mixer();
     test_screen();
     test_text();
+    test_szdd();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;

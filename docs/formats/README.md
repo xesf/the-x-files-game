@@ -14,3 +14,4 @@ the layout as found in the shipped game data, and the matching reader in
 | DVD video | `vob/*.vob` (DVD edition) | [vob.md](vob.md) |
 | XTX text | `XT/*.xtx` | [text-and-fonts.md](text-and-fonts.md) |
 | TTR fonts | `*.TTR` | [text-and-fonts.md](text-and-fonts.md) |
+| SZDD packed files | `*.EX_`, Quantum Gate `*.HSB` (earlier games) | [szdd.md](szdd.md) |

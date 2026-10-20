@@ -22,6 +22,7 @@ extern const xftool_cmd xftool_lang_cmds[];
 extern const xftool_cmd xftool_font_cmds[];
 extern const xftool_cmd xftool_hdb_cmds[];
 extern const xftool_cmd xftool_play_cmds[];
+extern const xftool_cmd xftool_older_cmds[];
 
 int xftool_write_file(const char *path, const void *data, unsigned long size);
 int xftool_write_bmp(const char *path, const unsigned *pixels, int w, int h);
