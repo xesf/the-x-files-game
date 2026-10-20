@@ -2118,6 +2118,26 @@ static int picture_middle(const xf_image *img)
     return lo < 0 ? INV_W / 2 : (lo + hi + 1) / 2;
 }
 
+static void draw_inventory(explorer *e, int mx, int my, int bar);
+
+/* Pref_cInventory: the bar when the pointer is low (or always, 'V'), the
+ * item in hand, the Crime Lab's evidence row. It stays usable while clips
+ * play and during conversations. */
+static void draw_inventory_bar(explorer *e, int mx, int my)
+{
+    int bar;
+    refresh_inventory(e);
+    if (e->g->iface_count)
+        return;
+    bar = my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && holding(e));
+    if (bar || e->inv_items < e->inv_count) {
+        /* the bar, with the item's name under it, and the evidence row */
+        int top = e->inv_items < e->inv_count ? 328 : INV_Y - 4;
+        draw_inventory(e, mx, my, bar);
+        ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BOTTOM_LEFT);
+    }
+}
+
 static void draw_inventory(explorer *e, int mx, int my, int bar)
 {
     xf_surface s = screen_surface(e);
@@ -2766,6 +2786,8 @@ static void draw(explorer *e, int mx, int my)
                                  0x000000);
             ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BELOW);
         }
+        if (e->in_menu != -1) /* not over the opening titles */
+            draw_inventory_bar(e, mx, my);
         draw_ai_icon(e, mx, my);
         draw_menu_icon(e, mx, my);
         if (!wide)
@@ -2841,17 +2863,7 @@ static void draw(explorer *e, int mx, int my)
         draw_dialog(e, mx, my);
         ui_piece(e, x0, DLG_Y - 6, DLG_W, 130, SCR_ANCHOR_UNDER);
     }
-    refresh_inventory(e);
-    /* Pref_cInventory; the item in hand stays in view */
-    if (!g->iface_count) {
-        int bar = my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && holding(e));
-        if (bar || e->inv_items < e->inv_count) {
-            /* the bar, with the item's name under it, and the evidence row */
-            int top = e->inv_items < e->inv_count ? 328 : INV_Y - 4;
-            draw_inventory(e, mx, my, bar);
-            ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BOTTOM_LEFT);
-        }
-    }
+    draw_inventory_bar(e, mx, my);
     draw_ifaces(e);
     draw_ai_icon(e, mx, my);
     draw_menu_icon(e, mx, my);
@@ -3708,6 +3720,21 @@ static void load_game_fonts(explorer *e)
 
 /* One input event: from the platform, or from a script. Mouse positions
  * are in the pixels of the frame shown last. */
+/* A click on the inventory bar or the evidence row. */
+static void inv_click(explorer *e, int inv)
+{
+    if (inv >= e->inv_items) {
+        game_click_evidence(e->g, e->inv_ids[inv]);
+    } else if (e->inv_ids[inv] == e->held_inv && holding(e)) {
+        game_hold(e->g, NULL); /* the item in hand, clicked again: put away */
+        e->held_inv = 0;
+    } else {
+        game_click_inventory(e->g, e->inv_ids[inv]);
+        if (e->inv_ids[inv] != GAME_AI_ICON)
+            e->held_inv = e->inv_ids[inv];
+    }
+}
+
 static void handle_event(explorer *e, plat_event ev)
 {
     if (ev.type == PLAT_EV_MOUSE_MOVE || ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_MOUSE_UP) {
@@ -3811,7 +3838,7 @@ static void handle_event(explorer *e, plat_event ev)
     } else if (ev.type == PLAT_EV_MOUSE_MOVE) {
         e->mx = ev.x;
         e->my = ev.y;
-        if (!e->playing) {
+        if (e->in_menu != -1) {
             int inv = inv_hit(e, ev.x, ev.y);
             int inside = ev.y >= inv_reveal(e) && !e->g->iface_count;
             if (inside && !e->inv_inside && e->held_inv) {
@@ -3819,7 +3846,8 @@ static void handle_event(explorer *e, plat_event ev)
                 e->held_inv = 0;
             }
             e->inv_inside = inside;
-            game_hover(e->g, e->mx, e->my);
+            if (!e->playing)
+                game_hover(e->g, e->mx, e->my);
             game_hover_inventory(e->g, inv >= 0 ? e->inv_ids[inv] : 0, inv >= e->inv_items);
         }
     } else if (e->playing && ev.type == PLAT_EV_MOUSE_DOWN && icon_at(e, ev.x, ev.y) >= 0) {
@@ -3830,6 +3858,9 @@ static void handle_event(explorer *e, plat_event ev)
     } else if (e->playing && e->have_clip && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT &&
                clip_shot(e, ev.x, ev.y)) {
         stop_media(e); /* a shot: the clip ends without its end triggers */
+    } else if (e->playing && e->in_menu != -1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT &&
+               inv_hit(e, ev.x, ev.y) >= 0) {
+        inv_click(e, inv_hit(e, ev.x, ev.y)); /* the inventory during a clip: it goes on */
     } else if (e->playing && (ev.type == PLAT_EV_MOUSE_DOWN || ev.type == PLAT_EV_KEY_DOWN)) {
         /* Pref_bSkipClips: "Right/Command + Click to Skip Video Clip".
          * The opening titles skip with any click or key. The location
@@ -3862,16 +3893,8 @@ static void handle_event(explorer *e, plat_event ev)
             game_ask(e->g, e->idea_convs[idea_at(e, ev.x, ev.y)]); /* an idea: ask about it */
         else if (e->g->talking && click_dialog(e, ev.x, ev.y))
             ;
-        else if (inv >= e->inv_items) {
-            game_click_evidence(e->g, e->inv_ids[inv]);
-        } else if (inv >= 0 && e->inv_ids[inv] == e->held_inv && holding(e)) {
-            game_hold(e->g, NULL); /* the item in hand, clicked again: put away */
-            e->held_inv = 0;
-        } else if (inv >= 0) {
-            game_click_inventory(e->g, e->inv_ids[inv]);
-            if (e->inv_ids[inv] != GAME_AI_ICON)
-                e->held_inv = e->inv_ids[inv];
-        }
+        else if (inv >= 0)
+            inv_click(e, inv);
         else if (shoot_at(e, ev.x, ev.y))
             ;
         else {
