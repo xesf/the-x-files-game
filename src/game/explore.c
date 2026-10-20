@@ -2072,11 +2072,36 @@ static int inv_reveal(const explorer *e)
 
 static int inv_at(explorer *e, int x, int y);
 
+/* Whether a clip is on: the queue's (a scene, a question and its answer)
+ * or a view's own clip that plays once. */
+static int scene_playing(explorer *e)
+{
+    int i;
+    if (e->playing || game_media_pending(e->g))
+        return 1;
+    for (i = 0; i < e->anim_count; i++)
+        if (e->anims[i].use_player && !e->anims[i].loop && !e->anims[i].ended)
+            return 1;
+    return 0;
+}
+
+/* Whether the inventory bar can show and take clicks: not while a clip
+ * plays, nor while the dialogue box is open. The evidence row (the Crime
+ * Lab) stays usable while talking: the evidence goes to the technician. */
+static int inv_open(explorer *e, int evidence)
+{
+    if (e->g->iface_count || scene_playing(e))
+        return 0;
+    return evidence || !e->g->talking;
+}
+
 /* An inventory or evidence icon under (x, y) that takes clicks: the bar
  * when it shows, the evidence row (the Crime Lab) always. */
 static int inv_hit(explorer *e, int x, int y)
 {
-    int i = e->g->iface_count ? -1 : inv_at(e, x, y);
+    int i = inv_at(e, x, y);
+    if (i >= 0 && !inv_open(e, i >= e->inv_items))
+        i = -1;
     if (i >= 0 && i < e->inv_items && game_pref(e->g, 983) != 'V' && y < inv_reveal(e))
         i = -1;
     return i;
@@ -2843,8 +2868,9 @@ static void draw(explorer *e, int mx, int my)
     }
     refresh_inventory(e);
     /* Pref_cInventory; the item in hand stays in view */
-    if (!g->iface_count) {
-        int bar = my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && holding(e));
+    if (inv_open(e, 1)) {
+        int bar = inv_open(e, 0) &&
+                  (my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && holding(e)));
         if (bar || e->inv_items < e->inv_count) {
             /* the bar, with the item's name under it, and the evidence row */
             int top = e->inv_items < e->inv_count ? 328 : INV_Y - 4;
@@ -3464,7 +3490,7 @@ static int nav_targets(explorer *e, nav_point *t, int max)
             const vc_region *r = &g->spots[i].region;
             NAV_ADD((r->left + r->right) / 2, (r->top + r->bottom) / 2);
         }
-    if (e->my >= inv_reveal(e) || game_pref(g, 983) == 'V')
+    if ((e->my >= inv_reveal(e) || game_pref(g, 983) == 'V') && inv_open(e, 0))
         for (i = 0; i < e->inv_count; i++) {
             int x, y;
             inv_pos(e, i, &x, &y);
@@ -3587,7 +3613,7 @@ static int nav_key(explorer *e, const plat_event *ev)
         nav_click(e);
         return 1;
     }
-    if (ev->key == 'i' && !g->iface_count && !e->in_menu && g->view) {
+    if (ev->key == 'i' && inv_open(e, 0) && !e->in_menu && g->view) {
         /* the pointer to the inventory bar, which shows it */
         int x, y;
         nav_point_to(e, 10 + INV_W / 2, SCREEN_H - 20);
