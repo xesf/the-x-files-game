@@ -105,6 +105,8 @@ static int cmd_check(int argc, char **argv)
         }
         for (k = 0; k < mov.track_count; k++) {
             const xf_mov_track *t = &mov.tracks[k];
+            if (!t->sample_count)
+                continue; /* an empty track (Quantum Gate's BEAST2.MOV has 18) */
             if (t->kind == XF_TRACK_VIDEO) {
                 xf_video v;
                 u32 i;
