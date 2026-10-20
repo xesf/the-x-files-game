@@ -72,14 +72,21 @@ int vexe_load(vexe *x, const char *path)
         const u8 *e = d + segtab + (i - 1) * 8;
         vexe_seg *s = &x->segs[i];
         u32 off = (u32)xf_le16(e) << align, len = xf_le16(e + 2), flags = xf_le16(e + 4), cap = 0;
+        u32 mem = xf_le16(e + 6);
         if (!off)
             continue;
         if (!len)
             len = 0x10000;
         if (off + len > x->file_size)
             goto fail;
-        s->data = d + off;
-        s->size = len;
+        if (!mem || mem < len)
+            mem = mem ? len : 0x10000;
+        /* the last word of a segment can reach into the zeros past its
+         * file bytes (seg41 ends with 0xD3, its 0 high byte not stored) */
+        if (!(s->data = calloc(1, mem)))
+            goto fail;
+        memcpy(s->data, d + off, len);
+        s->size = mem;
         if (flags & 0x100 && off + len + 2 <= x->file_size) {
             u32 n = xf_le16(d + off + len), k;
             const u8 *r = d + off + len + 2;
@@ -96,7 +103,7 @@ int vexe_load(vexe *x, const char *path)
                         break;
                     if (r[1] & 4)
                         break; /* additive: no chain */
-                    next = xf_le16(s->data + at);
+                    next = xf_le16(d + off + at);
                     if (next == 0xFFFF || next == at)
                         break;
                     at = next;
@@ -115,6 +122,7 @@ void vexe_free(vexe *x)
 {
     int i;
     for (i = 0; i <= VX_MAX_SEGS; i++) {
+        free(x->segs[i].data);
         free(x->segs[i].fix_off);
         free(x->segs[i].fix_seg);
     }

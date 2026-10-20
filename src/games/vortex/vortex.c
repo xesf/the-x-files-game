@@ -125,6 +125,15 @@ static void on_clip_op(void *user, int seq, int action, u16 a, u16 b)
             stop_clip(v, &v->clips[i]);
 }
 
+static void on_moved(void *user, int from, int to)
+{
+    vortex *v = user;
+    int i;
+    for (i = 0; i < MAX_CLIPS; i++)
+        if (v->clips[i].open && v->clips[i].seq == from)
+            v->clips[i].seq = to;
+}
+
 /* 0x12C: pictures on the background. */
 static void on_picture(void *user, int seq, int sub, const char *file, int x, int y)
 {
@@ -289,6 +298,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.unknown = on_unknown;
     host.clip = on_clip;
     host.clip_op = on_clip_op;
+    host.moved = on_moved;
     host.picture = on_picture;
     host.sound = on_sound;
     host.sound_op = on_sound_op;
@@ -297,9 +307,12 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     vs_init(&v->vm, &v->exe, &host);
     while (!v->st.quit) {
         plat_event ev;
-        while (stage_poll(&v->st, &ev))
-            if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE)
-                v->st.quit = 1;
+        while (stage_poll(&v->st, &ev)) {
+            if (ev.type == PLAT_EV_MOUSE_DOWN)
+                vs_click(&v->vm, ev.x, ev.y, ev.button == PLAT_MOUSE_RIGHT);
+            else if (ev.type == PLAT_EV_KEY_DOWN)
+                vs_key(&v->vm, ev.key);
+        }
         update_clips(v);
         feed_channels(v);
         v->vm.now = plat_ticks_ms();

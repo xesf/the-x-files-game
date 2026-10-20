@@ -145,6 +145,21 @@ static int matches(const vs_state *s, int i, u16 who)
     return i == who;
 }
 
+/* seg8:71E0: sequence `to` takes `from`'s state (its sprite, place,
+ * clip, waits, handlers, locals, pointer); it keeps its slot, parent and
+ * number. */
+static void become(vs_state *s, int from, int to)
+{
+    u16 parent = vs_get(s, to, VC_PARENT), id = vs_get(s, to, VC_ID);
+    memcpy(s->ctx[to], s->ctx[from], sizeof(s->ctx[to]));
+    vs_set(s, to, VC_INDEX, (u16)to);
+    vs_set(s, to, VC_PARENT, parent);
+    vs_set(s, to, VC_ID, id);
+    vs_set(s, to, VC_USED, 1);
+    if (s->host.moved)
+        s->host.moved(s->host.user, from, to);
+}
+
 /* Pushes the return address (seg8:7590): eight slots, the oldest dropped
  * when full. */
 static void push_return(vs_state *s, int seq, vx_ptr ret)
@@ -258,12 +273,27 @@ static int step(vs_state *s, int seq)
         }
         return YIELD;
     }
-    case 0x0003: { /* stop this sequence's children */
+    case 0x0003: { /* carry on in another sequence's slot (seg8:0B74,
+                    * 71E0): the state moves there, the pointer after this
+                    * instruction; given a slot, this one stops */
         u16 who = val(&in, 2);
-        for (i = 0; i < VS_SEQS; i++)
-            if (i != seq && vs_get(s, i, VC_PARENT) == seq && matches(s, i, who))
-                stop_seq(s, i);
+        if (seq == 0) {
+            NEXT(4);
+            return RUN;
+        }
         NEXT(4);
+        if (who < 0x2D) {
+            if (who != seq)
+                become(s, seq, who);
+            if (who != seq) {
+                stop_seq(s, seq);
+                return STOP;
+            }
+            return YIELD;
+        }
+        for (i = 0; i < VS_SEQS; i++)
+            if (i != seq && matches(s, i, who))
+                become(s, seq, i);
         return YIELD;
     }
     case 0x0005: { /* a random number from lo to hi */
@@ -687,4 +717,44 @@ void vs_tick(vs_state *s)
     for (i = 0; i < VS_SEQS; i++)
         run_seq(s, i);
     s->events = 0;
+}
+
+void vs_click(vs_state *s, int x, int y, int right)
+{
+    int i, best = -1;
+    i16 best_z = 0x7FFF;
+    for (i = 0; i < VS_SEQS; i++) {
+        i16 sx, sy, sw, sh;
+        if (!vs_get(s, i, VC_USED) || vs_get(s, i, VC_HALTED))
+            continue;
+        xf_debug("click: seq %d at seg%d:%04X rect %d,%d %dx%d z %d wait %08X handled %08X", i,
+                 VX_SEG(vs_get_ptr(s, i, VC_PC)), VX_OFF(vs_get_ptr(s, i, VC_PC)), (i16)vs_get(s, i, VC_X),
+                 (i16)vs_get(s, i, VC_Y), (i16)vs_get(s, i, VC_W), (i16)vs_get(s, i, VC_H), (i16)vs_get(s, i, VC_Z),
+                 get32(s, i, VC_WAIT), get32(s, i, VC_HANDLED));
+        set32(s, i, VC_EVENTS, get32(s, i, VC_EVENTS) | 0x2);
+        if (!((get32(s, i, VC_WAIT) | get32(s, i, VC_HANDLED)) & 0x1C))
+            continue;
+        sx = (i16)vs_get(s, i, VC_X);
+        sy = (i16)vs_get(s, i, VC_Y);
+        sw = (i16)vs_get(s, i, VC_W);
+        sh = (i16)vs_get(s, i, VC_H);
+        if (x < sx || x > sx + sw || y < sy || y > sy + sh || (i16)vs_get(s, i, VC_Z) >= best_z)
+            continue;
+        best = i;
+        best_z = (i16)vs_get(s, i, VC_Z);
+    }
+    if (best >= 0)
+        set32(s, best, VC_EVENTS, get32(s, best, VC_EVENTS) | (right ? 0x14u : 0x0Cu));
+}
+
+void vs_key(vs_state *s, int key)
+{
+    int i;
+    for (i = 0; i < VS_SEQS; i++) {
+        if (!vs_get(s, i, VC_USED) || vs_get(s, i, VC_HALTED))
+            continue;
+        if (key == 27 && get32(s, i, VC_HANDLED) & 0x8000)
+            set32(s, i, VC_EVENTS, get32(s, i, VC_EVENTS) | 0x8000);
+        set32(s, i, VC_EVENTS, get32(s, i, VC_EVENTS) | 0x400);
+    }
 }

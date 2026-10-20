@@ -60,6 +60,8 @@ typedef struct vs_host {
     int (*sound_busy)(void *user, int channel);
     void (*music)(void *user, int sub, const char *file, u16 arg);
     void (*cursor)(void *user, u16 a, u16 b, u8 c, const char *file);
+    /* 0x3: a sequence's state (its clip) moved to another slot */
+    void (*moved)(void *user, int from, int to);
     /* 0x12E to 0x138: a screen update (transition) */
     void (*screen)(void *user, int seq, u16 op, vx_ptr at);
     /* 0x805: a call into segment 13 (the "uber" device), by sub-command */
@@ -88,6 +90,14 @@ void vs_tick(vs_state *s);
 /* Raises events (bits of DS:4ED6) for the waiting sequences, e.g. a clip
  * that ended (bit 0). */
 void vs_event(vs_state *s, int seq, u32 bits);
+
+/* The player's input (seg4's window procedure): a click gives every
+ * sequence event 0x2, and the nearest sequence (lowest z) waiting for
+ * or handling 0x4 to 0x10 under the pointer 0xC (left) or 0x14
+ * (right). A key gives every sequence 0x400; Escape gives 0x8000 to the
+ * ones that handle it. */
+void vs_click(vs_state *s, int x, int y, int right);
+void vs_key(vs_state *s, int key);
 
 u16 vs_get(const vs_state *s, int seq, int off);
 void vs_set(vs_state *s, int seq, int off, u16 v);

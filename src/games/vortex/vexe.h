@@ -11,7 +11,7 @@
 #define VX_MAX_SEGS 64
 
 typedef struct {
-    const u8 *data;   /* into vexe.file */
+    u8 *data;         /* the segment as loaded: its file bytes, then zeros up to its memory size */
     u32 size;
     u16 *fix_off;     /* offsets of the segment fixups, sorted */
     u8 *fix_seg;      /* the segment each names */
