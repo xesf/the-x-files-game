@@ -32,7 +32,9 @@ enum {
     VC_WAIT2 = 0x3A,     /* dword: the signals 0xD7 waits for */
     VC_HANDLED2 = 0x3E,  /* dword: signals with a handler (0xB8 + 4 * bit) */
     VC_EVENTS2 = 0x42,
+    VC_MOVIE_AT = 0x46,  /* the clip time 0x195 waits for, 1/30 s */
     VC_MOVIE_WAIT = 0x48,
+    VC_MOVIE_RECT = 0x50, /* the clip's window: left, top, right, bottom */
     VC_MOVIE = 0x5C,     /* the clip this sequence plays (nonzero while it does) */
     VC_LOCALS = 0x64,    /* six words */
     VC_VECTORS = 0x70,   /* event handlers, far pointers, bit 0 first */
@@ -48,6 +50,10 @@ typedef struct vs_host {
     void (*unknown)(void *user, int seq, u16 op, vx_ptr at);
     /* Media: clips, pictures, sounds, music, text. */
     int (*clip)(void *user, int seq, int sub, const char *file, int x, int y, const u16 *w, u8 b0, u8 b1);
+    /* 0x192: moves a sequence's clip to x, y */
+    void (*clip_move)(void *user, int seq, int x, int y);
+    /* where a sequence's clip is, ms; -1 without one */
+    long (*clip_time)(void *user, int seq);
     /* 0x197: an action on a sequence's clip */
     void (*clip_op)(void *user, int seq, int action, u16 a, u16 b);
     void (*picture)(void *user, int seq, int sub, const char *file, int x, int y);
@@ -72,6 +78,9 @@ typedef struct vs_host {
     /* 0x7E4, 0x7E5: makes sprite `slot` an image of a text; its size into
      * *w, *h. Returns 0, or -1. */
     int (*text_sprite)(void *user, int slot, int font, u32 rgb, const char *text, int *w, int *h);
+    /* 0xFF: 9 asks which disc is in the drive (its volume VORTEX_n);
+     * another n whether disc n is in. */
+    u16 (*disc)(void *user, int n);
     /* 0x805: a call into segment 13 (the "uber" device), by sub-command */
     u16 (*uber)(void *user, int seq, int sub, vx_ptr at);
 } vs_host;

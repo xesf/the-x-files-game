@@ -47,6 +47,8 @@ typedef struct {
     int logged_count;
     xf_font fonts[16];
     u8 font_tried[16];
+    int discs;              /* bit n: disc n's folders are here */
+    int disc;               /* the disc in the drive */
     struct {                /* the sprite slots (DS:46DC) */
         u32 *pixels;        /* 0x00RRGGBB; KEY is clear */
         int w, h;
@@ -141,6 +143,15 @@ static void stop_clip(vortex *v, vx_clip *c)
 }
 
 /* 0x190: a clip at (x, y), top left; the sequence's own (seg8:1ED2). */
+/* The clip's window into its sequence (context + 0x50). */
+static void clip_rect(vortex *v, const vx_clip *c)
+{
+    vs_set(&v->vm, c->seq, VC_MOVIE_RECT, (u16)c->x);
+    vs_set(&v->vm, c->seq, VC_MOVIE_RECT + 2, (u16)c->y);
+    vs_set(&v->vm, c->seq, VC_MOVIE_RECT + 4, (u16)(c->x + c->p.video.width));
+    vs_set(&v->vm, c->seq, VC_MOVIE_RECT + 6, (u16)(c->y + c->p.video.height));
+}
+
 static int on_clip(void *user, int seq, int sub, const char *file, int x, int y, const u16 *w, u8 b0, u8 b1)
 {
     vortex *v = user;
@@ -167,7 +178,30 @@ static int on_clip(void *user, int seq, int sub, const char *file, int x, int y,
     v->clips[i].x = x;
     v->clips[i].y = y;
     vs_set(&v->vm, seq, VC_MOVIE, (u16)(i + 1));
+    clip_rect(v, &v->clips[i]);
     return 0;
+}
+
+static void on_clip_move(void *user, int seq, int x, int y)
+{
+    vortex *v = user;
+    int i;
+    for (i = 0; i < MAX_CLIPS; i++)
+        if (v->clips[i].open && v->clips[i].seq == seq) {
+            v->clips[i].x = x;
+            v->clips[i].y = y;
+            clip_rect(v, &v->clips[i]);
+        }
+}
+
+static long on_clip_time(void *user, int seq)
+{
+    vortex *v = user;
+    int i;
+    for (i = 0; i < MAX_CLIPS; i++)
+        if (v->clips[i].open && v->clips[i].seq == seq)
+            return (long)v->clips[i].p.now_ms;
+    return -1;
 }
 
 static void on_clip_op(void *user, int seq, int action, u16 a, u16 b)
@@ -312,6 +346,39 @@ static void on_picture(void *user, int seq, int sub, const char *file, int x, in
     blit(v->pic, b.pixels, b.width, b.height, x, y);
     blit(v->bg, b.pixels, b.width, b.height, x, y);
     xf_bmp_free(&b);
+}
+
+/* The game comes on three discs, VORTEX_1 to VORTEX_3, each with its
+ * days' folders (c\1a, c\2a, c\3a); a copy may hold one or all. As with
+ * a drive, the disc in it changes when the program asks for another
+ * one that is here (after its "insert disc" prompt). */
+static void find_discs(vortex *v)
+{
+    char rel[8], path[1024];
+    int n;
+    for (n = 1; n <= 3; n++) {
+        snprintf(rel, sizeof(rel), "c\\%da", n);
+        if (stage_path(&v->st, rel, path, sizeof(path)) == 0) {
+            v->discs |= 1 << n;
+            if (!v->disc)
+                v->disc = n;
+        }
+    }
+    if (!v->disc) /* the menus and the splash clips need no day folder */
+        v->disc = 1;
+    xf_info("vortex: discs here %s%s%s, disc %d in", v->discs & 2 ? "1 " : "", v->discs & 4 ? "2 " : "",
+            v->discs & 8 ? "3 " : "", v->disc);
+}
+
+static u16 on_disc(void *user, int n)
+{
+    vortex *v = user;
+    if (n == 9)
+        return (u16)v->disc;
+    if (n < 1 || n > 3 || !(v->discs & 1 << n))
+        return 0;
+    v->disc = n;
+    return 1;
 }
 
 /* 0x12E: a rectangle of the pictures reaches the screen (seg7:33B8),
@@ -514,11 +581,15 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.unknown = on_unknown;
     host.clip = on_clip;
     host.clip_op = on_clip_op;
+    host.clip_move = on_clip_move;
+    host.clip_time = on_clip_time;
     host.moved = on_moved;
     host.picture = on_picture;
     host.text = on_text;
     host.text_sprite = on_text_sprite;
     host.screen = on_screen;
+    host.disc = on_disc;
+    find_discs(v);
     host.sound = on_sound;
     host.sound_op = on_sound_op;
     host.sound_busy = on_sound_busy;

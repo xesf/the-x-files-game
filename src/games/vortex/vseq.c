@@ -339,8 +339,8 @@ static int step(vs_state *s, int seq)
         return RUN;
     }
 
-    case 0x00FF: /* seg9:0134 checks the CD (its volume, VORTEX_n) is in: it always is */
-        *ref(&in, 4) = 1;
+    case 0x00FF: /* seg9:0134: the disc in the drive (9), or whether disc n is */
+        *ref(&in, 4) = s->host.disc ? s->host.disc(s->host.user, val(&in, 2)) : 1;
         NEXT(6);
         return YIELD;
 
@@ -386,6 +386,41 @@ static int step(vs_state *s, int seq)
         NEXT(len[op - 0x012E]);
         return YIELD;
     }
+
+    case 0x0192: /* moves the sequence's clip (seg8:1E16); a flag */
+        if (s->host.clip_move)
+            s->host.clip_move(s->host.user, seq, (i16)val(&in, 2), (i16)val(&in, 4));
+        NEXT(8);
+        return YIELD;
+    case 0x0194: /* the sequence's place becomes its clip's window (seg8:1B7E) */
+        vs_set(s, seq, VC_X, vs_get(s, seq, VC_MOVIE_RECT));
+        vs_set(s, seq, VC_Y, vs_get(s, seq, VC_MOVIE_RECT + 2));
+        vs_set(s, seq, VC_W, (u16)(vs_get(s, seq, VC_MOVIE_RECT + 4) - vs_get(s, seq, VC_MOVIE_RECT)));
+        vs_set(s, seq, VC_H, (u16)(vs_get(s, seq, VC_MOVIE_RECT + 6) - vs_get(s, seq, VC_MOVIE_RECT + 2)));
+        NEXT(2);
+        return RUN;
+    case 0x0195: { /* waits until the clip reaches a time, 1/30 s (seg8:1BEA);
+                    * then 8 goes on, 9 stops the clip too */
+        long ms = s->host.clip_time ? s->host.clip_time(s->host.user, seq) : -1;
+        u16 at;
+        if (!vs_get(s, seq, VC_MOVIE) || ms < 0) {
+            NEXT(5);
+            return RUN;
+        }
+        if (!vs_get(s, seq, VC_MOVIE_AT))
+            vs_set(s, seq, VC_MOVIE_AT, w_at(&in, 2));
+        at = vs_get(s, seq, VC_MOVIE_AT);
+        if ((long)at > ms * 30 / 1000)
+            return YIELD;
+        vs_set(s, seq, VC_MOVIE_AT, 0);
+        if (b_at(&in, 4) == 9 && s->host.clip_op)
+            s->host.clip_op(s->host.user, seq, 9, 0, 0);
+        NEXT(5);
+        return RUN;
+    }
+    case 0x0196: /* a clip's rate, from a variable (seg8:1D12): not done */
+        NEXT(4);
+        return YIELD;
 
     case 0x0197: { /* act on the clips of sequences (seg8:79C4): 9 stops and
                     * hides, 10 shows, 11 plays (an ended one goes) */
