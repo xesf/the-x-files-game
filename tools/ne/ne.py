@@ -163,7 +163,11 @@ def disasm(ne, n, out):
         note = []
         for k in range(ins.size):
             if ins.address + k in rel:
-                note.append(rel[ins.address + k][1])
+                src, desc = rel[ins.address + k]
+                if src == 2 and desc.startswith('seg') and ins.mnemonic in ('lcall', 'ljmp'):
+                    # a segment fixup: the offset is the instruction's own
+                    desc = '%s:%04X' % (desc.split(':')[0], int(ins.op_str.split(',')[1], 16))
+                note.append(desc)
                 break
         if ins.mnemonic in ('push', 'mov') and ins.op_str.startswith(('0x', 'ax, 0x', 'word ptr')) and not note:
             try:
