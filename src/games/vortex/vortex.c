@@ -55,10 +55,10 @@ typedef struct {
     } score;
     int discs;              /* bit n: disc n's folders are here */
     int disc;               /* the disc in the drive */
-    struct {                /* the sprite slots (DS:46DC) */
+    struct {                /* the sprite slots (DS:46DC), then the cursors */
         u32 *pixels;        /* 0x00RRGGBB; KEY is clear */
         int w, h;
-    } sprites[VS_SPRITES];
+    } sprites[0x7D];
 } vortex;
 
 #define KEY 0xFF000000u
@@ -293,6 +293,38 @@ static void free_sprite(vortex *v, int slot)
     free(v->sprites[slot].pixels);
     v->sprites[slot].pixels = NULL;
     v->sprites[slot].w = v->sprites[slot].h = 0;
+}
+
+/* 0x7D0: the bitmaps of a file, one after the other, into the slots
+ * from `slot` (seg2:0324). */
+static int on_sprite_load(void *user, int slot, const char *file)
+{
+    vortex *v = user;
+    char path[1024];
+    size_t size, at = 0;
+    u8 *data;
+    int n = 0;
+    if (stage_path(&v->st, file, path, sizeof(path)) != 0 || !(data = xf_load(path, &size))) {
+        xf_warn("vortex: sprites %s not found", file);
+        return 0;
+    }
+    while (slot + n < (int)XF_COUNT(v->sprites) && at + 14 <= size && data[at] == 'B' && data[at + 1] == 'M') {
+        u32 len = xf_le32(data + at + 2);
+        xf_bmp b;
+        if (len < 14 || len > size - at || xf_bmp_decode(data + at, len, &b) != 0)
+            break;
+        free_sprite(v, slot + n);
+        v->sprites[slot + n].pixels = b.pixels; /* taken from the bitmap */
+        v->sprites[slot + n].w = b.width;
+        v->sprites[slot + n].h = b.height;
+        b.pixels = NULL;
+        xf_bmp_free(&b);
+        at += len;
+        n++;
+    }
+    free(data);
+    xf_debug("vortex: sprites %s: %d into %d", file, n, slot);
+    return n;
 }
 
 /* 0x7E4: a text as a sprite (seg3:10A2), one line on a clear ground. */
@@ -583,33 +615,47 @@ static void update_clips(vortex *v)
     }
 }
 
-/* Each sequence shows its sprite at its place (seg3:13D0), the
- * farthest first (the highest z). */
+/* Each sequence shows its sprite at its place (seg3:2406), the lowest
+ * z first. The drawing mode makes a colour (RGB555) clear (seg3:1790):
+ * black, white, or none. Mode 8 tints the sprite (seg13): drawn as it
+ * is for now. */
+static int clear_colour(int mode)
+{
+    switch (mode) {
+    case 1: case 5: case 6: return 0x7FFF;
+    case 2: case 8: return -1;
+    default: return 0;
+    }
+}
+
 static void draw_sprites(vortex *v)
 {
     int order[VS_SEQS], n = 0, i, k;
     for (i = 0; i < VS_SEQS; i++) {
         u16 slot = vs_get(&v->vm, i, VC_SPRITE);
         if (vs_get(&v->vm, i, VC_USED) && vs_get(&v->vm, i, VC_FLAGS) & 1 && slot < VS_SPRITES &&
-            v->sprites[slot].pixels)
+            v->sprites[slot].pixels && (i16)vs_get(&v->vm, i, VC_Z) >= 0)
             order[n++] = i;
     }
-    for (i = 1; i < n; i++) /* by z, highest first */
-        for (k = i; k > 0 && (i16)vs_get(&v->vm, order[k], VC_Z) > (i16)vs_get(&v->vm, order[k - 1], VC_Z); k--) {
+    for (i = 1; i < n; i++) /* by z, lowest first */
+        for (k = i; k > 0 && (i16)vs_get(&v->vm, order[k], VC_Z) < (i16)vs_get(&v->vm, order[k - 1], VC_Z); k--) {
             int t = order[k];
             order[k] = order[k - 1];
             order[k - 1] = t;
         }
     for (i = 0; i < n; i++) {
-        int seq = order[i], x, y;
+        int seq = order[i], x, y, key = clear_colour((i16)vs_get(&v->vm, seq, VC_MODE));
         u16 slot = vs_get(&v->vm, seq, VC_SPRITE);
         int x0 = (i16)vs_get(&v->vm, seq, VC_X), y0 = (i16)vs_get(&v->vm, seq, VC_Y);
         for (y = 0; y < v->sprites[slot].h; y++)
             for (x = 0; x < v->sprites[slot].w; x++) {
                 u32 c = v->sprites[slot].pixels[y * v->sprites[slot].w + x];
                 int sx = x0 + x, sy = y0 + y;
-                if (c != KEY && sx >= 0 && sy >= 0 && sx < STAGE_W && sy < STAGE_H)
-                    v->st.fb[sy * STAGE_W + sx] = c;
+                if (c == KEY || sx < 0 || sy < 0 || sx >= STAGE_W || sy >= STAGE_H)
+                    continue;
+                if (key >= 0 && (int)((c >> 19 & 31) << 10 | (c >> 11 & 31) << 5 | (c >> 3 & 31)) == key)
+                    continue;
+                v->st.fb[sy * STAGE_W + sx] = c;
             }
     }
 }
@@ -651,6 +697,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.picture = on_picture;
     host.text = on_text;
     host.text_sprite = on_text_sprite;
+    host.sprite_load = on_sprite_load;
     host.screen = on_screen;
     host.disc = on_disc;
     host.score = on_score;
@@ -685,7 +732,7 @@ done:
         stop_channel(v, i);
     for (i = 0; i < (int)XF_COUNT(v->sounds); i++)
         xf_wav_free(&v->sounds[i]);
-    for (i = 0; i < VS_SPRITES; i++)
+    for (i = 0; i < (int)XF_COUNT(v->sprites); i++)
         free_sprite(v, i);
     free(v->score.names);
     free(v->score.cells);

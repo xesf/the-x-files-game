@@ -24,7 +24,8 @@ enum {
     VC_PC = 0x14,        /* far pointer: offset, then segment */
     VC_TIMER = 0x18,     /* four words */
     VC_ID = 0x24,        /* its number, which other instructions name */
-    VC_FLAGS = 0x26,
+    VC_FLAGS = 0x26,     /* bit 0: the sprite shows; bit 1: redraw it */
+    VC_MODE = 0x28,      /* how the sprite is drawn (seg3:1790) */
     VC_HALTED = 0x2A,
     VC_WAIT = 0x2E,      /* dword: the events 0xD5 waits for */
     VC_HANDLED = 0x32,   /* dword: events with a handler (0x74 + 4 * bit) */
@@ -75,6 +76,9 @@ typedef struct vs_host {
      * an effect; for the others than 0x12E, the rectangle is 0, 0, 0, 0
      * for now */
     void (*screen)(void *user, int seq, u16 op, int effect, int x, int y, int w, int h);
+    /* 0x7D0: loads a file of bitmaps into the slots from `slot` (from
+     * 0x5D on, cursors). Returns how many. */
+    int (*sprite_load)(void *user, int slot, const char *file);
     /* 0x7E4, 0x7E5: makes sprite `slot` an image of a text; its size into
      * *w, *h. Returns 0, or -1. */
     int (*text_sprite)(void *user, int slot, int font, u32 rgb, const char *text, int *w, int *h);
@@ -94,6 +98,7 @@ typedef struct {
     u16 g[0x100];        /* globals (DS:39F8) */
     u32 events;          /* DS:4ED6: the events this tick */
     u32 signals;         /* DS:4F60: the running sequence's signals (context + 0x42) */
+    u64 paused[11];      /* DS:2276: the sequences 0xE paused, by group */
     vx_ptr labels[13];   /* DS:46A8: 0x101's targets, set by 0x100 */
     u32 rand_seed;
     u32 now;             /* the clock, ms (GetTickCount), set before each tick */

@@ -344,11 +344,45 @@ static int step(vs_state *s, int seq)
         NEXT(6);
         return YIELD;
 
+    case 0x000E: { /* pauses the other running sequences into a group, or
+                    * resumes a group, 999 all (seg15:02AA) */
+        u16 g = w_at(&in, 6);
+        u16 me = val(&in, 2);
+        if (w_at(&in, 4)) {
+            for (i = 1; i < VS_SEQS; i++)
+                if (i != me && vs_get(s, i, VC_USED) && !vs_get(s, i, VC_HALTED)) {
+                    vs_set(s, i, VC_HALTED, 1);
+                    if (g < XF_COUNT(s->paused))
+                        s->paused[g] |= (u64)1 << i;
+                }
+        } else {
+            for (i = 1; i < VS_SEQS; i++)
+                if (vs_get(s, i, VC_USED) &&
+                    (g == 999 || (g < XF_COUNT(s->paused) && s->paused[g] >> i & 1)))
+                    vs_set(s, i, VC_HALTED, 0);
+            if (g == 999)
+                memset(s->paused, 0, sizeof(s->paused));
+            else if (g < XF_COUNT(s->paused))
+                s->paused[g] = 0;
+        }
+        NEXT(8);
+        return YIELD;
+    }
     case 0x0800: /* the score (seg8:2FB4): a song by three variables */
         if (s->host.score)
             s->host.score(s->host.user, val(&in, 2), val(&in, 4), val(&in, 6));
         NEXT(8);
         return YIELD;
+    case 0x0822: /* shows a sprite (seg8:5F0A): the slot from a variable, x,
+                  * y, z and the drawing mode as they are */
+        vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) | 1));
+        vs_set(s, seq, VC_SPRITE, *ref(&in, 2));
+        vs_set(s, seq, VC_X, w_at(&in, 4));
+        vs_set(s, seq, VC_Y, w_at(&in, 6));
+        vs_set(s, seq, VC_Z, w_at(&in, 8));
+        vs_set(s, seq, VC_MODE, w_at(&in, 10));
+        NEXT(12);
+        return RUN;
     case 0x080D: /* the sequence's slot into a variable (seg8:5F7C) */
         *ref(&in, 2) = vs_get(s, seq, VC_INDEX);
         NEXT(4);
@@ -770,10 +804,11 @@ static int step(vs_state *s, int seq)
         NEXT(5 + n);
         return YIELD;
     }
-    case 0x07D0:
+    case 0x07D0: /* loads bitmaps into the sprite slots (seg8:49E8, seg2:0324):
+                  * how many into the variable */
         str = str_at(&in, 7, &n);
-        if (s->host.cursor)
-            s->host.cursor(s->host.user, val(&in, 2), val(&in, 4), b_at(&in, 6), str);
+        if (b_at(&in, 6) == 1)
+            *ref(&in, 2) = (u16)(s->host.sprite_load ? s->host.sprite_load(s->host.user, val(&in, 4), str) : 0);
         NEXT(7 + n);
         return YIELD;
     }
