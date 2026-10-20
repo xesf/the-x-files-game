@@ -584,9 +584,10 @@ static void load_asset_picture(explorer *e, u32 asset, int w, int h, xf_image *i
             if (data && xf_pict_decode(data, size, img) != 0)
                 memset(img, 0, sizeof(*img));
             free(data);
-            if (img->pixels && strstr(a.logical, "pda pieces")) {
+            if (img->pixels && strstr(a.logical, "pda pieces") && !strstr(a.logical, "/maps/")) {
                 /* the PDA's pieces (map dots and rings, the frame) have a
-                 * white background where the others have blue */
+                 * white background where the others have blue; the maps
+                 * themselves are whole pictures */
                 size_t k;
                 for (k = 0; k < (size_t)img->width * (size_t)img->height; k++)
                     if ((img->pixels[k] & 0xFFFFFF) == 0xFFFFFF)
@@ -866,10 +867,11 @@ static void draw_iface_layer(explorer *e, int k)
     int i, order;
     char buf[64];
     for (order = 255; order >= 0; order--) { /* a low order is in front */
-        if (order == 0x7F && e->g->fade_back && k == e->g->iface_count - 1) {
-            /* FadeBack: the screen dims behind the front items, so the
-             * help screen's hovered part, its highlight and its text
-             * stand out */
+        if (order == 0xC7 && e->g->fade_back && k == e->g->iface_count - 1) {
+            /* FadeBack: the screen dims behind the layout's own pieces:
+             * the Help screen's picture of the game (order 0xC8) dims
+             * under its highlights and texts (0x65 and up); the PDA (it
+             * calls FadeBack as it opens) keeps its map (0xC7) bright */
             size_t p;
             for (p = 0; p < (size_t)SCREEN_W * SCREEN_H; p++) {
                 u32 c = e->fb[p];

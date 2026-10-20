@@ -777,7 +777,10 @@ Each text item starts switched off. Hovering a part of the picture (an
 area item such as 50495, the emotion icons) switches on that part's
 highlight (50472) and its text item (51104), and runs `FadeBack(1)`.
 `FadeBack` dims the screen behind the layout's front items, the ones
-with a draw order below 0x7F. Leaving the part switches them off again
+with a draw order below 0xC8: the Help screen's picture of the game
+(0xC8) dims under its highlights and texts (0x65 and up). The PDA calls
+`FadeBack(1)` as it opens (item 69888); its map (order 0xC7) stays
+bright. Leaving the part switches them off again
 and runs `FadeBack(0)`.
 
 Our engine keeps one text per item, removes an item's text when its
