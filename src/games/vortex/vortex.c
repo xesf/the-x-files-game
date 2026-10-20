@@ -327,6 +327,16 @@ static int on_sprite_load(void *user, int slot, const char *file)
     return n;
 }
 
+static int on_sprite_size(void *user, int slot, int *w, int *h)
+{
+    vortex *v = user;
+    if (slot < 0 || slot >= (int)XF_COUNT(v->sprites) || !v->sprites[slot].pixels)
+        return -1;
+    *w = v->sprites[slot].w;
+    *h = v->sprites[slot].h;
+    return 0;
+}
+
 /* 0x7E4: a text as a sprite (seg3:10A2), one line on a clear ground. */
 static int on_text_sprite(void *user, int slot, int font, u32 rgb, const char *text, int *w, int *h)
 {
@@ -698,6 +708,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.text = on_text;
     host.text_sprite = on_text_sprite;
     host.sprite_load = on_sprite_load;
+    host.sprite_size = on_sprite_size;
     host.screen = on_screen;
     host.disc = on_disc;
     host.score = on_score;

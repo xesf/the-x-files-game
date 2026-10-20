@@ -213,6 +213,22 @@ static u16 binop(int op, u16 a, u16 b, int literal)
     return 0;
 }
 
+/* A sequence's size is its sprite's (seg8:7968, before each
+ * instruction); a slot past the sprites is none. */
+static void sprite_size(vs_state *s, int seq)
+{
+    u16 slot = vs_get(s, seq, VC_SPRITE);
+    int w, h;
+    if (slot >= VS_SPRITES) {
+        vs_set(s, seq, VC_SPRITE, 0xFFFF);
+        return;
+    }
+    if (s->host.sprite_size && s->host.sprite_size(s->host.user, slot, &w, &h) == 0) {
+        vs_set(s, seq, VC_W, (u16)w);
+        vs_set(s, seq, VC_H, (u16)h);
+    }
+}
+
 /* Runs one instruction. */
 static int step(vs_state *s, int seq)
 {
@@ -223,6 +239,7 @@ static int step(vs_state *s, int seq)
     int i, k;
     vexe_seg const *sg;
 
+    sprite_size(s, seq);
     in.s = s;
     in.seq = seq;
     in.pc = vs_get_ptr(s, seq, VC_PC);
@@ -373,6 +390,17 @@ static int step(vs_state *s, int seq)
             s->host.score(s->host.user, val(&in, 2), val(&in, 4), val(&in, 6));
         NEXT(8);
         return YIELD;
+    case 0x080E: { /* a sequence's sprite goes (seg8:7914) */
+        u16 who = val(&in, 2);
+        if (who < VS_SEQS) {
+            vs_set(s, who, VC_SPRITE, 0xFFFF);
+            vs_set(s, who, 0x122, 0xFFFF);
+            vs_set(s, who, 0x124, 0xFFFF);
+            vs_set(s, who, 0x120, 0);
+        }
+        NEXT(4);
+        return RUN;
+    }
     case 0x0822: /* shows a sprite (seg8:5F0A): the slot from a variable, x,
                   * y, z and the drawing mode as they are */
         vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) | 1));

@@ -79,6 +79,8 @@ typedef struct vs_host {
     /* 0x7D0: loads a file of bitmaps into the slots from `slot` (from
      * 0x5D on, cursors). Returns how many. */
     int (*sprite_load)(void *user, int slot, const char *file);
+    /* a sprite slot's size; returns 0, or -1 when the slot is empty */
+    int (*sprite_size)(void *user, int slot, int *w, int *h);
     /* 0x7E4, 0x7E5: makes sprite `slot` an image of a text; its size into
      * *w, *h. Returns 0, or -1. */
     int (*text_sprite)(void *user, int slot, int font, u32 rgb, const char *text, int *w, int *h);
