@@ -114,6 +114,17 @@ static int on_clip(void *user, int seq, int sub, const char *file, int x, int y,
     return 0;
 }
 
+static void on_clip_op(void *user, int seq, int action, u16 a, u16 b)
+{
+    vortex *v = user;
+    int i;
+    (void)a;
+    (void)b;
+    for (i = 0; i < MAX_CLIPS; i++)
+        if (v->clips[i].open && v->clips[i].seq == seq && action == 9)
+            stop_clip(v, &v->clips[i]);
+}
+
 /* 0x12C: pictures on the background. */
 static void on_picture(void *user, int seq, int sub, const char *file, int x, int y)
 {
@@ -277,6 +288,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.user = v;
     host.unknown = on_unknown;
     host.clip = on_clip;
+    host.clip_op = on_clip_op;
     host.picture = on_picture;
     host.sound = on_sound;
     host.sound_op = on_sound_op;
@@ -290,6 +302,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
                 v->st.quit = 1;
         update_clips(v);
         feed_channels(v);
+        v->vm.now = plat_ticks_ms();
         vs_tick(&v->vm);
         draw(v);
         stage_frame(&v->st);

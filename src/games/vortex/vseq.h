@@ -28,7 +28,8 @@ enum {
     VC_WAIT = 0x2E,      /* dword: the events 0xD5 waits for */
     VC_HANDLED = 0x32,   /* dword: events with a handler (0x74 + 4 * bit) */
     VC_EVENTS = 0x36,    /* dword: events pending */
-    VC_HANDLED2 = 0x3E,  /* dword: second set (0xB8 + 4 * bit) */
+    VC_WAIT2 = 0x3A,     /* dword: the signals 0xD7 waits for */
+    VC_HANDLED2 = 0x3E,  /* dword: signals with a handler (0xB8 + 4 * bit) */
     VC_EVENTS2 = 0x42,
     VC_MOVIE_WAIT = 0x48,
     VC_MOVIE = 0x5C,     /* the clip this sequence plays (nonzero while it does) */
@@ -46,6 +47,8 @@ typedef struct vs_host {
     void (*unknown)(void *user, int seq, u16 op, vx_ptr at);
     /* Media: clips, pictures, sounds, music, text. */
     int (*clip)(void *user, int seq, int sub, const char *file, int x, int y, const u16 *w, u8 b0, u8 b1);
+    /* 0x197: an action on a sequence's clip */
+    void (*clip_op)(void *user, int seq, int action, u16 a, u16 b);
     void (*picture)(void *user, int seq, int sub, const char *file, int x, int y);
     void (*text)(void *user, int seq, int x, int y, const char *s, const u16 *w);
     /* 0x1F5: loads a sound, returns its handle (0: none) */
@@ -57,6 +60,10 @@ typedef struct vs_host {
     int (*sound_busy)(void *user, int channel);
     void (*music)(void *user, int sub, const char *file, u16 arg);
     void (*cursor)(void *user, u16 a, u16 b, u8 c, const char *file);
+    /* 0x12E to 0x138: a screen update (transition) */
+    void (*screen)(void *user, int seq, u16 op, vx_ptr at);
+    /* 0x805: a call into segment 13 (the "uber" device), by sub-command */
+    u16 (*uber)(void *user, int seq, int sub, vx_ptr at);
 } vs_host;
 
 typedef struct {
@@ -65,8 +72,11 @@ typedef struct {
     u16 ctx[VS_SEQS][VS_CTX_WORDS];
     u16 g[0x100];        /* globals (DS:39F8) */
     u32 events;          /* DS:4ED6: the events this tick */
+    u32 signals;         /* DS:4F60: the running sequence's signals (context + 0x42) */
     vx_ptr labels[13];   /* DS:46A8: 0x101's targets, set by 0x100 */
     u32 rand_seed;
+    u32 now;             /* the clock, ms (GetTickCount), set before each tick */
+    u32 sleep_start[VS_SEQS];
     u32 ticks;
     int depth;           /* instructions run this tick by the sequence (DS:44F0) */
     int unknown_count;

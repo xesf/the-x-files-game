@@ -314,6 +314,106 @@ static int step(vs_state *s, int seq)
         NEXT(6);
         return YIELD;
 
+    case 0x0805: /* the "uber" device (seg13): its result into +2. Not written yet. */
+        if (s->host.uber)
+            *ref(&in, 2) = s->host.uber(s->host.user, seq, b_at(&in, 4), in.pc);
+        else
+            *ref(&in, 2) = 0;
+        NEXT(34);
+        return YIELD;
+
+    /* screen updates: seg7:33B8 queues a command (the opcode, a rectangle
+     * and three words) that seg7:35EA carries out after the tick: how the
+     * new picture reaches the screen. The module redraws the whole
+     * screen every frame, so these show at once for now. */
+    case 0x012E: case 0x012F: case 0x0130: case 0x0132: case 0x0133:
+    case 0x0134: case 0x0135: case 0x0136: case 0x0137: case 0x0138: {
+        static const u8 len[] = { 16, 16, 12, 0, 2, 2, 2, 18, 12, 14, 18 };
+        if (s->host.screen)
+            s->host.screen(s->host.user, seq, op, in.pc);
+        NEXT(len[op - 0x012E]);
+        return YIELD;
+    }
+
+    case 0x0197: { /* act on the clips of sequences (seg8:79C4): 9 stops and
+                    * hides, 10 shows, 11 plays (an ended one goes) */
+        u16 who = val(&in, 3);
+        for (i = 0; i < VS_SEQS; i++)
+            if ((who < 0x2D ? i == who : matches(s, i, who)) && s->host.clip_op)
+                s->host.clip_op(s->host.user, i, b_at(&in, 2), w_at(&in, 5), w_at(&in, 7));
+        NEXT(9);
+        return YIELD;
+    }
+
+    case 0x04BA: { /* wait a number of milliseconds (seg8:2AB4) */
+        if (!get32(s, seq, 0x20)) {
+            set32(s, seq, 0x20, (u32)w_at(&in, 2) | (u32)w_at(&in, 4) << 16);
+            s->sleep_start[seq] = s->now;
+        }
+        if (s->now - s->sleep_start[seq] < get32(s, seq, 0x20))
+            return YIELD;
+        set32(s, seq, 0x20, 0);
+        NEXT(6);
+        return RUN;
+    }
+
+    /* events (context + 0x2E, 0x32, 0x36, handlers at 0x70) and signals
+     * between sequences (+ 0x3A, 0x3E, 0x42, handlers at 0xB8) */
+    case 0x0065: case 0x00D9: { /* handlers: a mask, then where to go */
+        u32 mask = (u32)w_at(&in, 2) | (u32)w_at(&in, 4) << 16;
+        int on = op == 0x0065 ? VC_HANDLED : VC_HANDLED2, vec = op == 0x0065 ? VC_VECTORS : VC_VECTORS2;
+        set32(s, seq, on, get32(s, seq, on) | mask);
+        for (k = 0; k < 18; k++)
+            if (mask & 1u << k)
+                vs_set_ptr(s, seq, vec + 4 * k, far_at(&in, 6));
+        NEXT(10);
+        return YIELD;
+    }
+    case 0x00D6: case 0x00D8: { /* cancel waits and handlers in sequences;
+                                 * a sequence waiting on them goes on */
+        u16 who = val(&in, 2);
+        u32 mask = (u32)w_at(&in, 4) | (u32)w_at(&in, 6) << 16;
+        int wait = op == 0x00D6 ? VC_WAIT : VC_WAIT2, on = op == 0x00D6 ? VC_HANDLED : VC_HANDLED2;
+        int vec = op == 0x00D6 ? VC_VECTORS : VC_VECTORS2;
+        u16 waitop = op == 0x00D6 ? 0x00D5 : 0x00D7;
+        for (i = 0; i < VS_SEQS; i++) {
+            if (!(who < 0x2D ? i == who && vs_get(s, i, VC_USED) : matches(s, i, who)))
+                continue;
+            if (get32(s, i, wait) & mask && (vexe_u16(s->x, vs_get_ptr(s, i, VC_PC)) & 0x7FFF) == waitop)
+                vs_set_ptr(s, i, VC_PC, vs_get_ptr(s, i, VC_PC) + 6);
+            set32(s, i, wait, get32(s, i, wait) & ~mask);
+            set32(s, i, on, get32(s, i, on) & ~mask);
+            for (k = 0; k < 18; k++)
+                if (mask & 1u << k)
+                    vs_set_ptr(s, i, vec + 4 * k, 0);
+        }
+        NEXT(8);
+        return YIELD;
+    }
+    case 0x00DA: { /* signal the sequences that wait for or handle these */
+        u32 mask = (u32)w_at(&in, 2) | (u32)w_at(&in, 4) << 16;
+        for (i = 0; i < VS_SEQS; i++)
+            if (vs_get(s, i, VC_USED) && !vs_get(s, i, VC_HALTED) &&
+                (get32(s, i, VC_WAIT2) | get32(s, i, VC_HANDLED2)) & mask)
+                set32(s, i, VC_EVENTS2, get32(s, i, VC_EVENTS2) | mask);
+        NEXT(6);
+        return YIELD;
+    }
+    case 0x00D7: { /* wait for signals */
+        u32 mask = (u32)w_at(&in, 2) | (u32)w_at(&in, 4) << 16, hit;
+        if (!get32(s, seq, VC_WAIT2))
+            set32(s, seq, VC_WAIT2, mask);
+        hit = mask & s->signals;
+        if (!hit)
+            return YIELD;
+        set32(s, seq, VC_EVENTS2, get32(s, seq, VC_EVENTS2) & ~hit);
+        set32(s, seq, VC_WAIT2, get32(s, seq, VC_WAIT2) & ~hit);
+        if (get32(s, seq, VC_WAIT2))
+            return YIELD;
+        NEXT(6);
+        return RUN;
+    }
+
     /* flow */
     case 0x00C8: /* go to */
         GOTO(far_at(&in, 2));
@@ -554,6 +654,7 @@ static void run_seq(vs_state *s, int seq)
         return;
     pending = get32(s, seq, VC_EVENTS);
     s->events = pending | (s->events & 0xFFFF0000u);
+    s->signals = get32(s, seq, VC_EVENTS2);
     /* seg8:04F9: the sound channels: 0x20 and 0x40 while channel 1 or 2
      * is quiet, 0x80 and 0x100 while it plays */
     if (s->host.sound_busy) {
@@ -566,6 +667,14 @@ static void run_seq(vs_state *s, int seq)
             set32(s, seq, VC_HANDLED, get32(s, seq, VC_HANDLED) & ~(1u << bit));
             push_return(s, seq, vs_get_ptr(s, seq, VC_PC));
             vs_set_ptr(s, seq, VC_PC, vs_get_ptr(s, seq, VC_VECTORS + 4 * bit));
+        }
+    pending = get32(s, seq, VC_EVENTS2);
+    for (bit = 0; bit < 18; bit++)
+        if (get32(s, seq, VC_HANDLED2) & pending & 1u << bit) {
+            set32(s, seq, VC_EVENTS2, get32(s, seq, VC_EVENTS2) & ~(1u << bit));
+            set32(s, seq, VC_HANDLED2, get32(s, seq, VC_HANDLED2) & ~(1u << bit));
+            push_return(s, seq, vs_get_ptr(s, seq, VC_PC));
+            vs_set_ptr(s, seq, VC_PC, vs_get_ptr(s, seq, VC_VECTORS2 + 4 * bit));
         }
     for (s->depth = 0; s->depth < MAX_DEPTH && r == RUN; s->depth++)
         r = step(s, seq);
