@@ -73,9 +73,37 @@ From the start, `seg18:0000`:
 | `5D 00 01 "c\cursor1.bmp"` | 0x5D with a string |
 | `90 01 01 "c\splash\forbob.mov"` ... | 0x190: a clip |
 
+### Operand layouts
+
+`tools/ne/vortex_seq.py` decodes the sequences. It starts at
+`seg18:0000` and follows every far pointer an instruction holds, as a
+disassembler follows jumps; the far pointers are found from the
+program's fixups. Most opcodes have a fixed length; the others have a
+string or a sub-type byte:
+
+| Opcode | Operands |
+|---|---|
+| 0x0007 | x, y, a picture file, a word |
+| 0x000A | x, y, a text, four words |
+| 0x012C | a sub-type: 1 and 0x12 a file and two words, 2 and 0x13 three words, 4 a file, 0x0F none |
+| 0x0190 | a clip: a sub-type; 1, 6, 7 and 8 a file, x, y, four words and two bytes; 2 to 5, 9 and 10 none |
+| 0x01F5 | a sound: a word, a sub-type, then a file (1) or a word (3) |
+| 0x0352 | MIDI: a word, a sub-type, then a file (1) or none (6, 9, 10) |
+| 0x07D0 | two words, a byte, a cursor file |
+| 0x07E4, 0x07E5 | eleven words, a text |
+| 0x0810 | a sub-type; 1: a file and three words |
+| 0x0821 | a byte, x, y, a picture file |
+| 0x00E6 | a switch on an operand over case records: 0xE7 low, high, target; 0xE8 target; 0xE9 the end |
+
+Coordinates above 640 (x) or 480 (y) are variable operands. Opcode 0
+stops a sequence; 0x101 jumps through a table of 13 targets that 0x100
+sets.
+
+The decoder reads 62,572 instructions, 93% of the sequence segments'
+bytes; all but 69 of their 15,262 far pointers fall in an instruction.
+The rest are tables of targets that 0x100 and 0x101 use.
+
 ## Status
 
-The opcodes' operand layouts and meanings are being read from their
-handlers. Next: a decoder that lists the sequences, checked against the
-fixups (a far pointer must fall where the program fixes up a segment),
-then a module that runs them.
+Next: the meaning of each opcode, from its handler, and a module that
+runs the sequences.
