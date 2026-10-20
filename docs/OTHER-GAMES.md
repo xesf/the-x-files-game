@@ -70,10 +70,22 @@ General MIDI:
 ### Disassembly
 
 `QGATE.EXE` and `VORTEX.EXE` are 16-bit Windows 3.1 (NE) executables.
-Check first that the IDA we use loads NE files with their segments and
-imports. Ghidra loads NE files too, if needed. Roland's program is VB3
-p-code, which a disassembler does not decode; it needs a p-code reader
-written for the engine's tools.
+The IDA we use does not handle 16-bit code, so these need another
+disassembler that loads NE files with their segments and imports, such
+as Ghidra. Roland's program is VB3 p-code, which a disassembler does
+not decode; it needs a p-code reader written for the engine's tools.
+
+### Earlier work on Roland
+
+The `virtualcinema` branch of the ScummVM fork
+(`~/Documents/workaround/github/scummvm`, last change 2025-05-03, all
+commits by xesf) has a Virtual Cinema engine with a start on Roland
+(`engines/virtualcinema/roland`, about 700 lines): the intro, the main
+menu, the chapter menu and the chapter page screens, on a shared core
+(`core/`: video, image, scene, engine). Its two stashes hold QuickTime
+audio work. Being our own code, its Roland screens can be ported to C
+here; ScummVM's own decoders it relies on are other people's code and
+are not copied.
 
 ## Engine structure
 
@@ -103,13 +115,15 @@ runtime. The shared layers (`src/platform`, `src/gfx`, `src/media`,
    logic is entirely compiled in, so this is the longest step. What it
    shares with The X-Files may help: compare its classes and functions
    with `XFILES.EXE`'s.
-5. **Roland**: SZDD-expand `ROLAND.EX_` and `ROLGUTS.EX_`, write the VB3
-   p-code reader, recover the forms and the logic, and write the
-   module.
+5. **Roland**: start from the ScummVM branch's screens (intro, menus,
+   chapter pages); SZDD-expand `ROLAND.EX_` and `ROLGUTS.EX_`, write the
+   VB3 p-code reader for what the screens do not cover yet, and write
+   the module.
 
 ## Open questions
 
-- Whether the IDA we use loads 16-bit NE executables.
+- Which disassembler to use for the 16-bit NE executables (IDA does
+  not handle them).
 - Which MIDI path to take on each platform.
 - Whether Vortex's executable keeps any class names or tables in common
   with The X-Files that make its logic faster to recover.
