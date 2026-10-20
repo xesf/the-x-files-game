@@ -75,8 +75,7 @@ static void put_row(pict_dec *d, const rect16 *dst, int y, const u32 *row, int w
     }
 }
 
-/* Keeps a row's alpha plane: the viewfinder cursor is white with its
- * frame lines opaque and the rest clear. */
+/* Keeps a row's alpha plane (the evidence icons cut out their object). */
 static void keep_alpha(pict_dec *d, const rect16 *dst, int y, const u8 *a, int w)
 {
     int x, iy = dst->top - d->frame.top + y;
@@ -409,17 +408,16 @@ int xf_pict_decode(const u8 *data, size_t size, xf_image *img)
     }
 done:
     /* A picture without the blue key whose alpha plane mixes zero and
-     * non-zero values is cut out by it, the non-zero pixels being the
-     * clear ones: the camera's viewfinder cursor (cursor-viewfinder.pic)
-     * is white everywhere, its corner marks and reticle at alpha 0. The
-     * pictures that already use the blue key keep it. */
+     * non-zero values is cut out by it, alpha 0 being clear: the
+     * evidence icons draw their object on a white ground the alpha
+     * removes. The pictures that already use the blue key keep it. */
     if (drew && d.alpha && d.alpha_clear && d.alpha_solid) {
         size_t k, n = (size_t)img->width * img->height;
         int keyed = 0;
         for (k = 0; k < n && !keyed; k++)
             keyed = img->pixels[k] == XF_PICT_KEY;
         for (k = 0; k < n && !keyed; k++)
-            if (d.alpha[k])
+            if (!d.alpha[k])
                 img->pixels[k] = XF_PICT_KEY;
     }
     free(d.alpha);

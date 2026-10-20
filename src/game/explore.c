@@ -205,6 +205,7 @@ typedef struct {
     int icon_open[MAX_ICONS];
     u32 icon_ids[MAX_ICONS];
     int icon_count;
+    u8 icon_action[MAX_ICONS]; /* an action icon (on the right), not an emotion */
     /* cursors */
     cursor_art cursors[MAX_CURSORS];
     cursor_art cross;     /* the default pointer */
@@ -1459,6 +1460,7 @@ static void stop_sound(explorer *e)
 #define DLG_THUMB 34763 /* thumb.pic, 12x10 */
 /* The scroll column under the folder's close box (x 234-241, y 18-24):
  * the up arrow, the bar and the down arrow fill y 27 to 115. */
+#define DLG_SCROLL_X 232 /* centred under the close box (x 234-241) */
 #define DLG_UP_Y 27
 #define DLG_BAR_Y 37    /* the bar, between the arrows */
 #define DLG_DOWN_Y 105
@@ -1476,19 +1478,18 @@ static void stop_sound(explorer *e)
  * with its name underneath on rollover. */
 #define ICON_W 80
 #define ICON_H 60
-#define ICON_Y (PICTURE_Y + PICTURE_H + 10)
+#define ICON_Y (PICTURE_Y + PICTURE_H + 13) /* the Help screen's icons, y 343 */
 #define ICON_GAP 24
 
 /* Inventory: 30x40 icons along the bottom, shown when the pointer is
  * near the bottom of the screen, with the hovered item's name under
  * them. */
-#define INV_Y 422
+#define INV_Y 428 /* the Help screen's inventory: (20, 428)-(198, 468) */
 #define INV_NAME_PX 10
 #define INV_W 30
 #define INV_H 40
 #define INV_GAP 8
-#define INV_REVEAL 410
-#define INV_ROW_GAP 6
+#define INV_REVEAL 418
 
 static int load_asset_image(explorer *e, u32 asset, xf_image *img)
 {
@@ -1727,8 +1728,9 @@ static void draw_dialog(explorer *e, int mx, int my)
         int over = mx >= x0 + DLG_TEXT_X && mx < x0 + DLG_TEXT_X + DLG_TEXT_W && my >= ent[i].y - DLG_LINE + 3 &&
                    my < ent[i].y + (ent[i].lines - 1) * DLG_LINE + 4;
         /* TALK in white, blue (65, 140, 175) under the pointer; HISTORY,
-         * the questions asked, in grey (205, 205, 205) */
-        u32 color = e->talk_tab ? (over ? 0xFFFFFF : 0xCDCDCD) : (over ? 0x418CAF : 0xFFFFFF);
+         * the questions asked, in grey, lighter (205, 205, 205) under
+         * the pointer */
+        u32 color = e->talk_tab ? (over ? 0xCDCDCD : 0x8C8C8C) : (over ? 0x418CAF : 0xFFFFFF);
         game_question_text(e->g, ent[i].id, q, sizeof(q));
         lines = wrap_lines_font(courier(e), q, DLG_PX, DLG_TEXT_W, starts, lens, 8);
         for (l = 0; l < lines; l++)
@@ -1740,11 +1742,11 @@ static void draw_dialog(explorer *e, int mx, int my)
          * its thumb at the scroll position */
         int left = e->talk_count - e->talk_scroll - n, span = e->talk_scroll + left;
         int room = (e->dlg_bar.pixels ? e->dlg_bar.height : 68) - (e->dlg_thumb.pixels ? e->dlg_thumb.height : 10);
-        blit_keyed(e, &e->dlg_up, x0 + DLG_W - 17, DLG_Y + DLG_UP_Y);
-        blit_keyed(e, &e->dlg_bar, x0 + DLG_W - 17, DLG_Y + DLG_BAR_Y);
-        blit_keyed(e, &e->dlg_thumb, x0 + DLG_W - 17,
+        blit_keyed(e, &e->dlg_up, x0 + DLG_SCROLL_X, DLG_Y + DLG_UP_Y);
+        blit_keyed(e, &e->dlg_bar, x0 + DLG_SCROLL_X, DLG_Y + DLG_BAR_Y);
+        blit_keyed(e, &e->dlg_thumb, x0 + DLG_SCROLL_X,
                    DLG_Y + DLG_BAR_Y + (span > 0 ? room * e->talk_scroll / span : 0));
-        blit_keyed(e, &e->dlg_down, x0 + DLG_W - 17, DLG_Y + DLG_DOWN_Y);
+        blit_keyed(e, &e->dlg_down, x0 + DLG_SCROLL_X, DLG_Y + DLG_DOWN_Y);
     }
 }
 
@@ -1765,7 +1767,7 @@ static int click_dialog(explorer *e, int x, int y)
         return 1;
     }
     n = dialog_layout(e, ent, GAME_MAX_CHOICES, &more);
-    if (x >= x0 + DLG_W - 18) { /* the scroll arrows */
+    if (x >= x0 + DLG_SCROLL_X - 1) { /* the scroll arrows */
         if (y < DLG_Y + (DLG_UP_Y + DLG_DOWN_Y + 10) / 2 && e->talk_scroll > 0)
             e->talk_scroll--;
         else if (y >= DLG_Y + (DLG_UP_Y + DLG_DOWN_Y + 10) / 2 && more)
@@ -1807,6 +1809,7 @@ static void refresh_icons(explorer *e)
         char path[1024];
         view_anim *an = &e->icon_anim[i];
         e->icon_ids[i] = ids[i];
+        e->icon_action[i] = vc_class(&e->g->db, ids[i]) == VC_ACTION_ICON;
         e->icon_open[i] = 0;
         an->use_player = an->ended = 0;
         if (game_read_icon(e->g, ids[i], &ic) != 0 || vc_read_list(&e->g->db, ic.icon, media, 4) <= 0 ||
@@ -1827,10 +1830,23 @@ static void refresh_icons(explorer *e)
     e->icon_count = n;
 }
 
+/* As the Help screen shows them: the emotion icons from x 210 (areas
+ * 207-390), the action icons on the right from x 443 (432-620). */
 static int icon_x(explorer *e, int i)
 {
-    int total = e->icon_count * ICON_W + (e->icon_count - 1) * ICON_GAP;
-    return (SCREEN_W - total) / 2 + i * (ICON_W + ICON_GAP);
+    int k, rank = 0;
+    for (k = 0; k < i; k++)
+        rank += e->icon_action[k] == e->icon_action[i];
+    return e->icon_action[i] ? 443 + rank * 92 : 210 + rank * 95;
+}
+
+static int icon_at(explorer *e, int x, int y);
+
+/* Whether an icon's rollover name shows under the icons (it takes the
+ * captions' place while the pointer is on the icon). */
+static int icon_name_shown(explorer *e, int mx, int my)
+{
+    return icon_at(e, mx, my) >= 0 && game_pref(e->g, 982);
 }
 
 static int icon_at(explorer *e, int x, int y)
@@ -1944,16 +1960,31 @@ static void refresh_inventory(explorer *e)
 
 static void inv_pos(const explorer *e, int i, int *x, int *y)
 {
+    /* evidence icons sit at the left of the icon band, (11, 327)-(149,
+     * 376) on the Help screen */
     int row = i >= e->inv_items, col = row ? i - e->inv_items : i;
-    *x = 10 + col * (INV_W + INV_GAP);
-    *y = row ? INV_Y - INV_H - INV_ROW_GAP : INV_Y;
+    *x = row ? 18 + col * 44 : 20 + col * (INV_W + INV_GAP);
+    *y = row ? 332 : INV_Y;
 }
 
 /* The inventory shows when the pointer is low on the screen (higher
  * when a lab's evidence row is up). */
 static int inv_reveal(const explorer *e)
 {
-    return e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_REVEAL;
+    (void)e;
+    return INV_REVEAL;
+}
+
+static int inv_at(explorer *e, int x, int y);
+
+/* An inventory or evidence icon under (x, y) that takes clicks: the bar
+ * when it shows, the evidence row (the Crime Lab) always. */
+static int inv_hit(explorer *e, int x, int y)
+{
+    int i = e->g->iface_count ? -1 : inv_at(e, x, y);
+    if (i >= 0 && i < e->inv_items && game_pref(e->g, 983) != 'V' && y < inv_reveal(e))
+        i = -1;
+    return i;
 }
 
 static int inv_at(explorer *e, int x, int y)
@@ -1992,7 +2023,7 @@ static int picture_middle(const xf_image *img)
     return lo < 0 ? INV_W / 2 : (lo + hi + 1) / 2;
 }
 
-static void draw_inventory(explorer *e, int mx, int my)
+static void draw_inventory(explorer *e, int mx, int my, int bar)
 {
     xf_surface s = screen_surface(e);
     int i, x, y, hover = inv_at(e, mx, my);
@@ -2004,19 +2035,23 @@ static void draw_inventory(explorer *e, int mx, int my)
         /* the item in hand stays lit; the object's first
          * picture is the lit one, its rollover picture the plain one */
         const xf_image *img = &e->inv_img[i][(i == hover || i == held) || !e->inv_img[i][1].pixels ? 0 : 1];
+        if (i >= e->inv_items) /* evidence: the icon, its white rollover shape under the pointer */
+            img = &e->inv_img[i][i == hover && e->inv_img[i][1].pixels ? 1 : 0];
         if (held >= 0 && i != held)
             continue; /* in hand: only that item shows */
+        if (i < e->inv_items && !bar)
+            continue; /* the bar is hidden: the evidence row only */
         inv_pos(e, i, &x, &y);
         blit_keyed(e, img, x, y);
     }
-    if (hover >= 0 && e->have_font && game_pref(e->g, 982)) {
+    if (hover >= 0 && (bar || hover >= e->inv_items) && e->have_font && game_pref(e->g, 982)) {
         char name[96];
         int w;
         game_object_label(e->g, e->inv_ids[hover], name, sizeof(name));
         w = xf_text_width(courier(e), INV_NAME_PX, name, strlen(name));
         inv_pos(e, hover, &x, &y);
         x = XF_CLAMP(x + picture_middle(&e->inv_img[hover][0]) - w / 2, 4, SCREEN_W - 4 - w);
-        xf_text_draw(&s, courier(e), INV_NAME_PX, x, INV_Y + INV_H + INV_NAME_PX, name, strlen(name), 0xFFFFFF);
+        xf_text_draw(&s, courier(e), INV_NAME_PX, x, y + INV_H + INV_NAME_PX, name, strlen(name), 0xFFFFFF);
     }
 }
 
@@ -2628,9 +2663,9 @@ static void draw(explorer *e, int mx, int my)
         draw_icons(e, mx, my);
         if (e->icon_count)
             ui_piece(e, 0, ICON_Y, SCREEN_W, ICON_H, SCR_ANCHOR_BELOW);
-        if (sub && e->have_font) {
+        if (sub && e->have_font && !icon_name_shown(e, mx, my)) {
             /* Captions under the picture; under the emotion icons when
-             * they are up, so both show. */
+             * they are up, so both show, but not over an icon's name. */
             int top = e->icon_count ? ICON_Y + ICON_H + 4 : PICTURE_Y + PICTURE_H + 4;
             xf_text_draw_wrapped(&s, caption_font(e), CAPTION_PX, SCREEN_W / 2, top + 12, PICTURE_W - 4, sub, 0xFFFFFF,
                                  0x000000);
@@ -2698,7 +2733,7 @@ static void draw(explorer *e, int mx, int my)
         for (i = 0; i < e->anim_count && !sub && game_pref(g, 2573); i++) /* Pref_bClosedCaptioning */
             if (e->anims[i].use_player)
                 sub = xf_player_subtitle(&e->anims[i].player);
-        if (sub && e->have_font) {
+        if (sub && e->have_font && !icon_name_shown(e, mx, my)) {
             int top = e->icon_count ? ICON_Y + ICON_H + 4 : PICTURE_Y + PICTURE_H + 4;
             xf_text_draw_wrapped(&s, caption_font(e), CAPTION_PX, SCREEN_W / 2, top + 12, PICTURE_W - 4, sub, 0xFFFFFF,
                                  0x000000);
@@ -2712,13 +2747,14 @@ static void draw(explorer *e, int mx, int my)
     }
     refresh_inventory(e);
     /* Pref_cInventory; the item in hand stays in view */
-    if ((my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && holding(e))) && !g->iface_count) {
-        /* the rows, with the item's name under them */
-        int top = (e->inv_items < e->inv_count ? INV_Y - INV_H - INV_ROW_GAP : INV_Y) - 4;
-        int cols = XF_MAX(e->inv_items, e->inv_count - e->inv_items);
-        draw_inventory(e, mx, my);
-        ui_piece(e, 0, top, XF_MIN(SCREEN_W, 10 + cols * (INV_W + INV_GAP) + 60), SCREEN_H - top,
-                 SCR_ANCHOR_BOTTOM_LEFT);
+    if (!g->iface_count) {
+        int bar = my >= inv_reveal(e) || game_pref(e->g, 983) == 'V' || (e->held_inv && holding(e));
+        if (bar || e->inv_items < e->inv_count) {
+            /* the bar, with the item's name under it, and the evidence row */
+            int top = e->inv_items < e->inv_count ? 328 : INV_Y - 4;
+            draw_inventory(e, mx, my, bar);
+            ui_piece(e, 0, top, SCREEN_W, SCREEN_H - top, SCR_ANCHOR_BOTTOM_LEFT);
+        }
     }
     draw_ifaces(e);
     draw_ai_icon(e, mx, my);
@@ -3680,8 +3716,7 @@ static void handle_event(explorer *e, plat_event ev)
         e->mx = ev.x;
         e->my = ev.y;
         if (!e->playing) {
-            int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
-            int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
+            int inv = inv_hit(e, ev.x, ev.y);
             int inside = ev.y >= inv_reveal(e) && !e->g->iface_count;
             if (inside && !e->inv_inside && e->held_inv) {
                 game_hold(e->g, NULL); /* back to the inventory: the item goes back */
@@ -3713,8 +3748,7 @@ static void handle_event(explorer *e, plat_event ev)
     } else if (ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
         /* Layout items first (a close-up covers everything), then
          * the dialogue box, the inventory, then the view. */
-        int reveal = game_pref(e->g, 983) == 'V' ? 0 : inv_reveal(e);
-        int inv = ev.y >= reveal && !e->g->iface_count ? inv_at(e, ev.x, ev.y) : -1;
+        int inv = inv_hit(e, ev.x, ev.y);
         const game_iface_item *it = game_iface_item_at(e->g, ev.x, ev.y);
         int dir, hit = lang_hit(e, ev.x, ev.y, &dir);
         if (hit == 1) {
