@@ -6,6 +6,7 @@
 
 #include "audio/mixer.h"
 #include "data/szdd.h"
+#include "media/bmp.h"
 #include "gfx/screen.h"
 #include "inflate_vectors.h"
 #include "xf_inflate.h"
@@ -168,6 +169,45 @@ static void test_szdd(void)
     CHECK(xf_szdd_expand(packed, sizeof(packed) - 3, out, 16) < 0);  /* truncated */
 }
 
+/* A bare 40-byte DIB header (no file header) followed by `extra`. */
+static size_t dib(u8 *out, int w, int h, int bits, u32 comp, int colors)
+{
+    memset(out, 0, 40);
+    out[0] = 40;
+    out[4] = (u8)w;
+    out[8] = (u8)h;
+    out[12] = 1;
+    out[14] = (u8)bits;
+    memcpy(out + 16, &comp, 4); /* little-endian hosts */
+    out[32] = (u8)colors;
+    return 40;
+}
+
+static void test_bmp(void)
+{
+    u8 d[256];
+    size_t n;
+    xf_bmp b;
+    /* RLE8, 4x2, two colours: bottom line 2 x 0 then 2 x 1; top line
+     * copies 1 0 1 0 */
+    static const u8 rle[] = { 2, 0, 2, 1, 0, 0, 0, 4, 1, 0, 1, 0, 0, 1 };
+    /* Video 1, 16-bit, 4x4: one block of one colour, pure red (0x7C00) */
+    static const u8 v1[] = { 0x00, 0xFC };
+    n = dib(d, 4, 2, 8, 1, 2);
+    memcpy(d + n, "\0\0\0\0\xFF\xFF\xFF\0", 8); /* black, white */
+    memcpy(d + n + 8, rle, sizeof(rle));
+    CHECK(xf_bmp_decode(d, n + 8 + sizeof(rle), &b) == 0);
+    CHECK(b.width == 4 && b.height == 2 && b.indices);
+    CHECK(b.indices && b.indices[0] == 1 && b.indices[1] == 0 && b.indices[4] == 0 && b.indices[7] == 1);
+    CHECK(b.pixels && b.pixels[0] == 0xFFFFFF && b.pixels[4] == 0);
+    xf_bmp_free(&b);
+    n = dib(d, 4, 4, 16, 0x4D415243u, 0); /* 'CRAM' */
+    memcpy(d + n, v1, sizeof(v1));
+    CHECK(xf_bmp_decode(d, n + sizeof(v1), &b) == 0);
+    CHECK(b.pixels && b.pixels[0] == 0xFF0000 && b.pixels[15] == 0xFF0000);
+    xf_bmp_free(&b);
+}
+
 int main(void)
 {
     test_inflate();
@@ -175,6 +215,7 @@ int main(void)
     test_screen();
     test_text();
     test_szdd();
+    test_bmp();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;

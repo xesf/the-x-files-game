@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "data/szdd.h"
+#include "media/bmp.h"
 #include "xf_file.h"
 #include "xftool.h"
 
@@ -47,7 +48,42 @@ static int cmd_expand(int argc, char **argv)
     return bad;
 }
 
+static int cmd_bmp(int argc, char **argv)
+{
+    xf_bmp b;
+    int i, bad = 0;
+
+    if (argc < 2) {
+        fputs("usage: xftool bmp <file> [out.bmp]   or   xftool bmp -c <files>...\n", stderr);
+        return 2;
+    }
+    if (strcmp(argv[1], "-c") == 0) {
+        for (i = 2; i < argc; i++)
+            if (xf_bmp_load(argv[i], &b) != 0) {
+                printf("%s: cannot decode\n", argv[i]);
+                bad++;
+            } else
+                xf_bmp_free(&b);
+        printf("%d of %d pictures failed\n", bad, argc - 2);
+        return bad ? 1 : 0;
+    }
+    if (xf_bmp_load(argv[1], &b) != 0) {
+        fprintf(stderr, "%s: cannot decode\n", argv[1]);
+        return 1;
+    }
+    printf("%dx%d, %d-bit, compression %c%c%c%c, %d colours\n", b.width, b.height, b.bits,
+           b.compression > 16 ? (char)(b.compression & 0xFF) : '0' + (char)b.compression,
+           b.compression > 16 ? (char)(b.compression >> 8 & 0xFF) : ' ',
+           b.compression > 16 ? (char)(b.compression >> 16 & 0xFF) : ' ',
+           b.compression > 16 ? (char)(b.compression >> 24) : ' ', b.colors);
+    if (argc > 2)
+        bad = xftool_write_bmp(argv[2], b.pixels, b.width, b.height) != 0;
+    xf_bmp_free(&b);
+    return bad;
+}
+
 const xftool_cmd xftool_older_cmds[] = {
+    { "bmp", "<file> [out.bmp]  decode a Windows bitmap (RLE8, Video 1, SZDD); -c <files> checks them", cmd_bmp },
     { "expand", "<packed> [out]  unpack an SZDD (COMPRESS.EXE) file; -c <files> checks them", cmd_expand },
     { 0 }
 };
