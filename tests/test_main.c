@@ -5,6 +5,11 @@
 #include <string.h>
 
 #include "audio/mixer.h"
+#include "data/szdd.h"
+#include "media/bmp.h"
+#include "media/midi.h"
+#include "media/smc.h"
+#include "media/wav.h"
 #include "gfx/screen.h"
 #include "inflate_vectors.h"
 #include "xf_inflate.h"
@@ -151,12 +156,115 @@ static void test_text(void)
     CHECK(strcmp(out, "fenomeno") == 0);
 }
 
+static void test_szdd(void)
+{
+    /* "ABC", a match of 6 from the window position the first literal went
+     * to (4080), then "X" */
+    static const u8 packed[] = { 'S', 'Z', 'D', 'D', 0x88, 0xF0, 0x27, 0x33, 'A', 'T', 10, 0, 0, 0,
+                                 0x17, 'A', 'B', 'C', 0xF0, 0xF3, 'X' };
+    u8 out[16];
+    CHECK(xf_szdd_is(packed, sizeof(packed)));
+    CHECK(xf_szdd_size(packed, sizeof(packed)) == 10);
+    CHECK(xf_szdd_last_char(packed, sizeof(packed)) == 'T');
+    CHECK(xf_szdd_expand(packed, sizeof(packed), out, sizeof(out)) == 10);
+    CHECK(memcmp(out, "ABCABCABCX", 10) == 0);
+    CHECK(xf_szdd_expand(packed, sizeof(packed), out, 9) < 0);       /* too small */
+    CHECK(xf_szdd_expand(packed, sizeof(packed) - 3, out, 16) < 0);  /* truncated */
+}
+
+/* A bare 40-byte DIB header (no file header) followed by `extra`. */
+static size_t dib(u8 *out, int w, int h, int bits, u32 comp, int colors)
+{
+    memset(out, 0, 40);
+    out[0] = 40;
+    out[4] = (u8)w;
+    out[8] = (u8)h;
+    out[12] = 1;
+    out[14] = (u8)bits;
+    memcpy(out + 16, &comp, 4); /* little-endian hosts */
+    out[32] = (u8)colors;
+    return 40;
+}
+
+static void test_bmp(void)
+{
+    u8 d[256];
+    size_t n;
+    xf_bmp b;
+    /* RLE8, 4x2, two colours: bottom line 2 x 0 then 2 x 1; top line
+     * copies 1 0 1 0 */
+    static const u8 rle[] = { 2, 0, 2, 1, 0, 0, 0, 4, 1, 0, 1, 0, 0, 1 };
+    /* Video 1, 16-bit, 4x4: one block of one colour, pure red (0x7C00) */
+    static const u8 v1[] = { 0x00, 0xFC };
+    n = dib(d, 4, 2, 8, 1, 2);
+    memcpy(d + n, "\0\0\0\0\xFF\xFF\xFF\0", 8); /* black, white */
+    memcpy(d + n + 8, rle, sizeof(rle));
+    CHECK(xf_bmp_decode(d, n + 8 + sizeof(rle), &b) == 0);
+    CHECK(b.width == 4 && b.height == 2 && b.indices);
+    CHECK(b.indices && b.indices[0] == 1 && b.indices[1] == 0 && b.indices[4] == 0 && b.indices[7] == 1);
+    CHECK(b.pixels && b.pixels[0] == 0xFFFFFF && b.pixels[4] == 0);
+    xf_bmp_free(&b);
+    n = dib(d, 4, 4, 16, 0x4D415243u, 0); /* 'CRAM' */
+    memcpy(d + n, v1, sizeof(v1));
+    CHECK(xf_bmp_decode(d, n + sizeof(v1), &b) == 0);
+    CHECK(b.pixels && b.pixels[0] == 0xFF0000 && b.pixels[15] == 0xFF0000);
+    xf_bmp_free(&b);
+}
+
+static void test_wav(void)
+{
+    /* 8-bit mono at 11025 Hz: 0x80 is silence, 0xFF the top */
+    static const u8 d[] = { 'R', 'I', 'F', 'F', 38, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ', 16, 0, 0, 0,
+                            1, 0, 1, 0, 0x11, 0x2B, 0, 0, 0x11, 0x2B, 0, 0, 1, 0, 8, 0, 'd', 'a', 't', 'a',
+                            2, 0, 0, 0, 0x80, 0xFF };
+    xf_wav w;
+    CHECK(xf_wav_decode(d, sizeof(d), &w) == 0);
+    CHECK(w.rate == 11025 && w.channels == 1 && w.frames == 2);
+    CHECK(w.samples && w.samples[0] == 0 && w.samples[1] == 127 * 256);
+    xf_wav_free(&w);
+}
+
+static void test_smc(void)
+{
+    /* 8x4: block 0 filled with index 0 (white); block 1 two colours, 0
+     * and 255 (black), the top row black */
+    static const u8 f[] = { 0, 0, 0, 11, 0x60, 0, 0x80, 0, 255, 0xF0, 0x00 };
+    u32 pal[256], frame[32];
+    xf_smc s;
+    memset(&s, 0, sizeof(s));
+    xf_mac_palette(pal);
+    CHECK(pal[0] == 0xFFFFFF && pal[255] == 0 && pal[215] == 0xEE0000 && pal[254] == 0x111111);
+    CHECK(xf_smc_decode(&s, f, sizeof(f), pal, frame, 8, 4) == 0);
+    CHECK(frame[0] == 0xFFFFFF && frame[3 * 8 + 3] == 0xFFFFFF);
+    CHECK(frame[4] == 0 && frame[7] == 0 && frame[8 + 4] == 0xFFFFFF);
+}
+
+static void test_midi(void)
+{
+    /* format 0, 96 ticks a beat: tempo 250000 us a beat, a note on at 0,
+     * running status note off (velocity 0) at 96 ticks, end at 192 */
+    static const u8 d[] = { 'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0, 96, 'M', 'T', 'r', 'k', 0, 0, 0, 19,
+                            0, 0xFF, 0x51, 3, 0x03, 0xD0, 0x90, 0, 0x90, 60, 100, 96, 60, 0, 96, 0xFF, 0x2F, 0 };
+    xf_midi_song m;
+    CHECK(xf_midi_parse(d, sizeof(d), &m) == 0);
+    CHECK(m.count == 2);
+    CHECK(m.count == 2 && m.events[0].us == 0 && m.events[0].status == 0x90 && m.events[0].d1 == 60);
+    CHECK(m.count == 2 && m.events[1].us == 250000 && m.events[1].d2 == 0);
+    CHECK(m.length_us == 500000);
+    xf_midi_free(&m);
+}
+
 int main(void)
 {
     test_inflate();
     test_mixer();
     test_screen();
     test_text();
+    test_szdd();
+    test_bmp();
+    test_wav();
+    test_smc();
+    test_midi();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;

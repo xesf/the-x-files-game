@@ -31,11 +31,44 @@ Counts are tracks in the English CD release (1,198 files).
 | Audio | `ima4` (IMA ADPCM, Apple variant) | Most sound | 11025, 22050 or 44100 Hz; mono or stereo. |
 | Audio | `twos` (signed PCM, big-endian) | Some `.amv`, `.mus`, `.xmv` | 8-bit or 16-bit. |
 | Audio | `QDMC` (QDesign Music 1) | 18 `.xmv`, 4 `.mus`, 1 `.amv`, 1 `.dmv` | Music and a few scenes: the credits music, the establishing shots, the songs on Willmore's stereo. Not QDesign Music 2 (`QDM2`). See below. |
+| Video | `smc ` (Apple Graphics) | Roland (16 clips) | 8-bit, the Macintosh system palette. See below. |
+| Audio | `raw ` and codec 0 (8-bit unsigned PCM) | Quantum Gate, Vortex, Roland | Codec 0 is how QuickTime 1.x wrote it. |
 | Text | `text` | Most `XV/` scenes | Subtitles. A scene can have several text tracks. |
 
 Scenes in `XV/` have one video track, one sound track and one or more text
 tracks. The text tracks whose sample description has no codec name are
 also subtitle tracks.
+
+## Apple Graphics (`smc `)
+
+Roland's 16 `smc ` clips are 8-bit. Their sample descriptions say
+colour table ID -1, so the colours are the Macintosh system palette
+(`clut` 8): a 6×6×6 cube from white down at 0 to 214, ramps of red,
+green, blue and grey at 215 to 254 (`EE DD BB AA 88 77 55 44 22 11`),
+and black at 255. A description with colour table ID 0 keeps its own
+table after the fixed fields.
+
+A frame starts with a flag byte and a 24-bit size. Opcodes follow over
+the 4×4 blocks in raster order. The high nibble is the operation and
+the low one a count minus 1; the operations 0x10, 0x30, 0x50 and 0x70
+take the count minus 1 from the next byte instead.
+
+| Opcode | Operation |
+|---|---|
+| `0x00`, `0x10` | Skip blocks (they keep the previous frame's pixels) |
+| `0x20`, `0x30` | Repeat the previous block |
+| `0x40`, `0x50` | Repeat the previous two blocks |
+| `0x60`, `0x70` | Fill with one colour index |
+| `0x80`, `0x90` | Two colours: two new indices (added to a cache) or a cache index; then 16 bits a block |
+| `0xA0`, `0xB0` | Four colours, likewise; 2 bits a pixel |
+| `0xC0`, `0xD0` | Eight colours, likewise; 3 bits a pixel in 6 bytes a block |
+| `0xE0` | Sixteen indices given in full |
+
+The bits go from the most significant, a row at a time from the top.
+Each cache holds 256 entries and is filled from its start again with
+every frame. An eight-colour block's top two rows use the high 12 bits
+of its first two 16-bit words; the bottom two use the high 12 bits of
+the third word, then the low nibbles of bytes 1, 3 and 5.
 
 ## QDesign Music 1 (`QDMC`)
 

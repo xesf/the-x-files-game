@@ -455,3 +455,34 @@ int plat_save_dir(char *out, size_t size)
     CreateDirectoryA(out, NULL);
     return 0;
 }
+
+/* --- MIDI --------------------------------------------------------------- */
+
+/* The MIDI mapper: the system's General MIDI synthesizer. */
+static HMIDIOUT g_midi;
+
+int plat_midi_open(void)
+{
+    if (g_midi)
+        return 0;
+    if (getenv("XF_HEADLESS") || midiOutOpen(&g_midi, MIDI_MAPPER, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
+        g_midi = NULL;
+        return -1;
+    }
+    return 0;
+}
+
+void plat_midi_send(u8 status, u8 d1, u8 d2)
+{
+    if (g_midi)
+        midiOutShortMsg(g_midi, (DWORD)status | (DWORD)d1 << 8 | (DWORD)d2 << 16);
+}
+
+void plat_midi_close(void)
+{
+    if (g_midi) {
+        midiOutReset(g_midi);
+        midiOutClose(g_midi);
+        g_midi = NULL;
+    }
+}

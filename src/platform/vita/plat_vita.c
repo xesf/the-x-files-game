@@ -510,3 +510,11 @@ int plat_save_dir(char *out, size_t size)
     sceIoMkdir(out, 0777);
     return 0;
 }
+
+/* --- MIDI --------------------------------------------------------------- */
+
+/* No system synthesizer here yet: the earlier games play without music
+ * (docs/OTHER-GAMES.md). */
+int plat_midi_open(void) { return -1; }
+void plat_midi_send(u8 status, u8 d1, u8 d2) { (void)status; (void)d1; (void)d2; }
+void plat_midi_close(void) {}

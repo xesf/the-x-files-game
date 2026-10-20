@@ -7,6 +7,8 @@
  *                                                   starts a new game; --media
  *                                                   adds folders to search for clips;
  *                                                   --script <file> plays a story script
+ *   xfiles --game <folder> [--script <file>]        run whichever HyperBole game the
+ *                                                   folder holds (src/games/games.h)
  * Without arguments it starts a new game from the first game folder it
  * finds (see find_game_dir), or shows a test pattern when there is none. */
 #include <stdio.h>
@@ -15,6 +17,7 @@
 
 #include "audio/mixer.h"
 #include "game/explore.h"
+#include "games/games.h"
 #include "gfx/text.h"
 #include "media/player.h"
 #include "platform/plat.h"
@@ -101,9 +104,21 @@ static int play_movie(const char *path, const char *data_dir)
  * language folders (src/core/xf_lang.h). */
 static int is_game_dir(const char *dir)
 {
-    static xf_langs langs; /* large for the stack of some systems */
-    char path[1024];
-    return xf_path_resolve(dir, "XFILES.HDB", path, sizeof(path)) == 0 || xf_langs_scan(&langs, dir) > 0;
+    return xf_detect_game(dir) != XF_GAME_NONE;
+}
+
+/* Runs an earlier game's module. */
+static int run_module(const char *dir, const char *script)
+{
+    const xf_game_module *m = xf_game_module_for(xf_detect_game(dir));
+    xf_game_options opt;
+    if (!m || !m->run) {
+        xf_warn("%s: no HyperBole game found there", dir);
+        return 1;
+    }
+    opt.script = script;
+    opt.media = NULL;
+    return m->run(dir, &opt);
 }
 
 /* Where a release looks for the game: $XF_GAME_DIR, then a folder named
@@ -163,9 +178,13 @@ int main(int argc, char **argv)
 {
     int r = 0;
 
+    char buf[1024];
+    const char *dir = argc <= 1 ? find_game_dir(argc ? argv[0] : NULL, buf, sizeof(buf)) : NULL;
+    xf_game_id game = argc > 2 && strcmp(argv[1], "--game") == 0 ? xf_detect_game(argv[2]) : xf_detect_game(dir);
+
     if (getenv("XF_DEBUG"))
         xf_log_set_level(XF_LOG_DEBUG);
-    if (plat_init("The X-Files", SCREEN_W, SCREEN_H) != 0)
+    if (plat_init(game == XF_GAME_NONE ? "The X-Files" : xf_game_title(game), SCREEN_W, SCREEN_H) != 0)
         xf_fatal("cannot open window");
     xf_mixer_init(AUDIO_RATE, plat_audio_lock, plat_audio_unlock);
     if (plat_audio_open(AUDIO_RATE, xf_mixer_render, NULL) != 0)
@@ -187,9 +206,13 @@ int main(int argc, char **argv)
     }
     else if (argc > 2 && strcmp(argv[1], "--play") == 0)
         r = play_movie(argv[2], argc > 4 && strcmp(argv[3], "--data") == 0 ? argv[4] : NULL);
+    else if (argc > 2 && strcmp(argv[1], "--game") == 0 && game != XF_GAME_XFILES)
+        r = run_module(argv[2], argc > 4 && strcmp(argv[3], "--script") == 0 ? argv[4] : NULL);
+    else if (dir && game != XF_GAME_XFILES)
+        r = run_module(dir, NULL);
     else {
-        char buf[1024];
-        const char *dir = argc <= 1 ? find_game_dir(argc ? argv[0] : NULL, buf, sizeof(buf)) : NULL;
+        if (argc > 2 && strcmp(argv[1], "--game") == 0)
+            dir = argv[2];
         if (dir) {
             /* XF_MEDIA_DIR adds a folder of clips, for installs that
              * keep them apart (the DVD build streams them from the disc). */

@@ -89,30 +89,37 @@ are not copied.
 
 ## Engine structure
 
-Today `src/game` and `src/vc` are The X-Files' Virtual Cinema 3.0
-runtime. The shared layers (`src/platform`, `src/gfx`, `src/media`,
-`src/audio`, `src/core`) already serve any game. The plan:
+`src/game` and `src/vc` are The X-Files' Virtual Cinema 3.0 runtime.
+The shared layers (`src/platform`, `src/gfx`, `src/media`, `src/audio`,
+`src/core`) serve any game. The earlier games live in `src/games`:
 
-1. Game detection: the folder's files say which game it is (`XFILES.EXE`
-   and an HDB, `QGATE.EXE`, `VORTEX.EXE`, `ROLAND.EX_`), and `main`
-   starts that game's module.
-2. One module per game behind a small interface (start, frame, input,
-   save, load), so the shared layers do not depend on any one game.
-3. The X-Files' module stays as it is and moves behind that interface
-   once its own work is done.
+| File | Content |
+|---|---|
+| `games.h`, `detect.c` | Which game a folder holds: `XFILES.HDB` (or a language folder with it), `VORTEX.EXE`, `ROLAND.EX_` or `ROLAND.EXE`, `QGATE.EXE`. `xftool detect` prints it. |
+| `modules.c` | The module table: a name, a title and a `run(folder, options)` function per game. Each module owns its loop, as `xf_explore` does for The X-Files. |
+| `stage.c` | What the modules share: the 640×480 screen, DOS paths (`c\splash\vclogo.mov`) found whatever their case, clips, pictures, sounds, music, the pointer, and a test script (`wait`, `point`, `press`, `key`, `shot`, `quit`). |
+| `music.c` | Plays a MIDI song through `plat_midi_*`. |
+| `vortex/`, `roland/`, `qgate/` | One module each. |
+
+`xfiles --game <folder> [--script <file>]` runs the game a folder holds;
+without arguments the program also finds an earlier game in the folders
+it searches (`$XF_GAME_DIR`, `game` beside the program). The X-Files
+keeps its own command-line options and runs as before.
 
 ## Order of the work
 
-1. **Shared formats** (can start any time): `raw ` PCM, SZDD, BMP and
-   RLE8, WAV, `smc `. Each with an `xftool` command and a unit test,
-   as for the X-Files formats.
-2. **Game detection and the module interface.**
-3. **Vortex** (Virtual Cinema 2.0): load `VORTEX.EXE` in the
-   disassembler; find the scene tables and the media paths; write the
-   module; play the clips and the navigation, with MIDI for its music.
-   Its logic is entirely compiled in, so this is the longest step. What
-   it shares with The X-Files may help: compare its classes and
-   functions with `XFILES.EXE`'s.
+1. **Shared formats** (done): `raw ` PCM, SZDD, BMP with RLE8 and
+   Microsoft Video 1, WAV, `smc `, MIDI with the platform synthesizers.
+   Each has an `xftool` command, a unit test and a format page. Not
+   read yet: one Intel Indeo picture and one QuickTime Animation (`rle `)
+   clip in Quantum Gate, neither used by its program.
+2. **Game detection and the module interface** (done).
+3. **Vortex** (Virtual Cinema 2.0, in progress): `tools/ne` reads and
+   disassembles `VORTEX.EXE`; its logic is a bytecode the program
+   interprets (see `docs/vortex/README.md`), and `src/games/vortex`
+   runs it. The opening, the menus and the Day 3 scenes play. The copy
+   in the data folder is disc 3 only (VORTEX_3); days 1 and 2 need the
+   other two discs.
 4. **Roland**: start from the ScummVM branch's screens (intro, menus,
    chapter pages); SZDD-expand `ROLAND.EX_` and `ROLGUTS.EX_`, write the
    VB3 p-code reader for what the screens do not cover yet, and write
@@ -123,10 +130,9 @@ runtime. The shared layers (`src/platform`, `src/gfx`, `src/media`,
 
 ## Open questions
 
-- Which disassembler to use for the 16-bit NE executables (IDA does
-  not handle them).
-- Which MIDI path to take on each platform.
-- Whether Vortex's executable keeps any class names or tables in common
-  with The X-Files that make its logic faster to recover.
+- Which disassembler to use for the 16-bit NE executables: our own
+  (`tools/ne`, on Python's capstone) is enough for Vortex.
+- Which MIDI path to take on Linux, the Vita and DOS (macOS and Windows
+  use their own synthesizers).
 - How far the earlier `hyperbole` project (C++, SDL, MIT) helps: it
   detects the games and reads BMP and RLE8, which this plan covers in C.

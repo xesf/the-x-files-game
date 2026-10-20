@@ -182,10 +182,12 @@ int xf_cinepak_decode(xf_cinepak *c, const u8 *data, size_t size, u32 *frame)
         strip_books *b = &c->books[i];
 
         if (p + 12 > end)
-            return -1;
+            return i > 0 ? 0 : -1;
         strip_size = xf_be16(p + 2);
+        /* A damaged strip after the first ends the frame with what came
+         * before it (Vortex's UBERASET/LOOPS/CRASH1.MOV, frame 8). */
         if (strip_size < 12 || p + strip_size > end)
-            return -1;
+            return i > 0 ? 0 : -1;
         strip_end = p + strip_size;
         y1 = y0;
         y2 = y0 + xf_be16(p + 8); /* strip bottom, relative to the strip */

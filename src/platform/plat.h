@@ -88,6 +88,14 @@ void plat_show_cursor(int show);
 u32 plat_ticks_ms(void);
 void plat_sleep_ms(u32 ms);
 
+/* General MIDI output through the system's own synthesizer, for the
+ * earlier games' music. Returns 0, or -1 where the platform has none
+ * (the engine then plays no music). Messages are channel messages:
+ * a status byte and one or two data bytes. */
+int plat_midi_open(void);
+void plat_midi_send(u8 status, u8 d1, u8 d2);
+void plat_midi_close(void);
+
 int plat_audio_open(int rate, plat_audio_fn fn, void *user);
 void plat_audio_close(void);
 void plat_audio_lock(void);
