@@ -7,6 +7,7 @@
 
 #include "data/szdd.h"
 #include "media/bmp.h"
+#include "media/wav.h"
 #include "xf_file.h"
 #include "xftool.h"
 
@@ -82,7 +83,31 @@ static int cmd_bmp(int argc, char **argv)
     return bad;
 }
 
+static int cmd_wav(int argc, char **argv)
+{
+    xf_wav w;
+    int i, bad = 0;
+
+    if (argc < 2) {
+        fputs("usage: xftool wav <files>...\n", stderr);
+        return 2;
+    }
+    for (i = 1; i < argc; i++)
+        if (xf_wav_load(argv[i], &w) != 0) {
+            printf("%s: cannot decode\n", argv[i]);
+            bad++;
+        } else {
+            if (argc == 2)
+                printf("%u frames, %u Hz, %d channels\n", w.frames, w.rate, w.channels);
+            xf_wav_free(&w);
+        }
+    if (argc > 2)
+        printf("%d of %d sounds failed\n", bad, argc - 1);
+    return bad ? 1 : 0;
+}
+
 const xftool_cmd xftool_older_cmds[] = {
+    { "wav", "<files>...  decode WAVE sounds and report failures", cmd_wav },
     { "bmp", "<file> [out.bmp]  decode a Windows bitmap (RLE8, Video 1, SZDD); -c <files> checks them", cmd_bmp },
     { "expand", "<packed> [out]  unpack an SZDD (COMPRESS.EXE) file; -c <files> checks them", cmd_expand },
     { 0 }

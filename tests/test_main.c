@@ -7,6 +7,7 @@
 #include "audio/mixer.h"
 #include "data/szdd.h"
 #include "media/bmp.h"
+#include "media/wav.h"
 #include "gfx/screen.h"
 #include "inflate_vectors.h"
 #include "xf_inflate.h"
@@ -208,6 +209,19 @@ static void test_bmp(void)
     xf_bmp_free(&b);
 }
 
+static void test_wav(void)
+{
+    /* 8-bit mono at 11025 Hz: 0x80 is silence, 0xFF the top */
+    static const u8 d[] = { 'R', 'I', 'F', 'F', 38, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ', 16, 0, 0, 0,
+                            1, 0, 1, 0, 0x11, 0x2B, 0, 0, 0x11, 0x2B, 0, 0, 1, 0, 8, 0, 'd', 'a', 't', 'a',
+                            2, 0, 0, 0, 0x80, 0xFF };
+    xf_wav w;
+    CHECK(xf_wav_decode(d, sizeof(d), &w) == 0);
+    CHECK(w.rate == 11025 && w.channels == 1 && w.frames == 2);
+    CHECK(w.samples && w.samples[0] == 0 && w.samples[1] == 127 * 256);
+    xf_wav_free(&w);
+}
+
 int main(void)
 {
     test_inflate();
@@ -216,6 +230,7 @@ int main(void)
     test_text();
     test_szdd();
     test_bmp();
+    test_wav();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;
