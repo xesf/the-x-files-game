@@ -47,6 +47,12 @@ typedef struct {
     int logged_count;
     xf_font fonts[16];
     u8 font_tried[16];
+    struct {                /* the score: system\\midifile.txt (midi.c) */
+        int dims[3];        /* scenes, variants, moods */
+        int files;
+        char (*names)[32];
+        u16 (*cells)[2];    /* a song, how many times it plays */
+    } score;
     int discs;              /* bit n: disc n's folders are here */
     int disc;               /* the disc in the drive */
     struct {                /* the sprite slots (DS:46DC) */
@@ -370,6 +376,64 @@ static void find_discs(vortex *v)
             v->discs & 8 ? "3 " : "", v->disc);
 }
 
+/* The score (seg17:0000): a line "scenes variants moods songs", a song
+ * file a line, then a line a cell, scene by scene, "scene variant mood
+ * plays song" (a count of 0 or less plays for ever). */
+static void load_score(vortex *v)
+{
+    char path[1024], line[256];
+    FILE *f;
+    int i, n;
+    if (stage_path(&v->st, "system\\midifile.txt", path, sizeof(path)) != 0 || !(f = fopen(path, "r")))
+        return;
+    if (!fgets(line, sizeof(line), f) ||
+        sscanf(line, "%d %d %d %d", &v->score.dims[0], &v->score.dims[1], &v->score.dims[2], &v->score.files) != 4 ||
+        v->score.files <= 0 || v->score.files > 500)
+        goto bad;
+    n = v->score.dims[0] * v->score.dims[1] * v->score.dims[2];
+    if (n <= 0 || n > 0x4000)
+        goto bad;
+    v->score.names = calloc((size_t)v->score.files, sizeof(*v->score.names));
+    v->score.cells = calloc((size_t)n, sizeof(*v->score.cells));
+    if (!v->score.names || !v->score.cells)
+        goto bad;
+    for (i = 0; i < v->score.files; i++)
+        if (!fgets(line, sizeof(line), f) || sscanf(line, " %31s", v->score.names[i]) != 1)
+            goto bad;
+    for (i = 0; i < n; i++) {
+        int plays, song;
+        if (!fgets(line, sizeof(line), f) || sscanf(line, "%*s %*s %*s %d %d", &plays, &song) != 2)
+            goto bad;
+        v->score.cells[i][0] = (u16)song;
+        v->score.cells[i][1] = (u16)(plays > 0 ? plays : 0);
+    }
+    fclose(f);
+    xf_info("vortex: score of %d songs, %dx%dx%d", v->score.files, v->score.dims[0], v->score.dims[1],
+            v->score.dims[2]);
+    return;
+bad:
+    xf_warn("vortex: %s: not a score", path);
+    fclose(f);
+    free(v->score.names);
+    free(v->score.cells);
+    memset(&v->score, 0, sizeof(v->score));
+}
+
+static void on_score(void *user, int scene, int variant, int mood)
+{
+    vortex *v = user;
+    char rel[64];
+    int i;
+    if (!v->score.cells || scene >= v->score.dims[0] || variant >= v->score.dims[1] || mood >= v->score.dims[2])
+        return;
+    i = (scene * v->score.dims[1] + variant) * v->score.dims[2] + mood;
+    if (v->score.cells[i][0] >= v->score.files)
+        return;
+    snprintf(rel, sizeof(rel), "c\\midi\\%s", v->score.names[v->score.cells[i][0]]);
+    xf_info("vortex: score %d %d %d: %s", scene, variant, mood, rel);
+    stage_music(&v->st, rel, v->score.cells[i][1]);
+}
+
 static u16 on_disc(void *user, int n)
 {
     vortex *v = user;
@@ -497,7 +561,7 @@ static void on_music(void *user, int sub, const char *file, u16 arg)
     vortex *v = user;
     (void)arg;
     if (sub == 1)
-        stage_music(&v->st, file, 1);
+        stage_music(&v->st, file, 0);
     else if (sub == 6)
         stage_music(&v->st, NULL, 0);
 }
@@ -589,6 +653,8 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.text_sprite = on_text_sprite;
     host.screen = on_screen;
     host.disc = on_disc;
+    host.score = on_score;
+    load_score(v);
     find_discs(v);
     host.sound = on_sound;
     host.sound_op = on_sound_op;
@@ -621,6 +687,8 @@ done:
         xf_wav_free(&v->sounds[i]);
     for (i = 0; i < VS_SPRITES; i++)
         free_sprite(v, i);
+    free(v->score.names);
+    free(v->score.cells);
     for (i = 0; i < (int)XF_COUNT(v->fonts); i++)
         if (v->fonts[i].data)
             xf_font_free(&v->fonts[i]);

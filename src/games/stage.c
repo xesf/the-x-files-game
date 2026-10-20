@@ -276,13 +276,13 @@ int stage_wait_input(xf_stage *s, u32 ms, int *x, int *y)
     return 0;
 }
 
-void stage_music(xf_stage *s, const char *rel, int loop)
+void stage_music(xf_stage *s, const char *rel, int plays)
 {
     char path[1024];
     if (!rel || stage_path(s, rel, path, sizeof(path)) != 0) {
         xf_music_stop(&s->music);
         return;
     }
-    if (xf_music_play(&s->music, path, loop, plat_ticks_ms()) != 0)
+    if (xf_music_play(&s->music, path, plays, plat_ticks_ms()) != 0)
         xf_info("music %s: not played", rel);
 }

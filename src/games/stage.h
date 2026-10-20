@@ -64,8 +64,9 @@ int stage_draw_bmp(xf_stage *s, const char *rel, int x, int y);
 /* Waits for a click or a key, or `ms` (0: no limit). Returns 1 for a
  * click (its position in *x, *y), 2 for a key, 0 on timeout or quit. */
 int stage_wait_input(xf_stage *s, u32 ms, int *x, int *y);
-/* Starts a MIDI song (or stops the music with NULL). */
-void stage_music(xf_stage *s, const char *rel, int loop);
+/* Starts a MIDI song, played `plays` times (0: for ever), or stops the
+ * music with NULL. */
+void stage_music(xf_stage *s, const char *rel, int plays);
 void stage_clear(xf_stage *s, u32 color);
 
 #endif

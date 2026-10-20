@@ -81,6 +81,8 @@ typedef struct vs_host {
     /* 0xFF: 9 asks which disc is in the drive (its volume VORTEX_n);
      * another n whether disc n is in. */
     u16 (*disc)(void *user, int n);
+    /* 0x800: the score's song for a scene, a variant and a mood */
+    void (*score)(void *user, int scene, int variant, int mood);
     /* 0x805: a call into segment 13 (the "uber" device), by sub-command */
     u16 (*uber)(void *user, int seq, int sub, vx_ptr at);
 } vs_host;

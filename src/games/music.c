@@ -16,7 +16,7 @@ static void silence(void)
     }
 }
 
-int xf_music_play(xf_music *m, const char *path, int loop, u32 now_ms)
+int xf_music_play(xf_music *m, const char *path, int plays, u32 now_ms)
 {
     int volume = m->open || m->volume ? m->volume : 127;
     xf_music_stop(m);
@@ -29,7 +29,7 @@ int xf_music_play(xf_music *m, const char *path, int loop, u32 now_ms)
     if (xf_midi_load(path, &m->song) != 0)
         return -1;
     m->playing = 1;
-    m->loop = loop;
+    m->plays = plays;
     m->start_ms = now_ms;
     m->next = 0;
     return 0;
@@ -50,7 +50,9 @@ void xf_music_update(xf_music *m, u32 now_ms)
     }
     if (m->next >= m->song.count && at >= m->song.length_us) {
         silence();
-        if (m->loop && m->song.count) {
+        if (m->plays != 1 && m->song.count) {
+            if (m->plays > 1)
+                m->plays--;
             m->start_ms = now_ms;
             m->next = 0;
         } else

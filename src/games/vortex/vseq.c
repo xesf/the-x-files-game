@@ -344,6 +344,15 @@ static int step(vs_state *s, int seq)
         NEXT(6);
         return YIELD;
 
+    case 0x0800: /* the score (seg8:2FB4): a song by three variables */
+        if (s->host.score)
+            s->host.score(s->host.user, val(&in, 2), val(&in, 4), val(&in, 6));
+        NEXT(8);
+        return YIELD;
+    case 0x080D: /* the sequence's slot into a variable (seg8:5F7C) */
+        *ref(&in, 2) = vs_get(s, seq, VC_INDEX);
+        NEXT(4);
+        return RUN;
     case 0x0805: /* the "uber" device (seg13): its result into +2. Not written yet. */
         if (s->host.uber)
             *ref(&in, 2) = s->host.uber(s->host.user, seq, b_at(&in, 4), in.pc);
