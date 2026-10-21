@@ -118,9 +118,12 @@ keeps its own command-line options and runs as before.
 3. **Vortex** (Virtual Cinema 2.0, in progress): `tools/ne` reads and
    disassembles `VORTEX.EXE`; its logic is a bytecode the program
    interprets (see `docs/vortex/README.md`), and `src/games/vortex`
-   runs it. The opening, the menus and the Day 3 scenes play. The copy
-   in the data folder is disc 3 only (VORTEX_3); days 1 and 2 need the
-   other two discs.
+   runs it. Every opcode the sequences hold is implemented, with the
+   uber device (moods, the journal) and the screen effects. The three
+   discs play from folders `VORTEX_1` to `VORTEX_3` (the disc images'
+   contents), changing discs as the original asks. Left: playing every
+   day through to its ends, MIDI on the platforms without a
+   synthesizer, and the swirl effect (shown as a dissolve).
 4. **Roland**: start from the ScummVM branch's screens (intro, menus,
    chapter pages); SZDD-expand `ROLAND.EX_` and `ROLGUTS.EX_`, write the
    VB3 p-code reader for what the screens do not cover yet, and write

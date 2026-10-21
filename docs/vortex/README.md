@@ -228,9 +228,8 @@ bitmap onto the screen; 0x9 draws a string resource word-wrapped in a
 
 ## Status
 
-`src/games/vortex` runs the opening, the main menu, GO TO SCENE and
-the Day 3 scenes that the disc-3 copy holds: clips, pictures, the
-dialogue box and its choices, hover cursors and the score. Missing:
-screen update effects, sprite tints, the journal and the "uber"
-device (0x805, segment 13), and the opcodes the scenes have not
-reached yet.
+`src/games/vortex` runs every opcode the sequences hold: the menus, GO
+TO SCENE, the three days on their discs, the dialogue box and its
+choices, captions, idea icons, the uber device and its journal, the
+score and the screen effects. Not done yet: the swirl effect (a
+dissolve for now), and a play-through of every scene to the endings.
