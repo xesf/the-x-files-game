@@ -14,7 +14,28 @@
 #include "xf_log.h"
 
 static void after_triggers(game *g);
+/* The atom slots (see Atoms below). */
+enum {
+    ATOM_JUST_TOLD,  /* "I just told you" */
+    ATOM_AS_I_SAID,  /* "As I just said" */
+    ATOM_MATTER,     /* "What's the matter with you" */
+    ATOM_WHAT_DOING, /* "What are you doing" */
+    ATOM_DONT_WANT,  /* "I don't want that" */
+    ATOM_DONT_DO,    /* "Don't do that" */
+    ATOM_DONT_KNOW,  /* "I don't know anything about that" */
+    ATOM_PRISON,     /* 19656: Willmore in prison (game over) */
+    ATOM_FIRED,      /* 19654: Willmore out of the FBI (game over) */
+    ATOM_SLOTS,
+    ATOM_NONE = 10   /* what the exe's tables return for no atom */
+};
 static int hand_empty(game *g);
+static u32 reg_id(game *g, const char *name, int i);
+static void hand_changed(game *g, i32 before);
+static i32 hand_item(game *g);
+static int tests_hand(game *g, u32 trigger_list, int kind);
+static int char_atoms(game *g, u32 char_view, u32 *atoms);
+static int hover_atom(i32 item);
+static int play_atom(game *g, u32 char_view, int slot, const u32 *atoms);
 static u32 inventory_triggers(game *g, u32 id);
 static void set_item_text(game *g, u32 item, const char *text);
 static int photo_function(game *g, const char *name, int argc, const vc_operand *args);
@@ -917,11 +938,39 @@ const game_iface_item *game_iface_item_at(game *g, int x, int y)
     return NULL;
 }
 
+/* 0x442B70: the pointer onto a hotspot with an item in hand runs the
+ * hotspot's kind 4 triggers. A character whose triggers do not test the
+ * item answers with an atom (hover_atom), unless a clip plays. */
+static void hover_spot(game *g, const game_spot *s)
+{
+    u32 id = s ? s->id : 0, atoms[ATOM_SLOTS];
+    i32 item = hand_item(g);
+    if (id == g->spot_hover)
+        return;
+    g->spot_hover = id;
+    if (!s || !item)
+        return;
+    vc_run_triggers(&g->interp, s->triggers, 4);
+    if (s->kind == SPOT_CHARACTER && !tests_hand(g, s->triggers, 4) && !g->current.asset &&
+        !game_media_pending(g) && char_atoms(g, s->id, atoms))
+        play_atom(g, s->id, hover_atom(item), atoms);
+    after_triggers(g);
+}
+
+void game_hover_spot(game *g, u32 id)
+{
+    int i;
+    for (i = 0; i < g->spot_count && g->spots[i].id != id; i++)
+        ;
+    hover_spot(g, i < g->spot_count ? &g->spots[i] : NULL);
+}
+
 /* Mouse over and off interface items run their kind 4 and 5 triggers. */
 void game_hover(game *g, int x, int y)
 {
     const game_iface_item *it = game_iface_item_at(g, x, y);
     u32 id = it ? it->id : 0;
+    hover_spot(g, it || game_scene_held(g) ? NULL : game_spot_at(g, x, y));
     if (id == g->iface_hover)
         return;
     if (g->iface_hover) {
@@ -1013,7 +1062,11 @@ int game_hold(game *g, const char *item)
     id = vc_find_var(&g->interp, name);
     if (!id)
         return 0;
-    set_reg_var(g, "RegCurrInvVar", 0, vc_get_var(&g->interp, id));
+    {
+        i32 before = hand_item(g);
+        set_reg_var(g, "RegCurrInvVar", 0, vc_get_var(&g->interp, id));
+        hand_changed(g, before);
+    }
     return 1;
 }
 
@@ -1155,7 +1208,11 @@ int game_click_inventory(game *g, u32 id)
     if (!triggers)
         return 0;
     xf_info("click inventory %u", id);
-    vc_run_triggers(&g->interp, triggers, 0);
+    {
+        i32 before = hand_item(g);
+        vc_run_triggers(&g->interp, triggers, 0);
+        hand_changed(g, before);
+    }
     after_triggers(g);
     return 1;
 }
@@ -1313,14 +1370,244 @@ static void queue_list_media(game *g, u32 list, u32 conversation)
     }
 }
 
+/* --- Atoms ----------------------------------------------------------- */
+
+/* Atoms are a character's stock replies: "I just told you", "Don't do
+ * that" and the like. A character view that has them lists a disabled
+ * placeholder conversation first; its atom list holds seven slots in a
+ * fixed order. An asset that is not a clip (a text asset) marks an empty
+ * slot. 0x43CFEB loads them into the character view (+0x13C..+0x154) and
+ * adds two end-game clips as slots 7 and 8; +0x160 says the view has
+ * atoms (0x4907F0 asks it). */
+
+/* 1 when an asset is a clip, not the placeholder text. */
+static int atom_clip(game *g, u32 asset)
+{
+    vc_asset_ref a;
+    return asset && vc_read_asset_ref(&g->db, asset, &a) == 0 && a.kind != 4;
+}
+
+/* The atoms of a character view; 0 when it has none. */
+static int char_atoms(game *g, u32 char_view, u32 atoms[ATOM_SLOTS])
+{
+    vc_char_view cv;
+    vc_conversation c;
+    u32 convs[1], list[16];
+    int n, i;
+    memset(atoms, 0, sizeof(u32) * ATOM_SLOTS);
+    if (vc_class(&g->db, char_view) != VC_CHAR_VIEW || vc_read_char_view(&g->db, char_view, &cv) != 0 ||
+        vc_read_list(&g->db, cv.conversations, convs, 1) != 1 ||
+        vc_class(&g->db, convs[0]) != VC_CONVERSATION || vc_is_enabled(&g->interp, convs[0]) ||
+        vc_read_conversation(&g->db, convs[0], &c) != 0 || !c.atoms)
+        return 0;
+    n = vc_read_list(&g->db, c.atoms, list, 16);
+    if (n < ATOM_DONT_KNOW + 1)
+        return 0;
+    for (i = 0; i <= ATOM_DONT_KNOW; i++)
+        if (atom_clip(g, list[i]))
+            atoms[i] = list[i];
+    atoms[ATOM_PRISON] = 19656;
+    atoms[ATOM_FIRED] = 19654;
+    return 1;
+}
+
+static u32 roll10(game *g) /* 1..10 */
+{
+    g->rand_seed = g->rand_seed * 1103515245u + 12345u;
+    return (g->rand_seed >> 16) % 10 + 1;
+}
+
+/* The item in hand (its Inventory_i value), or 0. */
+static i32 hand_item(game *g) { return hand_empty(g) ? 0 : game_reg_value(g, "RegCurrInvVar", 0); }
+
+/* 1 when the triggers of a kind test for the item in hand ("if
+ * iCurrInventory == x" with x that item): then they answer it, not an
+ * atom. Such a test also keeps a character from answering an item. */
+static int tests_hand(game *g, u32 trigger_list, int kind)
+{
+    u32 ids[64], acts[64], var = reg_id(g, "RegCurrInvVar", 0);
+    int n = vc_read_list(&g->db, trigger_list, ids, 64), i, j, m;
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        u32 actions;
+        if (vc_class(&g->db, ids[i]) != VC_TRIGGER || xf_neo_object(&g->db, ids[i], &r, NULL, NULL) != 0)
+            continue;
+        actions = xf_neo_u32(&r);
+        if (xf_neo_u8(&r) != kind)
+            continue;
+        m = vc_read_list(&g->db, actions, acts, 64);
+        for (j = 0; j < m; j++) {
+            vc_action a;
+            const vc_expression *e = &a.condition;
+            const vc_operand *other;
+            i32 v;
+            if (vc_read_action(&g->db, acts[j], &a) != 0 || !a.has_condition || e->op != 0)
+                continue;
+            if (e->left.kind == VC_OPND_VARIABLE && e->left.value == var)
+                other = &e->right;
+            else if (e->right.kind == VC_OPND_VARIABLE && e->right.value == var)
+                other = &e->left;
+            else
+                continue;
+            v = other->kind == VC_OPND_VARIABLE ? vc_get_var(&g->interp, other->value) : (i32)other->value;
+            if (v == hand_item(g))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+/* 0x4EDF80: the pointer over a character with an item: the gun (9), the
+ * handcuffs (10) or the stiletto (23) get "Don't do that". */
+static int hover_atom(i32 item)
+{
+    return item == 9 || item == 10 || item == 23 ? ATOM_DONT_DO : ATOM_NONE;
+}
+
+/* 0x490520: a click on a character with an item (a table by item - 1 at
+ * 0x4906C0). The gun and the stiletto end in prison, the handcuffs out
+ * of the FBI; the cattle prod (5) gets "What are you doing" or "Don't
+ * do that". */
+static int click_atom(game *g, i32 item, const u32 atoms[ATOM_SLOTS])
+{
+    switch (item) {
+    case 1: case 4: case 6: case 7: case 11: case 12: case 21: case 22: case 25: case 26: case 30: case 31:
+        return ATOM_DONT_WANT;
+    case 9: case 23:
+        return ATOM_PRISON;
+    case 10:
+        return ATOM_FIRED;
+    case 16: case 17: case 18: case 19: case 20:
+        return ATOM_DONT_KNOW;
+    case 5:
+        if (atoms[ATOM_WHAT_DOING] && atoms[ATOM_DONT_DO])
+            return roll10(g) <= 5 ? ATOM_WHAT_DOING : ATOM_DONT_DO;
+        return atoms[ATOM_WHAT_DOING] ? ATOM_WHAT_DOING : ATOM_DONT_DO;
+    }
+    return ATOM_NONE;
+}
+
+/* 0x5192B0: taking the binoculars (2) or the flashlight (8) in hand
+ * gets "What's the matter with you", the night vision goggles (13) "What
+ * are you doing", from the first character in the view that has it. */
+static void select_atom(game *g, i32 item)
+{
+    int slot = item == 2 || item == 8 ? ATOM_MATTER : item == 13 ? ATOM_WHAT_DOING : ATOM_NONE, i;
+    u32 atoms[ATOM_SLOTS];
+    if (slot == ATOM_NONE)
+        return;
+    for (i = 0; i < g->spot_count; i++)
+        if (g->spots[i].kind == SPOT_CHARACTER && char_atoms(g, g->spots[i].id, atoms) && atoms[slot]) {
+            xf_info("atom %d of %u for item %d", slot, g->spots[i].id, (int)item);
+            game_queue_media(g, atoms[slot]);
+            return;
+        }
+}
+
+/* An item taken in hand: the select atoms play. */
+static void hand_changed(game *g, i32 before)
+{
+    i32 now = hand_item(g);
+    if (now && now != before)
+        select_atom(g, now);
+}
+
+/* Queues an atom of a character; 1 when one played. */
+static int play_atom(game *g, u32 char_view, int slot, const u32 atoms[ATOM_SLOTS])
+{
+    if (slot == ATOM_NONE || !atoms[slot])
+        return 0;
+    xf_info("atom %d of %u", slot, char_view);
+    game_queue_media(g, atoms[slot]);
+    return 1;
+}
+
+/* 1 when the conversation is a character's answer to an idea icon. */
+static int is_idea_conversation(game *g, u32 char_view, u32 conversation)
+{
+    vc_char_view cv;
+    u32 all[64];
+    int n, i;
+    if (vc_read_char_view(&g->db, char_view, &cv) != 0)
+        return 0;
+    n = vc_read_list(&g->db, cv.idea_maps, all, 64);
+    for (i = 0; i < n; i++) {
+        xf_neo_reader r;
+        if (vc_class(&g->db, all[i]) == VC_IDEA_MAP && xf_neo_object(&g->db, all[i], &r, NULL, NULL) == 0) {
+            xf_neo_u32(&r);
+            if (xf_neo_u32(&r) == conversation)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+/* The reply to a question asked again (from the History tab), after
+ * 0x4D9890 and 0x4DA090. With atoms the character varies it, with rolls
+ * of 1 to 10:
+ * - From the fourth time on, the character may not answer again: a
+ *   chance of 5 in 10, then 6, 7 and 8 in 10. A question gets "I just
+ *   told you", and 2 in 10 "What's the matter with you" after it; an
+ *   idea gets "What's the matter with you".
+ * - Otherwise, when the conversation has a yes or no atom, 8 in 10: that
+ *   atom, and 3 in 10 the answer after it.
+ * - Otherwise, 6 in 10: "I just told you" or "As I just said" (half each
+ *   for a question, only the second for an idea), 2 in 10 "What's the
+ *   matter with you", then the answer (not after an idea).
+ * - Otherwise the answer.
+ * Without atoms, the answer comes after the conversation's first atom. */
+static void queue_again(game *g, const vc_conversation *c, u32 conversation, int times)
+{
+    u32 atoms[ATOM_SLOTS], said[4];
+    int n = 0, answer = 1, idea, i;
+    u32 yes_no = first_enabled(g, c->atoms);
+    if (!g->talking || !char_atoms(g, g->talking, atoms)) {
+        if (yes_no)
+            game_queue_media(g, yes_no);
+        queue_list_media(g, c->answer, conversation);
+        return;
+    }
+    if (!atom_clip(g, yes_no))
+        yes_no = 0;
+    idea = is_idea_conversation(g, g->talking, conversation);
+    if (times >= 4 && (int)roll10(g) < (times == 4 ? 6 : times == 5 ? 7 : times == 6 ? 8 : 9)) {
+        answer = 0;
+        if (idea) {
+            said[n++] = atoms[ATOM_MATTER];
+        } else {
+            said[n++] = atoms[ATOM_JUST_TOLD];
+            if (roll10(g) >= 9)
+                said[n++] = atoms[ATOM_MATTER];
+        }
+    } else if (yes_no && roll10(g) <= 8) {
+        said[n++] = yes_no;
+        answer = roll10(g) <= 3;
+    } else if (roll10(g) <= 6) {
+        said[n++] = idea || roll10(g) > 5 ? atoms[ATOM_AS_I_SAID] : atoms[ATOM_JUST_TOLD];
+        if (roll10(g) >= 9)
+            said[n++] = atoms[ATOM_MATTER];
+        answer = !idea;
+    }
+    for (i = 0; i < n; i++)
+        if (said[i]) {
+            game_queue_media(g, said[i]);
+            g->queue[(g->queue_tail + GAME_MEDIA_QUEUE - 1) % GAME_MEDIA_QUEUE].conversation = conversation;
+        } else if (!answer && i == 0) {
+            answer = 1; /* the character has no such atom: the answer */
+        }
+    if (answer)
+        queue_list_media(g, c->answer, conversation);
+}
+
 /* 0x4ED930 records the question in the conversation history (or counts
- * it again), then 0x4D9890 plays the question and the answer, or the
- * repeat answer when it was asked before. The trigger list runs kind 0
- * on asking, kind 8 when it starts and kind 9 when the answer ends. */
+ * it again), then 0x4D9890 plays the question and the answer, or a
+ * varied reply when it was asked before (queue_again). The trigger list
+ * runs kind 0 on asking, kind 8 when it starts and kind 9 when the
+ * answer ends. */
 int game_ask(game *g, u32 conversation)
 {
     vc_conversation c;
-    int i, repeat;
+    int i, times;
     if (vc_read_conversation(&g->db, conversation, &c) != 0)
         return 0;
     for (i = 0; i < g->asked_count && g->asked[i].conversation != conversation; i++)
@@ -1329,11 +1616,11 @@ int game_ask(game *g, u32 conversation)
         g->asked[g->asked_count++].conversation = conversation;
     if (i < g->asked_count)
         g->asked[i].count++;
-    repeat = game_times_asked(g, conversation) > 1;
+    times = game_times_asked(g, conversation);
     {
         char name[128] = "";
         vc_read_name(&g->db, c.name, name, sizeof(name));
-        xf_info("ask %u: %s%s", conversation, name, repeat ? " (again)" : "");
+        xf_info("ask %u: %s%s", conversation, name, times > 1 ? " (again)" : "");
     }
     /* Willmore asking comes first, then what the question's triggers
      * queue: asking the Comity Inn clerk for the rooms (22650) queues her
@@ -1342,7 +1629,10 @@ int game_ask(game *g, u32 conversation)
         queue_list_media(g, c.question, 0);
     vc_run_triggers(&g->interp, c.triggers, 0);
     vc_run_triggers(&g->interp, c.triggers, 8);
-    queue_list_media(g, repeat && c.repeat ? c.repeat : c.answer, conversation);
+    if (times > 1)
+        queue_again(g, &c, conversation, times);
+    else
+        queue_list_media(g, c.answer, conversation);
     after_triggers(g);
     return 1;
 }
@@ -1382,10 +1672,18 @@ static void click_spot_how(game *g, const game_spot *s, int aiming)
     u32 from = g->view, target = s->kind == SPOT_NAV && !aiming ? s->target : 0, triggers = s->triggers;
     u32 epoch = g->view_epoch;
     xf_info("click %s %u", s->kind == SPOT_NAV ? "move" : s->kind == SPOT_EXPLORE ? "object" : "character", s->id);
+    i32 item = hand_item(g);
     g->talking = 0;
     vc_run_triggers(&g->interp, triggers, 0);
     if (g->view_epoch != epoch) /* the click went to another view */
         target = 0;
+    else if (s->kind == SPOT_CHARACTER && item && !tests_hand(g, triggers, 0)) {
+        /* 0x435C00: an item the character's triggers do not answer gets
+         * an atom; the gun or the stiletto on someone ends in prison. */
+        u32 atoms[ATOM_SLOTS];
+        if (char_atoms(g, s->id, atoms))
+            play_atom(g, s->id, click_atom(g, item, atoms), atoms);
+    }
     else if (s->kind == SPOT_CHARACTER && hand_empty(g) && !game_media_pending(g)) {
         /* Empty hand: talk. Items in hand run the character's triggers. */
         u32 ids[GAME_MAX_CHOICES];

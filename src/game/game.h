@@ -144,6 +144,7 @@ typedef struct {
     int iface_count;
     u32 iface_serial;     /* changes when a layout opens or closes */
     u32 iface_hover;
+    u32 spot_hover;       /* hotspot under the pointer (for the item in hand) */
 
     u32 talking;          /* character view whose questions are offered, or 0 */
     game_asked asked[GAME_MAX_ASKED];
@@ -341,6 +342,8 @@ int game_view_has_hot(game *g, u32 hot);
 
 /* Mouse moved: runs mouse over and off triggers of interface items. */
 void game_hover(game *g, int x, int y);
+/* The pointer onto a hotspot by ID, or off the hotspots (0). */
+void game_hover_spot(game *g, u32 id);
 /* The inventory item under the pointer (0 for none); on_evidence when it
  * is a piece of evidence, which keeps the kit's popup open. */
 void game_hover_inventory(game *g, u32 id, int on_evidence);
