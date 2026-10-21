@@ -39,7 +39,7 @@ without cutting anything.
 
 ## The wide layout
 
-`src/gfx/screen.c` places everything; `src/game/explore.c` draws in two
+`src/gfx/screen.c` places everything; `src/games/xfiles/explore.c` draws in two
 layers:
 
 1. The **scene layer**, 640x480 as before: the clip or view picture, the

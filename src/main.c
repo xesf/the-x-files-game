@@ -16,7 +16,7 @@
 #include <string.h>
 
 #include "audio/mixer.h"
-#include "game/explore.h"
+#include "games/xfiles/explore.h"
 #include "games/games.h"
 #include "gfx/text.h"
 #include "media/player.h"

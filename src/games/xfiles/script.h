@@ -5,7 +5,7 @@
 #ifndef XF_SCRIPT_H
 #define XF_SCRIPT_H
 
-#include "game/game.h"
+#include "games/xfiles/game.h"
 
 /* What the runner asks of the program that plays the game. Without a
  * host, clips end as soon as they start and time passes at once. */

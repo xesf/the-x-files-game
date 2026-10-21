@@ -8,8 +8,8 @@
 #include <time.h>
 
 #include "audio/mixer.h"
-#include "game/game.h"
-#include "game/script.h"
+#include "games/xfiles/game.h"
+#include "games/xfiles/script.h"
 #include "gfx/screen.h"
 #include "gfx/text.h"
 #include "media/mov.h"

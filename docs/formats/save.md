@@ -66,7 +66,7 @@ them to 12 and 8 bytes, and put the loop flag before the time.
 
 ### Loading a `.x` save
 
-`src/game/xsave.c` reads `.x` files, and `game_load_file` and the
+`src/games/xfiles/xsave.c` reads `.x` files, and `game_load_file` and the
 `load` script command accept them. The loader:
 
 1. starts a fresh game and runs the title's start-up triggers, which
@@ -137,7 +137,7 @@ main menu.
 
 ## Our save files
 
-`src/game/save.c` writes its own format. All numbers are 32-bit
+`src/games/xfiles/save.c` writes its own format. All numbers are 32-bit
 little-endian, so a save works on every platform build. The file starts
 with `XFSV` and the version, 1. Chunks follow; each one has four letters,
 then the size of its data.

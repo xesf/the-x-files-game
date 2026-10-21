@@ -4,7 +4,7 @@
  * GAM database with the variables, enable states and strings as they
  * were, plus a header object (class 0x57) and lists of the state that the
  * engine keeps outside the GAM. 0x4D14B0 writes them. */
-#include "game/game.h"
+#include "games/xfiles/game.h"
 
 #include <stdlib.h>
 #include <string.h>

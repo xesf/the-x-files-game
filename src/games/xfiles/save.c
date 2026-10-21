@@ -5,7 +5,7 @@
  * file (0x4D14B0). We keep the same state in a chunked file: the GAM
  * variables, enable states and strings, the trigger parameters, the view,
  * and what the engine itself holds (mail, photos, notes, ...). */
-#include "game/game.h"
+#include "games/xfiles/game.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -110,5 +110,5 @@ An idea is a conversation that a `VCIdeaMap` of the character view
 leads to. A character without atoms plays the conversation's first atom,
 then the answer.
 
-The engine does all of this in `src/game/game.c`, in the section
+The engine does all of this in `src/games/xfiles/game.c`, in the section
 "Atoms".

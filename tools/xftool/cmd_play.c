@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "game/script.h"
+#include "games/xfiles/script.h"
 #include "xftool.h"
 
 static int cmd_play(int argc, char **argv)
