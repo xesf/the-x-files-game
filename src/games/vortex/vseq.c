@@ -233,6 +233,31 @@ static void sprite_size(vs_state *s, int seq)
     }
 }
 
+/* seg8:782C, 788E: takes a sequence's cursor (0x807) or its sprite away,
+ * keeping it for show(). */
+static void hide(vs_state *s, int seq, int cursor)
+{
+    if (cursor) {
+        s->saved_cursor[seq] = vs_get(s, seq, VC_CURSOR);
+        vs_set(s, seq, VC_CURSOR, 0);
+    } else {
+        s->saved_sprite[seq] = vs_get(s, seq, VC_SPRITE);
+        vs_set(s, seq, VC_SPRITE, 0xFFFF);
+        vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) & ~1));
+    }
+}
+
+/* seg8:7862, 78D4: gives it back. */
+static void show(vs_state *s, int seq, int cursor)
+{
+    if (cursor) {
+        vs_set(s, seq, VC_CURSOR, s->saved_cursor[seq]);
+    } else {
+        vs_set(s, seq, VC_SPRITE, s->saved_sprite[seq]);
+        vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) | 1));
+    }
+}
+
 /* Runs one instruction. */
 static int step(vs_state *s, int seq)
 {
@@ -415,6 +440,43 @@ static int step(vs_state *s, int seq)
         vs_set(s, seq, VC_MODE, w_at(&in, 10));
         NEXT(12);
         return RUN;
+    /* a sequence's cursor and sprite taken away and given back (seg8:782C
+     * to 78D4) */
+    case 0x0807: case 0x0808: case 0x0809: case 0x080A: {
+        u16 who = val(&in, 2);
+        if (who < VS_SEQS) {
+            if (op == 0x0807 || op == 0x0809)
+                hide(s, who, op == 0x0807);
+            else
+                show(s, who, op == 0x0808);
+        }
+        if (op == 0x0808 && s->mx >= 0) /* seg3:2F0E: the pointer looks again */
+            vs_move(s, s->mx, s->my);
+        NEXT(4);
+        return YIELD;
+    }
+    case 0x080B: case 0x080C: { /* the sprites of the sequences whose z is
+                                 * from lo to hi (seg8:5D2C); a flag takes
+                                 * the paused ones too */
+        u16 lo = w_at(&in, 2), hi = w_at(&in, 4), halted = w_at(&in, 6);
+        for (i = 0; i < VS_SEQS; i++)
+            if (vs_get(s, i, VC_USED) && (halted || !vs_get(s, i, VC_HALTED)) &&
+                (i16)lo <= (i16)vs_get(s, i, VC_Z) && (i16)vs_get(s, i, VC_Z) <= (i16)hi) {
+                if (op == 0x080B)
+                    hide(s, i, 0);
+                else
+                    show(s, i, 0);
+            }
+        NEXT(8);
+        return YIELD;
+    }
+    case 0x07FF: { /* empties a sprite slot (seg3:25FC) */
+        u16 slot = val(&in, 2);
+        if (slot < 0x7D && s->host.sprite_free)
+            s->host.sprite_free(s->host.user, slot);
+        NEXT(4);
+        return YIELD;
+    }
     case 0x080D: /* the sequence's slot into a variable (seg8:5F7C) */
         *ref(&in, 2) = vs_get(s, seq, VC_INDEX);
         NEXT(4);

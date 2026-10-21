@@ -82,6 +82,8 @@ typedef struct vs_host {
     /* 0x7D0: loads a file of bitmaps into the slots from `slot` (from
      * 0x5D on, cursors). Returns how many. */
     int (*sprite_load)(void *user, int slot, const char *file);
+    /* 0x7FF: empties a sprite slot (seg3:25FC) */
+    void (*sprite_free)(void *user, int slot);
     /* a sprite slot's size; returns 0, or -1 when the slot is empty */
     int (*sprite_size)(void *user, int slot, int *w, int *h);
     /* 0x7E4, 0x7E5: makes sprite `slot` an image of a text; its size into
@@ -110,6 +112,8 @@ typedef struct {
     int mx, my;          /* the pointer at the last vs_move */
     u64 paused[11];      /* DS:2276: the sequences 0xE paused, by group */
     vx_ptr labels[13];   /* DS:46A8: 0x101's targets, set by 0x100 */
+    u16 saved_cursor[VS_SEQS]; /* DS:3EA2: cursors 0x807 took away */
+    u16 saved_sprite[VS_SEQS]; /* DS:967A: sprites 0x809 hid */
     u32 rand_seed;
     u32 now;             /* the clock, ms (GetTickCount), set before each tick */
     u32 sleep_start[VS_SEQS];

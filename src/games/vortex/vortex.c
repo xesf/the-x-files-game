@@ -306,6 +306,8 @@ static void free_sprite(vortex *v, int slot)
     v->sprites[slot].w = v->sprites[slot].h = 0;
 }
 
+static void on_sprite_free(void *user, int slot) { free_sprite(user, slot); }
+
 /* 0x7D0: the bitmaps of a file, one after the other, into the slots
  * from `slot` (seg2:0324). */
 static int on_sprite_load(void *user, int slot, const char *file)
@@ -408,15 +410,33 @@ static void on_picture(void *user, int seq, int sub, const char *file, int x, in
 }
 
 /* The game comes on three discs, VORTEX_1 to VORTEX_3, each with its
- * days' folders (c\1a, c\2a, c\3a); a copy may hold one or all. As with
- * a drive, the disc in it changes when the program asks for another
- * one that is here (after its "insert disc" prompt). */
+ * days' folders (c\1a, c\2a, c\3a). A game folder holds one disc's
+ * files, or all of them, or the discs as folders named VORTEX_1 to
+ * VORTEX_3 (the disc images' contents). As with a drive, the disc in it
+ * changes when the program asks for another one that is here (after its
+ * "insert disc" prompt). */
+static int disc_folder(vortex *v, int n, char *out, size_t size)
+{
+    char rel[16];
+    snprintf(rel, sizeof(rel), "VORTEX_%d", n);
+    return xf_path_resolve(v->st.dir, rel, out, size);
+}
+
+static void insert_disc(vortex *v, int n)
+{
+    v->disc = n;
+    if (disc_folder(v, n, v->st.disc_dir, sizeof(v->st.disc_dir)) != 0)
+        v->st.disc_dir[0] = '\0';
+}
+
 static void find_discs(vortex *v)
 {
     char rel[8], path[1024];
     int n;
     for (n = 1; n <= 3; n++) {
         snprintf(rel, sizeof(rel), "c\\%da", n);
+        if (disc_folder(v, n, v->st.disc_dir, sizeof(v->st.disc_dir)) != 0)
+            v->st.disc_dir[0] = '\0';
         if (stage_path(&v->st, rel, path, sizeof(path)) == 0) {
             v->discs |= 1 << n;
             if (!v->disc)
@@ -425,6 +445,7 @@ static void find_discs(vortex *v)
     }
     if (!v->disc) /* the menus and the splash clips need no day folder */
         v->disc = 1;
+    insert_disc(v, v->disc);
     xf_info("vortex: discs here %s%s%s, disc %d in", v->discs & 2 ? "1 " : "", v->discs & 4 ? "2 " : "",
             v->discs & 8 ? "3 " : "", v->disc);
 }
@@ -494,7 +515,7 @@ static u16 on_disc(void *user, int n)
         return (u16)v->disc;
     if (n < 1 || n > 3 || !(v->discs & 1 << n))
         return 0;
-    v->disc = n;
+    insert_disc(v, n);
     return 1;
 }
 
@@ -628,12 +649,13 @@ static void update_clips(vortex *v)
         vx_clip *c = &v->clips[i];
         if (!c->open)
             continue;
-        if (!xf_player_update(&c->p, plat_ticks_ms())) {
+        if (v->st.skip || !xf_player_update(&c->p, plat_ticks_ms())) {
             int seq = c->seq;
             stop_clip(v, c);
             vs_event(&v->vm, seq, 1); /* the clip ended */
         }
     }
+    v->st.skip = 0;
 }
 
 /* Each sequence shows its sprite at its place (seg3:2406), the lowest
@@ -752,6 +774,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
         return 1;
     if (stage_open(&v->st, dir, opt) != 0)
         goto done;
+    insert_disc(v, 1); /* the program may be on the first disc's folder */
     if (stage_path(&v->st, "VORTEX.EXE", path, sizeof(path)) != 0 || vexe_load(&v->exe, path) != 0) {
         xf_warn("%s: cannot read VORTEX.EXE", dir);
         goto done;
@@ -770,6 +793,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.text_sprite = on_text_sprite;
     host.sprite_load = on_sprite_load;
     host.sprite_size = on_sprite_size;
+    host.sprite_free = on_sprite_free;
     host.screen = on_screen;
     host.disc = on_disc;
     host.score = on_score;
