@@ -11,6 +11,7 @@ shipped game and its data. File layouts are in [../formats](../formats).
 | [actions.md](actions.md) | Action data, expressions and the built-in function table |
 | [game-state.md](game-state.md) | Variables and enabled states in `XFILES.GAM` |
 | [runtime.md](runtime.md) | Start-up, main loop and the event system |
+| [conversations.md](conversations.md) | Questions, replies to questions asked again, and the atoms: replies to items in hand |
 | [game-ui.md](game-ui.md) | The location card, the dialogue box, emotion and action icons, the inventory |
 | [screen.md](screen.md) | The original and wide screen layouts, and how the pointer maps back |
 | [languages.md](languages.md) | Several releases in one game folder, voice and text languages, translations |

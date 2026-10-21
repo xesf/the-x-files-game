@@ -122,7 +122,7 @@ English DVD HDB:
 | `VCExplorable` | u32 | `VCTriggerList` (400 of 401) |
 | `VCCharView` | u32 fields | `VCCharacter`, then `VCConversationList`, `VCIdeaMapList`, `VCAssetRefList`, `VCTriggerList` |
 | `VCInterfaceItem` | u32 fields | `VCAssetRefList`, then `VCTriggerList` |
-| `VCConversation` | u32 fields | `VCName`, `VCAssetRefList`, `VCAssetRefList`, `VCTriggerList` |
+| `VCConversation` | u32 fields | `VCName`, `VCAssetRefList`, `VCAssetRefList`, `VCTriggerList`, then `VCAssetRefList` (question), `VCAssetRefList` (atoms), see [conversations.md](conversations.md) |
 | `VCTrigger` | u32 | `VCActionList` (5,335 of 5,429) |
 
 ## Triggers
