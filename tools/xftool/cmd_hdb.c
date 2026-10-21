@@ -5,10 +5,10 @@
 #include <string.h>
 
 #include "data/neo.h"
-#include "vc/action.h"
-#include "vc/interp.h"
+#include "games/xfiles/vc/action.h"
+#include "games/xfiles/vc/interp.h"
 #include "xf_log.h"
-#include "vc/vc.h"
+#include "games/xfiles/vc/vc.h"
 #include "xftool.h"
 
 static int cmd_hdb(int argc, char **argv)

@@ -7,10 +7,10 @@
 #ifndef XF_GAME_H
 #define XF_GAME_H
 
-#include "vc/interp.h"
+#include "games/xfiles/vc/interp.h"
 #include "data/strings.h"
 #include "xf_lang.h"
-#include "vc/vc.h"
+#include "games/xfiles/vc/vc.h"
 
 #define GAME_MAX_SPOTS 64
 #define GAME_HISTORY 64

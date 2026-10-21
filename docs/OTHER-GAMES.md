@@ -89,8 +89,8 @@ are not copied.
 
 ## Engine structure
 
-`src/games/xfiles` and `src/vc` are The X-Files' Virtual Cinema 3.0
-runtime. The shared layers (`src/platform`, `src/gfx`, `src/media`,
+`src/games/xfiles` is The X-Files' Virtual Cinema 3.0 runtime, with
+its scene-graph reader and action interpreter in `vc/`. The shared layers (`src/platform`, `src/gfx`, `src/media`,
 `src/audio`, `src/core`) serve any game. Every game lives in `src/games`:
 
 | File | Content |
@@ -99,7 +99,7 @@ runtime. The shared layers (`src/platform`, `src/gfx`, `src/media`,
 | `modules.c` | The module table: a name, a title and a `run(folder, options)` function per game. Each module owns its loop, as `xf_explore` does for The X-Files. |
 | `stage.c` | What the modules share: the 640×480 screen, DOS paths (`c\splash\vclogo.mov`) found whatever their case, clips, pictures, sounds, music, the pointer, and a test script (`wait`, `point`, `press`, `key`, `shot`, `quit`). |
 | `music.c` | Plays a MIDI song through `plat_midi_*`. |
-| `xfiles/` | The X-Files: the game logic, the window (`explore.c`), saves and play scripts |
+| `xfiles/` | The X-Files: the scene graph and actions (`vc/`), the game logic, the window (`explore.c`), saves and play scripts |
 | `vortex/`, `roland/`, `qgate/` | One module each. |
 
 `xfiles --game <folder> [--script <file>]` runs the game a folder holds;

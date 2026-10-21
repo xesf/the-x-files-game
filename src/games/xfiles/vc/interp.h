@@ -4,7 +4,7 @@
 #ifndef XF_VC_INTERP_H
 #define XF_VC_INTERP_H
 
-#include "vc/action.h"
+#include "games/xfiles/vc/action.h"
 
 typedef struct {
     u32 id;

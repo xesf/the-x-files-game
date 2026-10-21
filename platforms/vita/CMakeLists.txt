@@ -39,7 +39,7 @@ endif()
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/../../src)
 file(GLOB ENGINE_SRCS
     ${SRC}/core/*.c ${SRC}/media/*.c ${SRC}/data/*.c ${SRC}/audio/*.c
-    ${SRC}/gfx/*.c ${SRC}/vc/*.c ${SRC}/games/*.c ${SRC}/games/*/*.c ${SRC}/main.c)
+    ${SRC}/gfx/*.c ${SRC}/games/xfiles/vc/*.c ${SRC}/games/*.c ${SRC}/games/*/*.c ${SRC}/main.c)
 
 add_executable(xfiles ${ENGINE_SRCS} ${SRC}/platform/vita/plat_vita.c ${SRC}/platform/vita/vita_gpu.c)
 target_include_directories(xfiles PRIVATE ${SRC} ${SRC}/core)

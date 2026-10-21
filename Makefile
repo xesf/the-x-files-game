@@ -23,7 +23,7 @@ else
 PLATFORM ?= linux
 endif
 
-CORE_SRC := $(wildcard src/core/*.c) $(wildcard src/media/*.c) $(wildcard src/data/*.c) $(wildcard src/audio/*.c) $(wildcard src/gfx/*.c) $(wildcard src/vc/*.c)
+CORE_SRC := $(wildcard src/core/*.c) $(wildcard src/media/*.c) $(wildcard src/data/*.c) $(wildcard src/audio/*.c) $(wildcard src/gfx/*.c) $(wildcard src/games/xfiles/vc/*.c)
 CORE_OBJ := $(CORE_SRC:%.c=$(BUILD)/%.o)
 
 EXE :=

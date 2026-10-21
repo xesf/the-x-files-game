@@ -4,7 +4,7 @@
 #ifndef XF_VC_ACTION_H
 #define XF_VC_ACTION_H
 
-#include "vc/vc.h"
+#include "games/xfiles/vc/vc.h"
 
 enum {
     VC_ACT_EXPRESSION = 0, /* variable statement */

@@ -166,7 +166,7 @@ plays over the ambience, which goes on.
 
 ## Our interpreter
 
-`src/vc/interp.c` runs action lists against the state loaded from
+`src/games/xfiles/vc/interp.c` runs action lists against the state loaded from
 `XFILES.GAM`. It already handles:
 
 - conditions, with all eight comparisons;
