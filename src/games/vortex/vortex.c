@@ -48,6 +48,11 @@ typedef struct {
         u16 slot;
         i16 x, y, w, h;
     } drawn[VS_SEQS];
+    struct {                /* the book's two panels (seg13): the last
+                             * tinted bitmap with the screen under it */
+        u32 px[320 * 440];
+        int w, h;
+    } panel[2];
     xf_wav sounds[64];      /* loaded by 0x1F5; handle = index + 1 */
     struct {
         int sound;          /* handle playing, 0 for none */
@@ -509,6 +514,66 @@ static int on_text_sprite(void *user, int slot, int font, u32 rgb, const char *t
     return 0;
 }
 
+/* 0x81E: the black of a bitmap drawn in a colour, the rest leaving the
+ * screen; the result is kept in a panel (seg13:1646). */
+static void on_tint_bitmap(void *user, const char *file, int x, int y, u32 rgb)
+{
+    vortex *v = user;
+    char path[1024];
+    xf_bmp b;
+    int k = x >= 348, px, py, w, h;
+    if (stage_path(&v->st, file, path, sizeof(path)) != 0 || xf_bmp_load(path, &b) != 0) {
+        xf_warn("vortex: bitmap %s not found", file);
+        return;
+    }
+    w = XF_MIN(b.width, 320);
+    h = XF_MIN(b.height, 440);
+    for (py = 0; py < h; py++)
+        for (px = 0; px < w; px++) {
+            int sx = x + px, sy = y + py;
+            u32 c;
+            if (sx < 0 || sy < 0 || sx >= STAGE_W || sy >= STAGE_H)
+                continue;
+            if ((b.pixels[py * b.width + px] & 0xFFFFFF) == 0)
+                v->bg[sy * STAGE_W + sx] = rgb;
+            c = v->bg[sy * STAGE_W + sx];
+            v->panel[k].px[py * 320 + px] = c;
+        }
+    v->panel[k].w = w;
+    v->panel[k].h = h;
+    xf_bmp_free(&b);
+}
+
+/* 0x824: a bitmap onto the screen, at most w by h (seg13:17E6); the
+ * original dissolves it in by 4x4 squares. */
+static void on_show_bitmap(void *user, const char *file, int x, int y, int w, int h)
+{
+    vortex *v = user;
+    char path[1024];
+    xf_bmp b;
+    int py;
+    if (stage_path(&v->st, file, path, sizeof(path)) != 0 || xf_bmp_load(path, &b) != 0) {
+        xf_warn("vortex: bitmap %s not found", file);
+        return;
+    }
+    w = XF_MIN(w, b.width);
+    h = XF_MIN(h, b.height);
+    for (py = 0; py < h; py++)
+        blit(v->bg, b.pixels + (size_t)py * b.width, w, 1, x, y + py);
+    xf_bmp_free(&b);
+}
+
+/* 0x198 sub 0x11: a panel's image again (seg13:1A08). */
+static void on_replay_panel(void *user, int x, int y, int w, int h)
+{
+    vortex *v = user;
+    int k = x >= 348, py;
+    w = XF_MIN(w, v->panel[k].w);
+    h = XF_MIN(h, v->panel[k].h);
+    for (py = 0; py < h; py++)
+        blit(v->bg, v->panel[k].px + py * 320, w, 1, x, y + py);
+}
+
 /* 0x12C: pictures on the background. */
 static void on_picture(void *user, int seq, int sub, const char *file, int x, int y)
 {
@@ -956,6 +1021,9 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.text = on_text;
     host.text_sprite = on_text_sprite;
     host.text_extent = on_text_extent;
+    host.tint_bitmap = on_tint_bitmap;
+    host.show_bitmap = on_show_bitmap;
+    host.replay_panel = on_replay_panel;
     host.sprite_load = on_sprite_load;
     host.sprite_size = on_sprite_size;
     host.sprite_free = on_sprite_free;
@@ -987,6 +1055,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     }
     r = 0;
 done:
+    vu_free(&v->vm.uber);
     for (i = 0; i < MAX_CLIPS; i++)
         if (v->clips[i].open)
             xf_player_close(&v->clips[i].p);

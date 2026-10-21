@@ -8,6 +8,7 @@
 #define XF_VSEQ_H
 
 #include "games/vortex/vexe.h"
+#include "games/vortex/vuber.h"
 
 #define VS_SEQS 45
 #define VS_CTX_WORDS (0x136 / 2)
@@ -97,8 +98,15 @@ typedef struct vs_host {
     u16 (*disc)(void *user, int n);
     /* 0x800: the score's song for a scene, a variant and a mood */
     void (*score)(void *user, int scene, int variant, int mood);
-    /* 0x805: a call into segment 13 (the "uber" device), by sub-command */
-    u16 (*uber)(void *user, int seq, int sub, vx_ptr at);
+    /* 0x81E: a bitmap file whose black is drawn in a colour on the
+     * screen, kept in the book's panel (x < 348 the left, else the
+     * right) for 0x198 sub 0x11 to show again (seg13:1646) */
+    void (*tint_bitmap)(void *user, const char *file, int x, int y, u32 rgb);
+    /* 0x824: a bitmap file onto the screen with the dissolve, at most
+     * w by h (seg13:17E6) */
+    void (*show_bitmap)(void *user, const char *file, int x, int y, int w, int h);
+    /* 0x198 sub 0x11: a panel's image again, dissolving (seg13:1A08) */
+    void (*replay_panel)(void *user, int x, int y, int w, int h);
 } vs_host;
 
 typedef struct {
@@ -126,6 +134,7 @@ typedef struct {
     u32 ticks;
     int depth;           /* instructions run this tick by the sequence (DS:44F0) */
     int unknown_count;
+    vu_state uber;       /* segment 13 */
 } vs_state;
 
 void vs_init(vs_state *s, const vexe *x, const vs_host *host);

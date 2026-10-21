@@ -61,6 +61,8 @@ void vs_init(vs_state *s, const vexe *x, const vs_host *host)
     s->mx = s->my = -1;
     for (i = 0; i < VS_SEQS; i++)
         clear_slot(s, i);
+    vu_init(&s->uber);
+    vu_seed(&s->uber); /* seg4:00AF */
     /* seg8:00B8: the first sequence starts at seg18:0000 */
     vs_set(s, 0, VC_USED, 1);
     vs_set_ptr(s, 0, VC_PC, VX_PTR(18, 0));
@@ -610,13 +612,123 @@ static int step(vs_state *s, int seq)
         *ref(&in, 2) = vs_get(s, seq, VC_INDEX);
         NEXT(4);
         return RUN;
-    case 0x0805: /* the "uber" device (seg13): its result into +2. Not written yet. */
-        if (s->host.uber)
-            *ref(&in, 2) = s->host.uber(s->host.user, seq, b_at(&in, 4), in.pc);
-        else
-            *ref(&in, 2) = 0;
-        NEXT(34);
+    case 0x0805: { /* the "uber" device (seg8:4E4E, seg13): a sub-command
+                    * and its words; the result into +2 */
+        u16 w7[7], a = w_at(&in, 5), r = 0;
+        u8 mode = b_at(&in, 0xA), nn = b_at(&in, 0xB);
+        float tol = (float)((double)w_at(&in, 0xC) * (double)0.01f);
+        vu_state *u = &s->uber;
+        for (k = 0; k < 7; k++)
+            w7[k] = w_at(&in, 0x10 + 2 * k);
+        switch (b_at(&in, 4)) {
+        case 1: r = (u16)vu_seed(u); break;
+        case 2: vu_free(u); break;
+        case 3: r = (u16)vu_record(u, a == 0xFF ? 0xFF : (i16)a, b_at(&in, 9), w_at(&in, 0xE), w7); break;
+        case 4: r = (u16)vu_share(u, (i16)a, mode, nn, tol); break;
+        case 5: r = (u16)vu_balanced(u, (i16)a, (i16)w_at(&in, 7), tol); break;
+        case 6: r = (u16)vu_dominant(u, mode, nn); break;
+        case 7: r = u->def_mood; break;
+        case 8:
+            if (val(&in, 5) != u->def_mood) {
+                u->def_mood = val(&in, 5);
+                r = 1;
+            }
+            break;
+        case 9: r = (u16)u->event_count; break;
+        case 10: r = (u16)u->cursor; break;
+        case 11: r = (u16)u->cursor; u->cursor = nn; break;
+        case 12: if (u->cursor + nn <= u->event_count - 1) u->cursor += nn; r = (u16)u->cursor; break;
+        case 13: if (u->cursor - nn >= 0) u->cursor -= nn; r = (u16)u->cursor; break;
+        case 14: {
+            int idx = vu_move(u, nn);
+            r = idx < 0 || idx >= u->event_count ? VU_NONE : u->events[idx].id;
+            break;
+        }
+        case 15: r = u->cursor >= 0 && u->cursor < u->event_count ? u->events[u->cursor].mood : 0; break;
+        case 23: vu_mark_seen(u, w_at(&in, 0xE)); r = w_at(&in, 0xE); break;
+        }
+        *ref(&in, 2) = r;
+        NEXT(0x22);
         return YIELD;
+    }
+    case 0x0806: { /* a mood's colour at a level (seg8:50D4): 0x15 the
+                    * dominant mood's, 0x16 a given one's; red, green, blue
+                    * into three variables */
+        u16 mood = val(&in, 3);
+        u32 c = 0;
+        if (b_at(&in, 2) == 0x15)
+            c = vu_colour(&s->uber, vu_dominant(&s->uber, 3, 0), w_at(&in, 5));
+        else if (b_at(&in, 2) == 0x16)
+            c = vu_colour(&s->uber, mood, w_at(&in, 5));
+        *ref(&in, 7) = (u16)(c >> 16 & 0xFF);
+        *ref(&in, 9) = (u16)(c >> 8 & 0xFF);
+        *ref(&in, 0xB) = (u16)(c & 0xFF);
+        NEXT(0xD);
+        return YIELD;
+    }
+    case 0x0009: { /* a string resource word-wrapped in a 240 by 400 box
+                    * (seg8:54D6, seg13:147A): x, y, red, green, blue, the
+                    * font, the string; runs on */
+        char text[256];
+        vexe_string(s->x, val(&in, 0xD), text, sizeof(text));
+        if (text[0] && s->host.text)
+            s->host.text(s->host.user, b_at(&in, 0xC), (i16)val(&in, 2), (i16)val(&in, 4), 240, 400,
+                         (u32)(val(&in, 6) & 0xFF) << 16 | (u32)(val(&in, 8) & 0xFF) << 8 | (val(&in, 0xA) & 0xFF),
+                         text);
+        NEXT(0xF);
+        return RUN;
+    }
+    case 0x081A: { /* opens the book (seg13:1A64): its page, 9999 before
+                    * the first, 6666 when it cannot */
+        int r = vu_open(&s->uber);
+        *ref(&in, 2) = (u16)(r == -2 ? 6666 : r == -1 ? VU_NONE : r);
+        NEXT(4);
+        return YIELD;
+    }
+    case 0x081B: /* closes the book (seg13:1C40) */
+        vu_close(&s->uber);
+        NEXT(2);
+        return YIELD;
+    case 0x081C: /* the page before (seg8:51F8) */
+        *ref(&in, 2) = (u16)(s->uber.page - 1);
+        NEXT(4);
+        return YIELD;
+    case 0x081D: { /* turns a page back (1) or on (2) and gives both sides'
+                    * events (seg13:1D52) */
+        vu_event l, r;
+        vu_turn(&s->uber, w_at(&in, 2), &l, &r);
+        *ref(&in, 4) = l.mood;
+        *ref(&in, 6) = r.mood;
+        *ref(&in, 8) = l.id;
+        *ref(&in, 0xA) = r.id;
+        for (k = 0; k < 3; k++) {
+            *ref(&in, 0xC + 4 * k) = l.w[k];
+            *ref(&in, 0xE + 4 * k) = r.w[k];
+        }
+        for (k = 0; k < 4; k++) {
+            *ref(&in, 0x18 + 2 * k) = l.w[3 + k];
+            *ref(&in, 0x20 + 2 * k) = r.w[3 + k];
+        }
+        NEXT(0x28);
+        return YIELD;
+    }
+    case 0x081E: case 0x0824: { /* a bitmap named by a string resource:
+                                 * tinted (0x81E, seg13:1646) or with the
+                                 * dissolve (0x824, seg13:17E6) */
+        char name[256];
+        if (w_at(&in, 2) != VU_NONE) {
+            vexe_string(s->x, val(&in, 2), name, sizeof(name));
+            if (name[0] && op == 0x081E && s->host.tint_bitmap)
+                s->host.tint_bitmap(s->host.user, name, (i16)val(&in, 4), (i16)val(&in, 6),
+                                    (u32)(val(&in, 0xC) & 0xFF) << 16 | (u32)(val(&in, 0xE) & 0xFF) << 8 |
+                                        (val(&in, 0x10) & 0xFF));
+            else if (name[0] && op == 0x0824 && s->host.show_bitmap)
+                s->host.show_bitmap(s->host.user, name, (i16)val(&in, 4), (i16)val(&in, 6), (i16)val(&in, 8),
+                                    (i16)val(&in, 0xA));
+        }
+        NEXT(op == 0x081E ? 0x12 : 0xC);
+        return YIELD;
+    }
 
     /* screen updates: seg7:33B8 queues a command (the opcode, a rectangle
      * and three words) that seg7:35EA carries out after the tick: how the
