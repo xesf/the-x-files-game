@@ -509,7 +509,7 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x40BC30 Screen_show_layers  FadeBack: shows or hides a set of screen layers
 0x41B150 LayoutDisplay_set_view  SetIFLAsView: sets the flag at +0x178 of the layout display
 0x42A2C0 ForwardObject_get  ForwardObject: what the mail encloses
-0x442B70 Pointer_over_a  pointer handler: runs kind 4 (mouse over) triggers
+0x442B70 Pointer_over_a  pointer handler: runs kind 4 (mouse over) triggers; then the hover atom
 0x4EEB90 Pointer_over_b  pointer handler: runs kind 4 (mouse over) triggers
 0x459230 Cursor_cross_create  the white cross cursor, hot spot (7, 7)
 0x4667D0 ING_show_record  one ING record: mug shot and fingerprint
@@ -551,7 +551,7 @@ data 0x6C4958 g_rect_screen  (0, 0)-(640, 480)
 0x514BB0 ING_cook_prints  INGDisplayCook: the fingerprint search found Cook
 0x514DE0 ING_plate_search  plate search: two plates are on file
 0x518C80 Binoculars_closeup  the binoculars show the close-up of the view
-0x5192B0 View_swap_picture  swaps a view's picture on enable
+0x5192B0 Atom_on_select  item taken in hand: binoculars/flashlight slot 2, night vision slot 3, first character in view
 0x5E4EE0 Var_text_compare  string variables compare their text
 0x43A820 Font_set_size  sets the size (+0x1C) and rebuilds the font
 0x404AF0 Font_copy_ctor  copies a font object
@@ -596,3 +596,11 @@ data 0x65CFF8 g_cycle_flash_beam  "MWS"
 0x41B0C0 flashlight_assets_set  flashlightmask.pic 34745
 0x41B090 nightvision_assets_set  nightvisiongogmask.pic 34751
 0x466AA0 binoculars_assets_set  binocularmask.pic 34753
+0x43CFEB CharView_load_atoms  placeholder conversation's 7 atom slots to +0x13C, prison 19656 +0x158, fired 19654 +0x15C, +0x160 = 1
+0x4907F0 CharView_has_atoms  +0x160 of the character view (or another by id)
+0x4EDF80 Atom_for_hover  gun/handcuffs/stiletto -> slot 5, else 10 (none)
+0x490520 Atom_for_click  table by item-1 at 0x4906C0 -> slot, 10 = none
+0x4EDFF0 CharView_answers_item  whether a click or hover atom exists (cursor)
+0x435C00 CharView_click_item  kind 0 triggers, else the click atom
+0x518C80 Inventory_select  item taken in hand; calls Atom_on_select
+0x4DA090 Conversation_again  reply to a question asked again: no-reply chance from the 4th time (5..8 in 10)

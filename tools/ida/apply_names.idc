@@ -551,7 +551,7 @@ static main()
     set_name(0x514BB0, "ING_cook_prints", SN_NOWARN);
     set_name(0x514DE0, "ING_plate_search", SN_NOWARN);
     set_name(0x518C80, "Binoculars_closeup", SN_NOWARN);
-    set_name(0x5192B0, "View_swap_picture", SN_NOWARN);
+    set_name(0x5192B0, "Atom_on_select", SN_NOWARN);
     set_name(0x5E4EE0, "Var_text_compare", SN_NOWARN);
     set_name(0x43A820, "Font_set_size", SN_NOWARN);
     set_name(0x404AF0, "Font_copy_ctor", SN_NOWARN);
@@ -596,5 +596,13 @@ static main()
     set_name(0x41B0C0, "flashlight_assets_set", SN_NOWARN);
     set_name(0x41B090, "nightvision_assets_set", SN_NOWARN);
     set_name(0x466AA0, "binoculars_assets_set", SN_NOWARN);
+    set_name(0x43CFEB, "CharView_load_atoms", SN_NOWARN);
+    set_name(0x4907F0, "CharView_has_atoms", SN_NOWARN);
+    set_name(0x4EDF80, "Atom_for_hover", SN_NOWARN);
+    set_name(0x490520, "Atom_for_click", SN_NOWARN);
+    set_name(0x4EDFF0, "CharView_answers_item", SN_NOWARN);
+    set_name(0x435C00, "CharView_click_item", SN_NOWARN);
+    set_name(0x518C80, "Inventory_select", SN_NOWARN);
+    set_name(0x4DA090, "Conversation_again", SN_NOWARN);
     msg("names applied\n");
 }
