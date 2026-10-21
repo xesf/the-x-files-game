@@ -574,6 +574,14 @@ static int step(vs_state *s, int seq)
         NEXT(8);
         return YIELD;
     }
+    case 0x07FE: /* the sequence's own sprite goes (seg8:4D2A) */
+        vs_set(s, seq, VC_SPRITE, 0xFFFF);
+        vs_set(s, seq, 0x122, 0xFFFF);
+        vs_set(s, seq, 0x124, 0xFFFF);
+        vs_set(s, seq, 0x120, 0);
+        vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) & ~3));
+        NEXT(2);
+        return RUN;
     case 0x07FF: { /* empties a sprite slot (seg3:25FC) */
         u16 slot = val(&in, 2);
         if (slot < 0x7D && s->host.sprite_free)
