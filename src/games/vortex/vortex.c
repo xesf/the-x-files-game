@@ -39,6 +39,8 @@ typedef struct {
         int font, x, y, w, h;
         u32 rgb, frame;
         char text[256];
+        int cuts;           /* places drawn again since: the text is gone there */
+        i16 cut[8][4];      /* x, y, w, h */
     } texts[32];
     int text_count;
     u32 frame;
@@ -321,21 +323,55 @@ static void text_rect(vortex *v, int k, int *x0, int *y0, int *x1, int *y1)
     *y1 = *y0 + (v->texts[k].h > 0 ? v->texts[k].h : cell);
 }
 
-/* The texts in a rectangle go (the screen there is drawn again), the ones
- * drawn this frame too unless `older`. */
+/* The screen in a rectangle is drawn again: the texts there go, the
+ * ones drawn this frame too unless `older`; a text partly there keeps
+ * the rest. */
 static void erase_texts(vortex *v, int x, int y, int w, int h, int older)
 {
     int k, n = 0;
     for (k = 0; k < v->text_count; k++) {
         int x0, y0, x1, y1;
         text_rect(v, k, &x0, &y0, &x1, &y1);
-        if ((!older || v->texts[k].frame != v->frame) && x0 < x + w && x < x1 && y0 < y + h && y < y1)
-            continue;
+        if ((!older || v->texts[k].frame != v->frame) && x0 < x + w && x < x1 && y0 < y + h && y < y1) {
+            if (x <= x0 && y <= y0 && x + w >= x1 && y + h >= y1)
+                continue; /* all of it */
+            if (v->texts[k].cuts == (int)XF_COUNT(v->texts[k].cut))
+                continue;
+            v->texts[k].cut[v->texts[k].cuts][0] = (i16)x;
+            v->texts[k].cut[v->texts[k].cuts][1] = (i16)y;
+            v->texts[k].cut[v->texts[k].cuts][2] = (i16)w;
+            v->texts[k].cut[v->texts[k].cuts++][3] = (i16)h;
+        }
         if (n != k)
             v->texts[n] = v->texts[k];
         n++;
     }
     v->text_count = n;
+}
+
+/* Draws the kept texts over the frame, but not where they were cut. */
+static void draw_texts(vortex *v)
+{
+    static u32 save[STAGE_W * STAGE_H];
+    int k, c, row;
+    for (k = 0; k < v->text_count; k++) {
+        for (c = 0; c < v->texts[k].cuts; c++) {
+            int x = XF_MAX(v->texts[k].cut[c][0], 0), y = XF_MAX(v->texts[k].cut[c][1], 0);
+            int x1 = XF_MIN(v->texts[k].cut[c][0] + v->texts[k].cut[c][2], STAGE_W);
+            int y1 = XF_MIN(v->texts[k].cut[c][1] + v->texts[k].cut[c][3], STAGE_H);
+            for (row = y; row < y1 && x < x1; row++)
+                memcpy(save + row * STAGE_W + x, v->st.fb + row * STAGE_W + x, (size_t)(x1 - x) * 4);
+        }
+        render_text(v, v->st.fb, v->texts[k].font, v->texts[k].x, v->texts[k].y, v->texts[k].w, v->texts[k].h,
+                    v->texts[k].rgb, v->texts[k].text);
+        for (c = v->texts[k].cuts - 1; c >= 0; c--) {
+            int x = XF_MAX(v->texts[k].cut[c][0], 0), y = XF_MAX(v->texts[k].cut[c][1], 0);
+            int x1 = XF_MIN(v->texts[k].cut[c][0] + v->texts[k].cut[c][2], STAGE_W);
+            int y1 = XF_MIN(v->texts[k].cut[c][1] + v->texts[k].cut[c][3], STAGE_H);
+            for (row = y; row < y1 && x < x1; row++)
+                memcpy(v->st.fb + row * STAGE_W + x, save + row * STAGE_W + x, (size_t)(x1 - x) * 4);
+        }
+    }
 }
 
 static void on_text_extent(void *user, int font, const char *text, int *w, int *h)
@@ -374,6 +410,7 @@ static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, c
     v->texts[k].h = h;
     v->texts[k].rgb = rgb;
     v->texts[k].frame = v->frame;
+    v->texts[k].cuts = 0;
     snprintf(v->texts[k].text, sizeof(v->texts[k].text), "%s", text);
 }
 
@@ -859,6 +896,8 @@ static void sprite_changes(vortex *v)
             slot = 0xFFFF;
         if (slot == v->drawn[i].slot && (slot == 0xFFFF || (x == v->drawn[i].x && y == v->drawn[i].y)))
             continue;
+        xf_debug("vortex: sprite of %d: slot %d at (%d, %d), was %d at (%d, %d)", i, slot, x, y, v->drawn[i].slot,
+                 v->drawn[i].x, v->drawn[i].y);
         if (v->drawn[i].slot != 0xFFFF)
             erase_texts(v, v->drawn[i].x, v->drawn[i].y, v->drawn[i].w, v->drawn[i].h, 1);
         if (slot != 0xFFFF)
@@ -877,9 +916,7 @@ static void draw(vortex *v)
     memcpy(v->st.fb, v->bg, sizeof(v->bg));
     sprite_changes(v);
     draw_sprites(v);
-    for (i = 0; i < v->text_count; i++)
-        render_text(v, v->st.fb, v->texts[i].font, v->texts[i].x, v->texts[i].y, v->texts[i].w, v->texts[i].h,
-                    v->texts[i].rgb, v->texts[i].text);
+    draw_texts(v);
     v->frame++;
     for (i = 0; i < MAX_CLIPS; i++)
         if (v->clips[i].open && xf_player_frame(&v->clips[i].p))

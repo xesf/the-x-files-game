@@ -271,7 +271,9 @@ static void show(vs_state *s, int seq, int cursor)
  * the pointer stored there. */
 static vx_ptr text_pointer(vs_state *s, vx_ptr at)
 {
-    if (VX_SEG(at) == s->x->seg_count && VX_OFF(at) >= 0x50A8 && VX_OFF(at) < 0x50D8)
+    int seg = VX_SEG(at);
+    /* some name it without a fixup (segment 0xFFFF in the file) */
+    if ((seg == s->x->seg_count || seg == 0) && VX_OFF(at) >= 0x50A8 && VX_OFF(at) < 0x50D8)
         return s->label_aux[(VX_OFF(at) - 0x50A4) / 4];
     return vexe_far(s->x, at);
 }
@@ -578,7 +580,9 @@ static int step(vs_state *s, int seq)
         return YIELD;
     }
     case 0x0814: /* redraw the sprites of sequences (seg8:6228 through
-                  * seg3:13D0): the module redraws every frame */
+                  * seg3:13D0), or of all but one (0x81F, seg8:62D2): the
+                  * module redraws every frame */
+    case 0x081F:
         NEXT(6);
         return YIELD;
     case 0x0816: case 0x0817: /* the sequence's caption: a string resource
@@ -825,11 +829,15 @@ static int step(vs_state *s, int seq)
                 vs_set(s, seq, VC_W, (u16)tw);
                 vs_set(s, seq, VC_H, (u16)th);
             }
-            if (!ok || w_at(&in, 0x19)) {
+            if (!ok) {
                 vs_set(s, seq, VC_SPRITE, 0xFFFF);
                 vs_set(s, seq, 0x122, 0xFFFF);
                 vs_set(s, seq, 0x124, 0xFFFF);
                 vs_set(s, seq, 0x120, 0);
+                vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) & ~1));
+            } else if (w_at(&in, 0x19)) {
+                /* drawn: the sprite stays hidden, for 0x80C to show when
+                 * the screen there is drawn again */
                 vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) & ~1));
             } else {
                 vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) | 1));
