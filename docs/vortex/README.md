@@ -137,11 +137,39 @@ Cursors are the resources 0xFA2 (wait) and 0xFA3 (a small cross), or a
 cursor slot: an image, then its mask in the next slot, drawn from the
 pointer.
 
+## Choices and captions
+
+0x100 gives twelve targets (1 to 12) and a current one; 0x101 jumps to
+target n. 0xFD gives a far pointer beside each target, the text of a
+dialogue choice. 0xFE moves a target and its text to another number, or
+empties it, and 0x102 closes the gaps in the first six, putting the
+current one last of them (segment 22). The dialogue box shows choice n
+with 0xD, which names the text by its place in the data segment
+(DS:50A4 + 4n). 0xD draws the text, or makes it the sequence's sprite,
+or both: then the sprite stays hidden until 0x80C shows the sprites of a
+z range again, which brings the text back after the box was hidden.
+
+Texts are drawn on the screen over the sprites. Where the screen is
+drawn again (a screen update, a sprite that moves, shows or hides), the
+text there is gone.
+
+0x816 and 0x817 give a sequence a caption, a string resource that shows
+in light green above the sequence (below it at the top of the screen)
+while the pointer is over it; 0x818 gives another sequence one, with a
+place and a colour. Only sequences with hover sprites (0x7D1) show
+theirs.
+
+0x807 to 0x80C take a sequence's cursor or sprite away and give it
+back, one sequence or those whose z is in a range.
+
 ## Discs and music
 
 The game is on three discs, VORTEX_1 to VORTEX_3, each with its days'
 folders (`c\1a`, `c\2a`, `c\3a`). 0xFF with 9 asks which disc is in;
-a scene on another disc shows "insert disc" until it is.
+a scene on another disc shows "insert disc" until it is. A game folder
+can hold the discs' contents as folders `VORTEX_1` to `VORTEX_3`; the
+disc in the drive is read first, and the game changes discs when a
+scene asks.
 
 0x800 plays the adaptive score: `system\midifile.txt` (read by
 `midi.c`) gives its size (49 scenes, 2 variants, 4 moods: balance,
