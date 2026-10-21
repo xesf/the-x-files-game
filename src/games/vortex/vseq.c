@@ -608,6 +608,85 @@ static int step(vs_state *s, int seq)
         NEXT(4);
         return YIELD;
     }
+    case 0x0803: /* saves a rectangle of the screen and the pictures */
+        if (s->host.save_region)
+            s->host.save_region(s->host.user, (i16)val2(&in, 2), (i16)val2(&in, 4), (i16)val2(&in, 6),
+                                (i16)val2(&in, 8));
+        NEXT(0xA);
+        return YIELD;
+    case 0x0804: /* puts it back */
+        if (s->host.restore_region)
+            s->host.restore_region(s->host.user, w_at(&in, 2) == 1, w_at(&in, 4) != 0, (i16)val2(&in, 6),
+                                   (i16)val2(&in, 8), (i16)val2(&in, 0xA), (i16)val2(&in, 0xC));
+        NEXT(0xE);
+        return YIELD;
+    case 0x0810: /* a bitmap file into the pictures, black clear: 1, the
+                  * file, x, y, a word */
+        str = str_at(&in, 3, &n);
+        if (b_at(&in, 2) == 1 && s->host.overlay)
+            s->host.overlay(s->host.user, str, (i16)val2(&in, 3 + (int)n), (i16)val2(&in, 5 + (int)n), 0);
+        NEXT(3 + n + 6);
+        return YIELD;
+    case 0x0821: /* a bitmap file onto the screen only: 1, x, y, the file */
+        str = str_at(&in, 7, &n);
+        if (b_at(&in, 2) == 1 && s->host.overlay)
+            s->host.overlay(s->host.user, str, (i16)val2(&in, 3), (i16)val2(&in, 5), 1);
+        NEXT(7 + n);
+        return YIELD;
+    case 0x0811: /* a picture slot with a colour key: not in the scripts */
+        str_at(&in, 0x17, &n);
+        NEXT(0x17 + n);
+        return YIELD;
+    case 0x0812: /* nothing (seg7:40BC) */
+        NEXT(4);
+        return YIELD;
+    case 0x0813: /* a developer's dump of a slot: not in the scripts */
+        str_at(&in, 4, &n);
+        NEXT(4 + n);
+        return YIELD;
+    case 0x0815: { /* tints a rectangle of the screen (seg7:12A4): where, red,
+                    * green, blue, the rectangle, a step, a factor */
+        u16 where = w_at(&in, 2);
+        int x = 0, y = 0, w = 640, h = 480;
+        if (where == 0x7FFE) {
+            x = (i16)w_at(&in, 7);
+            y = (i16)w_at(&in, 9);
+            w = (i16)w_at(&in, 0xB);
+            h = (i16)w_at(&in, 0xD);
+        } else if (where != 0x7FFF) {
+            u16 who = where == 0xC001 ? (u16)seq : val(&in, 2);
+            if (who < VS_SEQS) {
+                x = (i16)vs_get(s, who, VC_X);
+                y = (i16)vs_get(s, who, VC_Y);
+                w = (i16)vs_get(s, who, VC_W);
+                h = (i16)vs_get(s, who, VC_H);
+            }
+        }
+        if (s->host.tint_region && w > 0 && h > 0 && b_at(&in, 0x11))
+            s->host.tint_region(s->host.user, x, y, w, h,
+                                (u32)b_at(&in, 4) << 16 | (u32)b_at(&in, 5) << 8 | b_at(&in, 6),
+                                w_at(&in, 0xF) ? w_at(&in, 0xF) : 1, b_at(&in, 0x11));
+        NEXT(0x14);
+        return YIELD;
+    }
+    case 0x0825: { /* goes to a pointer, keeping where to come back in one of
+                    * four places (seg8, MAX_ARRIVE_LIST); runs on */
+        u16 k2 = w_at(&in, 6);
+        if (k2 < 4)
+            s->arrive[k2] = in.pc + 8;
+        GOTO(far_at(&in, 2));
+        return RUN;
+    }
+    case 0x0826: { /* comes back from one of them */
+        u16 k2 = w_at(&in, 2);
+        if (k2 < 4 && s->arrive[k2]) {
+            GOTO(s->arrive[k2]);
+            s->arrive[k2] = 0;
+        } else {
+            NEXT(4);
+        }
+        return RUN;
+    }
     case 0x080D: /* the sequence's slot into a variable (seg8:5F7C) */
         *ref(&in, 2) = vs_get(s, seq, VC_INDEX);
         NEXT(4);
@@ -998,6 +1077,42 @@ static int step(vs_state *s, int seq)
         push_return(s, seq, in.pc + 6);
         GOTO(far_at(&in, 2));
         return RUN;
+    case 0x00EB: case 0x00EE: { /* call when a variable is not 0 (EB) or
+                                 * not a value (EE) */
+        u16 a = val(&in, 2);
+        int len = op == 0x00EB ? 8 : 0xA, t = op == 0x00EB ? a != 0 : a != w_at(&in, 4);
+        if (t) {
+            push_return(s, seq, in.pc + (u32)len);
+            GOTO(far_at(&in, len - 4));
+        } else {
+            NEXT(len);
+        }
+        return RUN;
+    }
+    case 0x00FC: /* drops the last return address */
+        pop_return(s, seq);
+        NEXT(2);
+        return RUN;
+    case 0x0198: { /* 0x10 plays a clip a string resource names at x, y;
+                    * 0x11 shows a book panel again (seg13:1A08) */
+        char name[256];
+        int sub = b_at(&in, 2), x = w_at(&in, 9) > 0x280 ? val(&in, 9) : w_at(&in, 9);
+        int y = w_at(&in, 0xB) > 0x1E0 ? val(&in, 0xB) : w_at(&in, 0xB);
+        size_t len;
+        vexe_string(s->x, val(&in, 3), name, sizeof(name));
+        len = strlen(name);
+        if (sub == 0x10 && name[0] && s->host.clip) {
+            u16 f[4] = { 0, 0xFFFF, 0, 1 };
+            s->host.clip(s->host.user, seq, 1, name, x, y, f, 0, 0);
+        } else if (sub == 0x11 && w_at(&in, 5) != VU_NONE &&
+                   !(len >= 3 && strcmp(name + len - 3, "amv") == 0 && w_at(&in, 7) == VU_NONE) &&
+                   s->host.replay_panel) {
+            s->host.replay_panel(s->host.user, x, y, w_at(&in, 0xD) > 0x280 ? val(&in, 0xD) : w_at(&in, 0xD),
+                                 w_at(&in, 0xF) > 0x1E0 ? val(&in, 0xF) : w_at(&in, 0xF));
+        }
+        NEXT(0x19);
+        return YIELD;
+    }
     case 0x00D3: { /* return */
         vx_ptr r = pop_return(s, seq);
         if (r)

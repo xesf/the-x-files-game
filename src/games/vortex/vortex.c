@@ -53,6 +53,10 @@ typedef struct {
         u32 px[320 * 440];
         int w, h;
     } panel[2];
+    struct {                /* 0x803's save: the screen and the pictures */
+        u32 *screen, *pic;
+        int x, y, w, h;
+    } saved;
     xf_wav sounds[64];      /* loaded by 0x1F5; handle = index + 1 */
     struct {
         int sound;          /* handle playing, 0 for none */
@@ -563,6 +567,120 @@ static void on_show_bitmap(void *user, const char *file, int x, int y, int w, in
     xf_bmp_free(&b);
 }
 
+static void copy_rect(u32 *dst, int dpitch, int dx, int dy, const u32 *src, int spitch, int sx, int sy, int w, int h)
+{
+    int row;
+    for (row = 0; row < h; row++)
+        memcpy(dst + (size_t)(dy + row) * dpitch + dx, src + (size_t)(sy + row) * spitch + sx, (size_t)w * 4);
+}
+
+/* Clips a rectangle to the screen; 0 when nothing is left. */
+static int clip_screen(int *x, int *y, int *w, int *h)
+{
+    if (*x < 0) { *w += *x; *x = 0; }
+    if (*y < 0) { *h += *y; *y = 0; }
+    if (*x + *w > STAGE_W) *w = STAGE_W - *x;
+    if (*y + *h > STAGE_H) *h = STAGE_H - *y;
+    return *w > 0 && *h > 0;
+}
+
+static void free_saved(vortex *v)
+{
+    free(v->saved.screen);
+    free(v->saved.pic);
+    v->saved.screen = v->saved.pic = NULL;
+}
+
+/* 0x803 (seg7:5592) */
+static void on_save_region(void *user, int x, int y, int w, int h)
+{
+    vortex *v = user;
+    free_saved(v);
+    if (!clip_screen(&x, &y, &w, &h) || !(v->saved.screen = malloc((size_t)w * h * 4)) ||
+        !(v->saved.pic = malloc((size_t)w * h * 4))) {
+        free_saved(v);
+        return;
+    }
+    copy_rect(v->saved.screen, w, 0, 0, v->bg, STAGE_W, x, y, w, h);
+    copy_rect(v->saved.pic, w, 0, 0, v->pic, STAGE_W, x, y, w, h);
+    v->saved.x = x;
+    v->saved.y = y;
+    v->saved.w = w;
+    v->saved.h = h;
+}
+
+/* 0x804 (seg7:56FA) */
+static void on_restore_region(void *user, int screen, int release, int x, int y, int w, int h)
+{
+    vortex *v = user;
+    if (!v->saved.pic)
+        return;
+    if (!x || x > v->saved.x) x = v->saved.x;
+    if (!y || y > v->saved.y) y = v->saved.y;
+    if (!w || w > v->saved.w) w = v->saved.w;
+    if (!h || h > v->saved.h) h = v->saved.h;
+    if (clip_screen(&x, &y, &w, &h)) {
+        copy_rect(v->pic, STAGE_W, x, y, v->saved.pic, v->saved.w, 0, 0, w, h);
+        if (screen) {
+            copy_rect(v->bg, STAGE_W, x, y, v->saved.screen, v->saved.w, 0, 0, w, h);
+            erase_texts(v, x, y, w, h, 0);
+        }
+    }
+    if (release)
+        free_saved(v);
+}
+
+/* 0x810: a bitmap into the pictures, black clear (seg7:4430); 0x821:
+ * onto the screen only (seg7:42C6). */
+static void on_overlay(void *user, const char *file, int x, int y, int screen_only)
+{
+    vortex *v = user;
+    char path[1024];
+    xf_bmp b;
+    int px, py;
+    if (stage_path(&v->st, file, path, sizeof(path)) != 0 || xf_bmp_load(path, &b) != 0) {
+        xf_warn("vortex: bitmap %s not found", file);
+        return;
+    }
+    xf_info("vortex: bitmap %s at (%d, %d)%s", file, x, y, screen_only ? " on the screen" : "");
+    if (screen_only) {
+        blit(v->bg, b.pixels, b.width, b.height, x, y);
+    } else {
+        for (py = 0; py < b.height; py++)
+            for (px = 0; px < b.width; px++) {
+                u32 c = b.pixels[py * b.width + px] & 0xFFFFFF;
+                int sx = x + px, sy = y + py;
+                if (c && sx >= 0 && sy >= 0 && sx < STAGE_W && sy < STAGE_H)
+                    v->pic[sy * STAGE_W + sx] = c;
+            }
+    }
+    xf_bmp_free(&b);
+}
+
+/* 0x815 (seg7:12A4): the screen in a rectangle, every `step`th pixel in
+ * a stipple, moved 1/factor of the way to a colour; near black stays. */
+static void on_tint_region(void *user, int x, int y, int w, int h, u32 rgb, int step, int factor)
+{
+    vortex *v = user;
+    int X, Y, phase = 0, k;
+    for (Y = y; Y < y + h && Y < STAGE_H; Y += step) {
+        for (X = x + phase; X < x + w && X < STAGE_W; X += step) {
+            u32 p, out = 0;
+            if (X < 0 || Y < 0)
+                continue;
+            p = v->bg[Y * STAGE_W + X];
+            if ((p >> 16 & 0xFF) < 5 && (p >> 8 & 0xFF) < 5 && (p & 0xFF) < 5)
+                continue;
+            for (k = 16; k >= 0; k -= 8) {
+                int c = (int)(p >> k & 0xFF), t = (int)(rgb >> k & 0xFF);
+                out |= (u32)(u8)(c + (t - c) / factor) << k;
+            }
+            v->bg[Y * STAGE_W + X] = out;
+        }
+        phase = phase == step - 1 ? 0 : phase + 1;
+    }
+}
+
 /* 0x198 sub 0x11: a panel's image again (seg13:1A08). */
 static void on_replay_panel(void *user, int x, int y, int w, int h)
 {
@@ -854,14 +972,15 @@ static void update_clips(vortex *v)
 }
 
 /* Each sequence shows its sprite at its place (seg3:2406), the lowest
- * z first. The drawing mode makes a colour (RGB555) clear (seg3:1790):
- * black, white, or none. Mode 8 tints the sprite (seg13): drawn as it
- * is for now. */
+ * z first, by its drawing mode (seg3:1790): a colour (RGB555) is clear,
+ * black for 0, 3, 4, 7 and 8, white for 1, 5 and 6, none for 2; modes 3
+ * to 6 draw the rest in one colour (white for 3 and 5, red for 4 and 6);
+ * mode 8 moves it a third of the way to the dominant mood's colour. */
 static int clear_colour(int mode)
 {
     switch (mode) {
     case 1: case 5: case 6: return 0x7FFF;
-    case 2: case 8: return -1;
+    case 2: return -1;
     default: return 0;
     }
 }
@@ -869,6 +988,7 @@ static int clear_colour(int mode)
 static void draw_sprites(vortex *v)
 {
     int order[VS_SEQS], n = 0, i, k;
+    u32 tint;
     for (i = 0; i < VS_SEQS; i++) {
         u16 slot = vs_get(&v->vm, i, VC_SPRITE);
         if (vs_get(&v->vm, i, VC_USED) && vs_get(&v->vm, i, VC_FLAGS) & 1 && slot < VS_SPRITES &&
@@ -881,8 +1001,10 @@ static void draw_sprites(vortex *v)
             order[k] = order[k - 1];
             order[k - 1] = t;
         }
+    tint = vu_colour(&v->vm.uber, vu_dominant(&v->vm.uber, 3, 0), 3);
     for (i = 0; i < n; i++) {
-        int seq = order[i], x, y, key = clear_colour((i16)vs_get(&v->vm, seq, VC_MODE));
+        int mode = (i16)vs_get(&v->vm, order[i], VC_MODE);
+        int seq = order[i], x, y, key = clear_colour(mode);
         u16 slot = vs_get(&v->vm, seq, VC_SPRITE);
         int x0 = (i16)vs_get(&v->vm, seq, VC_X), y0 = (i16)vs_get(&v->vm, seq, VC_Y);
         for (y = 0; y < v->sprites[slot].h; y++)
@@ -893,6 +1015,19 @@ static void draw_sprites(vortex *v)
                     continue;
                 if (key >= 0 && (int)((c >> 19 & 31) << 10 | (c >> 11 & 31) << 5 | (c >> 3 & 31)) == key)
                     continue;
+                if (mode == 3 || mode == 5)
+                    c = 0xFFFFFF;
+                else if (mode == 4 || mode == 6)
+                    c = 0xFF0000;
+                else if (mode == 8) {
+                    u32 out = 0;
+                    int k;
+                    for (k = 16; k >= 0; k -= 8) {
+                        int ch = (int)(c >> k & 0xF8), t = (int)(tint >> k & 0xFF);
+                        out |= (u32)(u8)(ch + (t - ch) / 3) << k;
+                    }
+                    c = out;
+                }
                 v->st.fb[sy * STAGE_W + sx] = c;
             }
     }
@@ -1024,6 +1159,10 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.tint_bitmap = on_tint_bitmap;
     host.show_bitmap = on_show_bitmap;
     host.replay_panel = on_replay_panel;
+    host.save_region = on_save_region;
+    host.restore_region = on_restore_region;
+    host.overlay = on_overlay;
+    host.tint_region = on_tint_region;
     host.sprite_load = on_sprite_load;
     host.sprite_size = on_sprite_size;
     host.sprite_free = on_sprite_free;
@@ -1056,6 +1195,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     r = 0;
 done:
     vu_free(&v->vm.uber);
+    free_saved(v);
     for (i = 0; i < MAX_CLIPS; i++)
         if (v->clips[i].open)
             xf_player_close(&v->clips[i].p);

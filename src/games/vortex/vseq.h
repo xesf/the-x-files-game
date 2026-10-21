@@ -105,6 +105,18 @@ typedef struct vs_host {
     /* 0x824: a bitmap file onto the screen with the dissolve, at most
      * w by h (seg13:17E6) */
     void (*show_bitmap)(void *user, const char *file, int x, int y, int w, int h);
+    /* 0x803: saves a rectangle of the screen and the pictures; 0x804 puts
+     * the pictures back (and the screen, when `screen`), sizes 0 or larger
+     * than the saved ones meaning the saved ones, and frees the save when
+     * `release` (seg7:5592, 56FA) */
+    void (*save_region)(void *user, int x, int y, int w, int h);
+    void (*restore_region)(void *user, int screen, int release, int x, int y, int w, int h);
+    /* 0x810: a bitmap file into the pictures, black clear (seg7:4430);
+     * 0x821: onto the screen only (seg7:42C6) */
+    void (*overlay)(void *user, const char *file, int x, int y, int screen_only);
+    /* 0x815: the screen's pixels in a rectangle, every `step`th in a
+     * stipple, moved 1/factor of the way to a colour (seg7:12A4) */
+    void (*tint_region)(void *user, int x, int y, int w, int h, u32 rgb, int step, int factor);
     /* 0x198 sub 0x11: a panel's image again, dissolving (seg13:1A08) */
     void (*replay_panel)(void *user, int x, int y, int w, int h);
 } vs_host;
@@ -135,6 +147,7 @@ typedef struct {
     int depth;           /* instructions run this tick by the sequence (DS:44F0) */
     int unknown_count;
     vu_state uber;       /* segment 13 */
+    vx_ptr arrive[4];    /* DS:216C: 0x826's return addresses */
 } vs_state;
 
 void vs_init(vs_state *s, const vexe *x, const vs_host *host);
