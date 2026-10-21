@@ -117,14 +117,35 @@ other (Video 1, 16-bit), into the slots from the one it names; 0x7E4
 makes a sprite of a text. Each sequence can show one sprite (context
 +6) at its x, y (+0xA, +0xC) when bit 0 of its flags (+0x26) is set;
 before each instruction, the sequence's width and height (+0x10,
-+0x12) become its sprite's. Sprites are drawn the lowest z (+0xE)
-first, with a clear colour (RGB555) by the drawing mode (+0x28):
-black for 0, 3, 4 and 7, white for 1, 5 and 6, none for 2; mode 8
-tints the sprite.
++0x12) become its sprite's. Sprites are drawn the lowest z first (seg3:1790). The drawing mode
+(+0x28) makes a colour (RGB555) clear: black for 0, 3, 4, 7 and 8,
+white for 1, 5 and 6, none for 2. Modes 3 to 6 draw the other pixels in
+one colour, white (3, 5) or red (4, 6). Mode 8 moves each pixel a third
+of the way to the colour of the dominant mood (see the uber device).
 
 Clips are windows over everything. 0x194 makes the sequence's place
 its clip's window; 0x195 waits until the clip reaches a time (1/30
 second).
+
+## Screen updates
+
+The screen updates (0x12E to 0x138) are queued during a tick and carried
+out after it (seg7:33B8, 35EA). Each copies a rectangle of the pictures
+to the screen with an effect: wipes from a side (0x12E effects 1 to 4),
+an iris (5), a box opening (6) or closing (7), a dissolve by 4x4 cells
+(0x130), lines (0x135), a clock sweep (0x136) or a swirl (0x138). None
+of them reads a clock: the original's speed was the machine's. The
+module copies at once for now.
+
+0x803 saves a rectangle of the screen and the pictures and 0x804 puts it
+back. 0x810 draws a bitmap file into the pictures with black clear; 0x821
+draws one onto the screen only, so the next update there takes it away.
+0x815 moves the screen's pixels in a rectangle part of the way to a
+colour, every other one in a stipple.
+
+0xEB and 0xEE call a target when a variable is not 0 or not a value;
+0xFC drops the last return address. 0x825 goes to a target keeping where
+to come back in one of four places, and 0x826 comes back.
 
 ## Pointer
 
