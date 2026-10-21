@@ -249,3 +249,18 @@ regions and pictures, and what each trigger does:
 ```sh
 python3 -I tools/re/vc_layout.py XFILES.HDB 15108
 ```
+
+## The earlier games
+
+`tests/vortex` holds scripts for Vortex, run in real time by the stage
+runtime (`wait`, `point`, `press`, `key`, `skip`, `shot`, `quit`; see
+`src/games/stage.c`). `skip` ends the clip playing, or the next one to
+play. Point `--game` at a folder with `VORTEX.EXE`, or with the three
+discs' contents as `VORTEX_1` to `VORTEX_3`:
+
+```sh
+XF_HEADLESS=1 build/xfiles --game <vortex folder> --script tests/vortex/journal.txt
+```
+
+The scripts save screenshots in the current folder; compare them by
+eye. `XF_DEBUG=1` prints every instruction the sequences run.

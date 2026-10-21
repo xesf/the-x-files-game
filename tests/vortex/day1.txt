@@ -1,0 +1,55 @@
+# Vortex, Day 1 from START MOVIE: the opening, the hospital's questions,
+# the bowl, the idea icon on Illyra. Real time, about ten minutes:
+#   XF_HEADLESS=1 build/xfiles --game <vortex folder> --script tests/vortex/day1.txt
+wait 2500
+skip
+wait 2500
+skip
+wait 2500
+skip
+wait 2500
+skip
+wait 8000
+press 98 198
+wait 3000
+press 600 430
+wait 2000
+skip
+wait 2000
+skip
+wait 14000
+press 100 50
+wait 2000
+skip
+wait 60000
+press 100 318
+wait 22000
+press 100 318
+wait 22000
+press 100 318
+wait 22000
+press 100 318
+wait 22000
+press 100 345
+wait 22000
+press 100 345
+wait 22000
+press 100 345
+wait 30000
+press 410 438
+wait 40000
+point 96 30
+wait 600
+press 96 30
+wait 2000
+point 300 280
+wait 600
+press 300 280
+wait 40000
+press 100 345
+wait 25000
+point 410 438
+wait 600
+press 410 438
+shot day1.bmp
+quit

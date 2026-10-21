@@ -1,0 +1,45 @@
+# Vortex: GO TO SCENE, Day 2's first scene (the disc 2 prompt), then the
+# uber device's journal, its pages turned on and back.
+#   XF_HEADLESS=1 build/xfiles --game <vortex folder> --script tests/vortex/journal.txt
+wait 2500
+skip
+wait 2500
+skip
+wait 2500
+skip
+wait 2500
+skip
+wait 8000
+press 98 290
+wait 3000
+press 104 212
+wait 3000
+press 378 88
+wait 3000
+press 320 240
+wait 50000
+point 570 440
+wait 500
+press 570 440
+wait 3000
+point 320 240
+wait 500
+press 320 240
+wait 4000
+shot journal1.bmp
+point 600 240
+wait 500
+press 600 240
+wait 4000
+shot journal2.bmp
+point 600 240
+wait 300
+press 600 240
+wait 4000
+shot journal3.bmp
+point 40 240
+wait 300
+press 40 240
+wait 4000
+shot journal4.bmp
+quit
