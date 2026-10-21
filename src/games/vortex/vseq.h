@@ -62,6 +62,8 @@ typedef struct vs_host {
     /* text onto the background: a font (seg14:042E), a box (0 wide: one
      * line at x, y), a colour 0x00RRGGBB; Windows-1252 */
     void (*text)(void *user, int font, int x, int y, int w, int h, u32 rgb, const char *s);
+    /* a text's size in a font (GetTextExtent) */
+    void (*text_extent)(void *user, int font, const char *s, int *w, int *h);
     /* 0x1F5: loads a sound, returns its handle (0: none) */
     int (*sound)(void *user, int sub, const char *file, u16 arg);
     /* 0x1F6 plays handle on channel args[0] (1, 2; 3 either) at

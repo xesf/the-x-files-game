@@ -30,7 +30,7 @@ typedef struct {
     vexe exe;
     vs_state vm;
     u32 pic[STAGE_W * STAGE_H]; /* the pictures (the back buffer) */
-    u32 bg[STAGE_W * STAGE_H];  /* the screen: the pictures and the texts */
+    u32 bg[STAGE_W * STAGE_H];  /* the screen: the pictures (the texts are kept apart) */
     vx_clip clips[MAX_CLIPS];
     /* Texts are drawn on the screen over the sprites under them (seg3:0E26);
      * a screen update or a change of a sprite under one redraws that place
@@ -338,6 +338,25 @@ static void erase_texts(vortex *v, int x, int y, int w, int h, int older)
     v->text_count = n;
 }
 
+static void on_text_extent(void *user, int font, const char *text, int *w, int *h)
+{
+    vortex *v = user;
+    const xf_font *f = font_for(v, font);
+    int cell = g_fonts[font >= 2 && font <= 13 ? font : 9].height, asc, span;
+    char utf8[512];
+    float px;
+    *w = 0;
+    *h = cell;
+    if (!f)
+        return;
+    asc = f->ascent;
+    span = f->ascent - f->descent;
+    win_metrics(f, &asc, &span);
+    px = span > 0 ? (float)cell * (float)f->units_per_em / (float)span : (float)cell;
+    xf_cp1252_to_utf8(utf8, sizeof(utf8), (const u8 *)text, strlen(text));
+    *w = xf_text_width(f, px, utf8, strlen(utf8));
+}
+
 static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, const char *text)
 {
     vortex *v = user;
@@ -345,7 +364,6 @@ static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, c
     if (!*text)
         return;
     xf_debug("vortex: text, font %d, at (%d, %d) %dx%d: %s", font, x, y, w, h, text);
-    render_text(v, v->bg, font, x, y, w, h, rgb, text);
     if (v->text_count == (int)XF_COUNT(v->texts))
         erase_texts(v, 0, 0, STAGE_W, STAGE_H, 0); /* full: start again */
     k = v->text_count++;
@@ -900,6 +918,7 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
     host.picture = on_picture;
     host.text = on_text;
     host.text_sprite = on_text_sprite;
+    host.text_extent = on_text_extent;
     host.sprite_load = on_sprite_load;
     host.sprite_size = on_sprite_size;
     host.sprite_free = on_sprite_free;

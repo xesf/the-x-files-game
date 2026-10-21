@@ -309,6 +309,55 @@ static void current_last(vs_state *s)
     t = s->label_aux[at]; s->label_aux[at] = s->label_aux[last]; s->label_aux[last] = t;
 }
 
+/* A sequence's caption (context +0x126 a string resource, +0x128 its
+ * colour, +0x12C to +0x132 its place): shown while the pointer is over
+ * the sequence (seg3:2D68), the screen drawn again there when it leaves
+ * (seg3:2CF2). The place is above the sequence, or below it when there
+ * is no room, inside the screen (seg8:6652); x or y nonzero is given. */
+static void caption(vs_state *s, int seq, u16 id, int x, int y, u32 rgb)
+{
+    char text[256];
+    int w = 0, h = 0;
+    vexe_string(s->x, id, text, sizeof(text));
+    if (s->host.text_extent)
+        s->host.text_extent(s->host.user, 0, text, &w, &h);
+    w = (w + 3) & ~3;
+    if (!x)
+        x = (i16)vs_get(s, seq, VC_X) + w > 0x280 ? 0x280 - w : (i16)vs_get(s, seq, VC_X);
+    if (!y) {
+        y = (i16)vs_get(s, seq, VC_Y) - h - 5;
+        if (y < 0)
+            y = (i16)vs_get(s, seq, VC_Y) + (i16)vs_get(s, seq, VC_H) + 5;
+    }
+    vs_set(s, seq, 0x126, id);
+    vs_set(s, seq, 0x128, (u16)(rgb >> 16 | (rgb & 0xFF00)));      /* COLORREF: red, green */
+    vs_set(s, seq, 0x12A, (u16)(rgb & 0xFF));                        /* blue */
+    vs_set(s, seq, 0x12C, (u16)x);
+    vs_set(s, seq, 0x12E, (u16)y);
+    vs_set(s, seq, 0x130, (u16)(x + w));
+    vs_set(s, seq, 0x132, (u16)(y + h));
+}
+
+static void caption_show(vs_state *s, int seq)
+{
+    char text[256];
+    u16 c = vs_get(s, seq, 0x128);
+    if (!vs_get(s, seq, 0x126) || !s->host.text)
+        return;
+    vexe_string(s->x, vs_get(s, seq, 0x126), text, sizeof(text));
+    s->host.text(s->host.user, 0, (i16)vs_get(s, seq, 0x12C), (i16)vs_get(s, seq, 0x12E), 0, 0,
+                 (u32)(c & 0xFF) << 16 | (u32)(c & 0xFF00) | (vs_get(s, seq, 0x12A) & 0xFF), text);
+}
+
+static void caption_hide(vs_state *s, int seq)
+{
+    if (!vs_get(s, seq, 0x126) || !s->host.screen)
+        return;
+    s->host.screen(s->host.user, seq, 0x012E, 0, (i16)vs_get(s, seq, 0x12C), (i16)vs_get(s, seq, 0x12E),
+                   (i16)vs_get(s, seq, 0x130) - (i16)vs_get(s, seq, 0x12C),
+                   (i16)vs_get(s, seq, 0x132) - (i16)vs_get(s, seq, 0x12E));
+}
+
 /* Runs one instruction. */
 static int step(vs_state *s, int seq)
 {
@@ -532,6 +581,27 @@ static int step(vs_state *s, int seq)
                   * seg3:13D0): the module redraws every frame */
         NEXT(6);
         return YIELD;
+    case 0x0816: case 0x0817: /* the sequence's caption: a string resource
+                               * (0x817 from a variable), light green */
+        caption(s, seq, op == 0x0816 ? w_at(&in, 2) : val(&in, 2), 0, 0, 0x96FA96);
+        NEXT(4);
+        return YIELD;
+    case 0x0818: { /* another sequence's caption: x and y (0: placed), red,
+                    * green, blue, the string resource (seg8:6870) */
+        u16 who = val(&in, 2);
+        if (who < VS_SEQS)
+            caption(s, who, w_at(&in, 0xC), (i16)w_at(&in, 4), (i16)w_at(&in, 6),
+                    (u32)b_at(&in, 8) << 16 | (u32)b_at(&in, 9) << 8 | b_at(&in, 0xA));
+        NEXT(0xE);
+        return YIELD;
+    }
+    case 0x0823: { /* a sequence's caption taken off the screen (seg8:6810) */
+        u16 who = val(&in, 2);
+        if (who < VS_SEQS)
+            caption_hide(s, who);
+        NEXT(4);
+        return YIELD;
+    }
     case 0x080D: /* the sequence's slot into a variable (seg8:5F7C) */
         *ref(&in, 2) = vs_get(s, seq, VC_INDEX);
         NEXT(4);
@@ -1149,6 +1219,7 @@ void vs_move(vs_state *s, int x, int y)
         if (was && !now && vs_get(s, i, 0x120)) { /* seg3:2CF2 */
             vs_set(s, i, VC_SPRITE, vs_get(s, i, 0x124));
             vs_event(s, i, 0x20000);
+            caption_hide(s, i);
         }
         if (over_clip)
             continue;
@@ -1168,6 +1239,7 @@ void vs_move(vs_state *s, int x, int y)
     if (!over_clip && best >= 0 && entered && vs_get(s, best, 0x120)) { /* seg3:2D68 */
         vs_set(s, best, VC_SPRITE, vs_get(s, best, 0x122));
         vs_event(s, best, 0x10000);
+        caption_show(s, best);
     }
     s->mx = x;
     s->my = y;
