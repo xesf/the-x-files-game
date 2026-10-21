@@ -2,6 +2,14 @@
 
 All notable changes to this project.
 
+## 0.4.0 - 2026-10-21
+
+- Atoms: characters answer items in hand with their stock replies. Pointing the gun, handcuffs or stiletto gets "Don't do that"; a click with an item follows the original's table ("I don't want that", "I don't know anything about that"); the gun or stiletto on someone ends in prison, the handcuffs out of the FBI; taking the binoculars, flashlight or night vision goggles in hand gets a reply from a character in the view. A character's own triggers for the item come first.
+- Questions asked again vary: "I just told you", "As I just said", "What's the matter with you", a yes or no, or, from the fourth time, sometimes no answer.
+- The inventory stays usable while clips play.
+- PDA map no longer dimmed.
+- The earlier HyperBole games (in progress): game detection and `xfiles --game`, a shared stage runtime, and a first Vortex module that plays the opening, the menus and the Day 3 scenes. New formats for them: 8-bit `raw ` PCM, SZDD, Windows bitmaps (RLE8, Microsoft Video 1), WAVE, Apple Graphics (`smc `) video and MIDI music. `tools/ne` lists 16-bit NE executables.
+
 ## 0.3.1 - 2026-10-20
 
 - Idea icons: while talking, the character's ideas show above the picture with their names on rollover; a click asks about one, and the TALK list leaves them out.
