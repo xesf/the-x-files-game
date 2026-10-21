@@ -433,7 +433,7 @@ static void up_build(const xf_neo_db *db)
                 up_add(db, id, cv.answer);
                 up_add(db, id, cv.triggers);
                 up_add(db, id, cv.question);
-                up_add(db, id, cv.repeat);
+                up_add(db, id, cv.atoms);
             }
         } else if (c == VC_IFACE_ITEM) {
             vc_iface_item it;

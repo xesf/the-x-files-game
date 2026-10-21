@@ -89,12 +89,12 @@ int vc_read_conversation(const xf_neo_db *db, u32 id, vc_conversation *c)
     c->triggers = xf_neo_u32(&r);
     if (r.error)
         return -1;
-    /* Later schema versions add the question, the repeat answer and a flag. */
+    /* Later schema versions add the question, the atoms and a flag. */
     c->question = xf_neo_u32(&r);
-    c->repeat = xf_neo_u32(&r);
+    c->atoms = xf_neo_u32(&r);
     c->flag = xf_neo_u8(&r);
     if (r.error)
-        c->question = c->repeat = c->flag = 0;
+        c->question = c->atoms = c->flag = 0;
     return 0;
 }
 

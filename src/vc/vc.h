@@ -114,7 +114,7 @@ typedef struct {
     u32 answer;   /* VCAssetRefList: clip played after the question */
     u32 triggers; /* VCTriggerList */
     u32 question; /* VCAssetRefList: Willmore asking */
-    u32 repeat;   /* VCAssetRefList: answer when asked again, or 0 */
+    u32 atoms;    /* VCAssetRefList: stock replies (see game.c, atoms) */
     u8 flag;
 } vc_conversation;
 
