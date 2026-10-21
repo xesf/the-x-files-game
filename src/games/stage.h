@@ -26,9 +26,11 @@ typedef struct {
 
 typedef struct {
     const char *dir;
+    char disc_dir[1024];  /* the disc in the drive, when the discs are folders; tried first */
     u32 fb[STAGE_W * STAGE_H];
     int mx, my;           /* the pointer */
     int quit;             /* the window closed or the script ended */
+    int skip;             /* the script's skip: the clips playing end now */
     xf_music music;
     stage_sound sounds[4];
     /* the test script (xf_game_options.script) */
@@ -40,8 +42,9 @@ typedef struct {
 int stage_open(xf_stage *s, const char *dir, const xf_game_options *opt);
 void stage_close(xf_stage *s);
 
-/* A game path as the program names it ("c\splash\vclogo.mov"), found in
- * the game folder whatever its case. Returns 0, or -1. */
+/* A game path as the program names it ("c\splash\vclogo.mov"), found
+ * whatever its case: on the disc in the drive (disc_dir), then in the
+ * game folder. Returns 0, or -1. */
 int stage_path(const xf_stage *s, const char *rel, char *out, size_t size);
 
 /* The next input event, the script's when it has one; also keeps the

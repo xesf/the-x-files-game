@@ -18,7 +18,7 @@ xf_game_id xf_detect_game(const char *dir)
         return XF_GAME_NONE;
     if (has(dir, "XFILES.HDB") || xf_langs_scan(&langs, dir) > 0)
         return XF_GAME_XFILES;
-    if (has(dir, "VORTEX.EXE"))
+    if (has(dir, "VORTEX.EXE") || has(dir, "VORTEX_1/VORTEX.EXE"))
         return XF_GAME_VORTEX;
     if (has(dir, "ROLAND.EX_") || has(dir, "ROLAND.EXE"))
         return XF_GAME_ROLAND;

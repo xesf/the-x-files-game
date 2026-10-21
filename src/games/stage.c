@@ -44,6 +44,8 @@ int stage_path(const xf_stage *s, const char *rel, char *out, size_t size)
     for (i = 0; p[i]; i++)
         if (p[i] == '\\')
             p[i] = '/';
+    if (s->disc_dir[0] && xf_path_resolve(s->disc_dir, p, out, size) == 0)
+        return 0;
     return xf_path_resolve(s->dir, p, out, size);
 }
 
@@ -80,6 +82,7 @@ static void save_shot(xf_stage *s, const char *path)
  *   press <x> <y>    click there
  *   key <c>          press a key (a character, or esc, return, space)
  *   shot <file.bmp>  save the screen
+ *   skip             the clips playing end now, as if played
  *   quit             end the game
  * Lines starting with # are comments. */
 static int script_event(xf_stage *s, plat_event *ev)
@@ -114,6 +117,10 @@ static int script_event(xf_stage *s, plat_event *ev)
                       : strcmp(arg, "space") == 0  ? PLAT_KEY_SPACE
                                                    : arg[0];
             return 1;
+        }
+        if (strcmp(cmd, "skip") == 0) {
+            s->skip = 1;
+            continue;
         }
         if (strcmp(cmd, "shot") == 0) {
             save_shot(s, arg);
