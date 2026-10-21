@@ -2,6 +2,7 @@
  * Copyright (C) 2026 xesf */
 /* Vortex: Quantum Gate II. Runs the sequences compiled into VORTEX.EXE
  * (docs/vortex/README.md) on the shared stage. */
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -827,31 +828,95 @@ static u16 on_disc(void *user, int n)
     return 1;
 }
 
-/* 0x12E: a rectangle of the pictures reaches the screen (seg7:33B8),
- * over the texts drawn there. The effect (a wipe, a dissolve) is not
- * shown yet. */
+static void draw(vortex *v);
+
+/* Whether pixel (px, py) of a w by h rectangle is shown at step t of n
+ * of an effect (seg7:1604, 038C, 2168, 238E, 0EA8); `order` holds the
+ * dissolves' random cell order. */
+static int revealed(u16 op, int effect, int px, int py, int w, int h, int t, int n, const u16 *order, int cells)
+{
+    switch (op) {
+    case 0x012E: case 0x012F:
+        switch (effect) {
+        case 1: return px * n < w * t;                 /* from the left */
+        case 2: return (w - 1 - px) * n < w * t;       /* from the right */
+        case 3: return (h - 1 - py) * n < h * t;       /* from the bottom */
+        case 4: return py * n < h * t;                 /* from the top */
+        case 5: {                                      /* an iris */
+            double dx = (px - w / 2.0) / (w / 2.0), dy = (py - h / 2.0) / (h / 2.0);
+            return (dx * dx + dy * dy) * n * n < 2.0 * t * t;
+        }
+        case 6: case 7: {                              /* a box from the middle, or from the edges */
+            int ex = abs(2 * px - w) * n, ey = abs(2 * py - h) * n;
+            if (effect == 6)
+                return ex <= w * t && ey <= h * t;
+            return ex >= w * (n - t) || ey >= h * (n - t);
+        }
+        }
+        return 1;
+    case 0x0133: case 0x0134:                          /* doors opening */
+        return abs(2 * px - w) * n <= w * t;
+    case 0x0136: {                                     /* a clock sweep from noon */
+        double a = atan2((double)px - w / 2.0, h / 2.0 - (double)py);
+        if (a < 0)
+            a += 2 * 3.14159265358979;
+        return a * n <= 2 * 3.14159265358979 * t;
+    }
+    case 0x0130: case 0x0138: case 0x0135: case 0x0137: { /* dissolves */
+        int c = op == 0x0135 || op == 0x0137 ? (effect == 2 ? px : py) : (py / 4) * ((w + 3) / 4) + px / 4;
+        return order[c % cells] * n < cells * t;
+    }
+    }
+    return 1;
+}
+
+/* 0x12E to 0x138: the pictures in a rectangle copied to the screen,
+ * over the texts drawn there, with the effect. The original blocks
+ * while it plays, as fast as the machine draws; here each takes about
+ * half a second. */
 static void on_screen(void *user, int seq, u16 op, int effect, int x, int y, int w, int h)
 {
     vortex *v = user;
-    int row;
+    int row, n = 30, t, cells = 0, px, py;
+    u16 *order = NULL;
     (void)seq;
     xf_debug("vortex: screen %04X effect %d at (%d, %d) %dx%d", op, effect, x, y, w, h);
-    if (x < 0) {
-        w += x;
-        x = 0;
+    if (!clip_screen(&x, &y, &w, &h))
+        return;
+    erase_texts(v, x, y, w, h, 0);
+    if (op == 0x0132 || ((op == 0x012E || op == 0x012F) && (effect < 1 || effect > 7)) || v->st.skip) {
+        for (row = y; row < y + h; row++)
+            memcpy(v->bg + row * STAGE_W + x, v->pic + row * STAGE_W + x, (size_t)w * 4);
+        return;
     }
-    if (y < 0) {
-        h += y;
-        y = 0;
+    if (op == 0x0130 || op == 0x0138 || op == 0x0135 || op == 0x0137) {
+        cells = op == 0x0135 || op == 0x0137 ? (effect == 2 ? w : h) : ((w + 3) / 4) * ((h + 3) / 4);
+        if (!(order = malloc(sizeof(*order) * (size_t)cells)))
+            cells = 0;
+        for (t = 0; t < cells; t++)
+            order[t] = (u16)t;
+        for (t = cells - 1; t > 0; t--) { /* the cells in a random order */
+            int k = rand() % (t + 1);
+            u16 o = order[t];
+            order[t] = order[k];
+            order[k] = o;
+        }
+        if (!cells) {
+            n = 1;
+            op = 0x0132;
+        }
     }
-    if (x + w > STAGE_W)
-        w = STAGE_W - x;
-    if (y + h > STAGE_H)
-        h = STAGE_H - y;
-    for (row = y; w > 0 && row < y + h; row++)
+    for (t = 1; t <= n && !v->st.quit; t++) {
+        for (py = 0; py < h; py++)
+            for (px = 0; px < w; px++)
+                if (revealed(op, effect, px, py, w, h, t, n, order, cells))
+                    v->bg[(y + py) * STAGE_W + x + px] = v->pic[(y + py) * STAGE_W + x + px];
+        draw(v);
+        stage_frame(&v->st);
+    }
+    for (row = y; row < y + h; row++) /* all of it at the end */
         memcpy(v->bg + row * STAGE_W + x, v->pic + row * STAGE_W + x, (size_t)w * 4);
-    if (w > 0 && h > 0)
-        erase_texts(v, x, y, w, h, 0);
+    free(order);
 }
 
 static int on_sound(void *user, int sub, const char *file, u16 arg)

@@ -823,32 +823,34 @@ static int step(vs_state *s, int seq)
      * screen every frame, so these show at once for now. */
     case 0x012E: case 0x012F: case 0x0130: case 0x0132: case 0x0133:
     case 0x0134: case 0x0135: case 0x0136: case 0x0137: case 0x0138: {
+        /* the selector's place in each, and the effect word's (-1: none) */
         static const u8 len[] = { 16, 16, 12, 0, 2, 2, 2, 18, 12, 14, 18 };
-        int x = 0, y = 0, w = 0, h = 0;
-        if (op == 0x012E) { /* seg8:1512: where, 0x7FFE a rectangle, 0x7FFF
-                             * the screen, else a sequence's sprite */
-            u16 where = w_at(&in, 4);
-            if (where == 0x7FFE) {
-                x = (i16)val(&in, 6);
-                y = (i16)val(&in, 8);
-                w = (i16)val(&in, 0xA);
-                h = (i16)val(&in, 0xC);
-            } else if (where == 0x7FFF) {
-                w = 640;
-                h = 480;
-            } else {
-                u16 who = val(&in, 4);
-                if (who < VS_SEQS) {
-                    x = (i16)vs_get(s, who, VC_X);
-                    y = (i16)vs_get(s, who, VC_Y);
-                    w = (i16)vs_get(s, who, VC_W);
-                    h = (i16)vs_get(s, who, VC_H);
-                }
+        static const i8 sel[] = { 4, 4, 2, -1, -1, -1, -1, 4, 2, 4, 4 };
+        static const i8 eff[] = { 2, 2, -1, -1, -1, -1, -1, 2, -1, 2, 2 };
+        int k3 = op - 0x012E, x = 0, y = 0, w = 640, h = 480, at = sel[k3] + (op == 0x0138 ? 4 : 2);
+        u16 where = sel[k3] >= 0 ? w_at(&in, sel[k3]) : 0x7FFF;
+        if (op == 0x0133 || op == 0x0134) { /* doors over the picture band */
+            x = 20;
+            y = 120;
+            w = 600;
+            h = 240;
+        } else if (where == 0x7FFE) { /* a rectangle (seg8:1512) */
+            x = (i16)val2(&in, at);
+            y = (i16)val2(&in, at + 2);
+            w = (i16)val2(&in, at + 4);
+            h = (i16)val2(&in, at + 6);
+        } else if (where != 0x7FFF) { /* a sequence's place, 0xC001 its own */
+            u16 who = where == 0xC001 ? (u16)seq : val(&in, sel[k3]);
+            if (who < VS_SEQS) {
+                x = (i16)vs_get(s, who, VC_X);
+                y = (i16)vs_get(s, who, VC_Y);
+                w = (i16)vs_get(s, who, VC_W);
+                h = (i16)vs_get(s, who, VC_H);
             }
         }
         if (s->host.screen)
-            s->host.screen(s->host.user, seq, op, w_at(&in, 2), x, y, w, h);
-        NEXT(len[op - 0x012E]);
+            s->host.screen(s->host.user, seq, op, eff[k3] >= 0 ? w_at(&in, eff[k3]) : 0, x, y, w, h);
+        NEXT(len[k3]);
         return YIELD;
     }
 

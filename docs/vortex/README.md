@@ -134,8 +134,9 @@ out after it (seg7:33B8, 35EA). Each copies a rectangle of the pictures
 to the screen with an effect: wipes from a side (0x12E effects 1 to 4),
 an iris (5), a box opening (6) or closing (7), a dissolve by 4x4 cells
 (0x130), lines (0x135), a clock sweep (0x136) or a swirl (0x138). None
-of them reads a clock: the original's speed was the machine's. The
-module copies at once for now.
+of them reads a clock: the original's speed was the machine's, and the
+game waits until the effect ends. The module plays each in about half a
+second; the swirl (0x138) is shown as a dissolve.
 
 0x803 saves a rectangle of the screen and the pictures and 0x804 puts it
 back. 0x810 draws a bitmap file into the pictures with black clear; 0x821
