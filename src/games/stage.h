@@ -30,7 +30,7 @@ typedef struct {
     u32 fb[STAGE_W * STAGE_H];
     int mx, my;           /* the pointer */
     int quit;             /* the window closed or the script ended */
-    int skip;             /* the script's skip: the clips playing end now */
+    int skip;             /* the script's skips to come: the clips playing end */
     xf_music music;
     stage_sound sounds[4];
     /* the test script (xf_game_options.script) */

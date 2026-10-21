@@ -32,6 +32,20 @@ typedef struct {
     u32 pic[STAGE_W * STAGE_H]; /* the pictures (the back buffer) */
     u32 bg[STAGE_W * STAGE_H];  /* the screen: the pictures and the texts */
     vx_clip clips[MAX_CLIPS];
+    /* Texts are drawn on the screen over the sprites under them (seg3:0E26);
+     * a screen update or a change of a sprite under one redraws that place
+     * without it. They are kept to draw again over the sprites each frame. */
+    struct {
+        int font, x, y, w, h;
+        u32 rgb, frame;
+        char text[256];
+    } texts[32];
+    int text_count;
+    u32 frame;
+    struct {                /* each sequence's sprite as drawn last */
+        u16 slot;
+        i16 x, y, w, h;
+    } drawn[VS_SEQS];
     xf_wav sounds[64];      /* loaded by 0x1F5; handle = index + 1 */
     struct {
         int sound;          /* handle playing, 0 for none */
@@ -261,9 +275,8 @@ static void win_metrics(const xf_font *f, int *ascent, int *span)
 
 /* Text on the background: in a box, wrapped at words from its top left
  * (DrawText with DT_WORDBREAK); else one line from x, y. */
-static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, const char *text)
+static void render_text(vortex *v, u32 *pixels, int font, int x, int y, int w, int h, u32 rgb, const char *text)
 {
-    vortex *v = user;
     const xf_font *f = font_for(v, font);
     xf_surface s;
     char utf8[1024];
@@ -271,7 +284,6 @@ static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, c
     int starts[32], lens[32], lines, i, line_h, ascent;
     if (!f || !*text)
         return;
-    xf_debug("vortex: text, font %d, at (%d, %d) %dx%d: %s", font, x, y, w, h, text);
     xf_cp1252_to_utf8(utf8, sizeof(utf8), (const u8 *)text, strlen(text));
     {
         /* a LOGFONT height is the cell, which Windows takes from the
@@ -282,7 +294,7 @@ static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, c
         line_h = cell;
         ascent = span > 0 ? cell * asc / span : cell * 4 / 5;
     }
-    s.pixels = v->bg;
+    s.pixels = pixels;
     s.width = STAGE_W;
     s.height = STAGE_H;
     s.pitch = STAGE_W;
@@ -297,6 +309,54 @@ static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, c
             break;
         xf_text_draw(&s, f, px, x, base, utf8 + starts[i], (size_t)lens[i], rgb);
     }
+}
+
+/* The place a text takes: its box, or a line up to the screen's right. */
+static void text_rect(vortex *v, int k, int *x0, int *y0, int *x1, int *y1)
+{
+    int font = v->texts[k].font, cell = g_fonts[font >= 2 && font <= 13 ? font : 9].height;
+    *x0 = v->texts[k].x;
+    *y0 = v->texts[k].y;
+    *x1 = v->texts[k].w > 0 ? *x0 + v->texts[k].w : STAGE_W;
+    *y1 = *y0 + (v->texts[k].h > 0 ? v->texts[k].h : cell);
+}
+
+/* The texts in a rectangle go (the screen there is drawn again), the ones
+ * drawn this frame too unless `older`. */
+static void erase_texts(vortex *v, int x, int y, int w, int h, int older)
+{
+    int k, n = 0;
+    for (k = 0; k < v->text_count; k++) {
+        int x0, y0, x1, y1;
+        text_rect(v, k, &x0, &y0, &x1, &y1);
+        if ((!older || v->texts[k].frame != v->frame) && x0 < x + w && x < x1 && y0 < y + h && y < y1)
+            continue;
+        if (n != k)
+            v->texts[n] = v->texts[k];
+        n++;
+    }
+    v->text_count = n;
+}
+
+static void on_text(void *user, int font, int x, int y, int w, int h, u32 rgb, const char *text)
+{
+    vortex *v = user;
+    int k;
+    if (!*text)
+        return;
+    xf_debug("vortex: text, font %d, at (%d, %d) %dx%d: %s", font, x, y, w, h, text);
+    render_text(v, v->bg, font, x, y, w, h, rgb, text);
+    if (v->text_count == (int)XF_COUNT(v->texts))
+        erase_texts(v, 0, 0, STAGE_W, STAGE_H, 0); /* full: start again */
+    k = v->text_count++;
+    v->texts[k].font = font;
+    v->texts[k].x = x;
+    v->texts[k].y = y;
+    v->texts[k].w = w;
+    v->texts[k].h = h;
+    v->texts[k].rgb = rgb;
+    v->texts[k].frame = v->frame;
+    snprintf(v->texts[k].text, sizeof(v->texts[k].text), "%s", text);
 }
 
 static void free_sprite(vortex *v, int slot)
@@ -357,7 +417,7 @@ static int on_text_sprite(void *user, int slot, int font, u32 rgb, const char *t
     const xf_font *f = font_for(v, font);
     char utf8[512];
     xf_surface s;
-    int cell = g_fonts[font >= 2 && font <= 13 ? font : 9].height, asc, span, tw;
+    int cell = g_fonts[font >= 2 && font <= 13 ? font : 9].height, asc, span, tw, th;
     size_t i;
     float px;
     if (!f)
@@ -367,21 +427,30 @@ static int on_text_sprite(void *user, int slot, int font, u32 rgb, const char *t
     win_metrics(f, &asc, &span);
     px = span > 0 ? (float)cell * (float)f->units_per_em / (float)span : (float)cell;
     xf_cp1252_to_utf8(utf8, sizeof(utf8), (const u8 *)text, strlen(text));
-    tw = xf_text_width(f, px, utf8, strlen(utf8)) + 1;
+    /* the extent, rounded up to 4; a box larger than that (narrower than
+     * the screen, lower than 40) is kept */
+    tw = (xf_text_width(f, px, utf8, strlen(utf8)) + 3) & ~3;
+    th = cell;
+    if (*w > tw && *w < STAGE_W)
+        tw = *w;
+    if (*h > th && *h < 40)
+        th = *h;
+    if (tw <= 0)
+        tw = 4;
     free_sprite(v, slot);
-    if (!(v->sprites[slot].pixels = malloc((size_t)tw * cell * 4)))
+    if (!(v->sprites[slot].pixels = malloc((size_t)tw * th * 4)))
         return -1;
-    for (i = 0; i < (size_t)tw * cell; i++)
-        v->sprites[slot].pixels[i] = KEY;
+    for (i = 0; i < (size_t)tw * th; i++)
+        v->sprites[slot].pixels[i] = 0; /* black, opaque */
     v->sprites[slot].w = tw;
-    v->sprites[slot].h = cell;
+    v->sprites[slot].h = th;
     s.pixels = v->sprites[slot].pixels;
     s.width = tw;
-    s.height = cell;
+    s.height = th;
     s.pitch = tw;
     xf_text_draw(&s, f, px, 0, span > 0 ? cell * asc / span : cell * 4 / 5, utf8, strlen(utf8), rgb);
     *w = tw;
-    *h = cell;
+    *h = th;
     return 0;
 }
 
@@ -396,6 +465,7 @@ static void on_picture(void *user, int seq, int sub, const char *file, int x, in
         if (sub == 2) {
             memset(v->pic, 0, sizeof(v->pic));
             memset(v->bg, 0, sizeof(v->bg));
+            v->text_count = 0;
         }
         return;
     }
@@ -542,6 +612,8 @@ static void on_screen(void *user, int seq, u16 op, int effect, int x, int y, int
         h = STAGE_H - y;
     for (row = y; w > 0 && row < y + h; row++)
         memcpy(v->bg + row * STAGE_W + x, v->pic + row * STAGE_W + x, (size_t)w * 4);
+    if (w > 0 && h > 0)
+        erase_texts(v, x, y, w, h, 0);
 }
 
 static int on_sound(void *user, int sub, const char *file, u16 arg)
@@ -644,18 +716,21 @@ static void on_music(void *user, int sub, const char *file, u16 arg)
 
 static void update_clips(vortex *v)
 {
-    int i;
+    int i, skipped = 0;
     for (i = 0; i < MAX_CLIPS; i++) {
         vx_clip *c = &v->clips[i];
         if (!c->open)
             continue;
         if (v->st.skip || !xf_player_update(&c->p, plat_ticks_ms())) {
             int seq = c->seq;
+            if (v->st.skip)
+                skipped = 1;
             stop_clip(v, c);
             vs_event(&v->vm, seq, 1); /* the clip ended */
         }
     }
-    v->st.skip = 0;
+    if (skipped) /* else the next clip to play */
+        v->st.skip--;
 }
 
 /* Each sequence shows its sprite at its place (seg3:2406), the lowest
@@ -751,11 +826,43 @@ static void draw_cursor(vortex *v)
     }
 }
 
+/* A sprite that changed since the last frame is drawn again with the
+ * screen under it: the texts there from before go. */
+static void sprite_changes(vortex *v)
+{
+    int i;
+    for (i = 0; i < VS_SEQS; i++) {
+        u16 slot = vs_get(&v->vm, i, VC_SPRITE);
+        int shown = vs_get(&v->vm, i, VC_USED) && vs_get(&v->vm, i, VC_FLAGS) & 1 && slot < VS_SPRITES &&
+                    v->sprites[slot].pixels;
+        i16 x = (i16)vs_get(&v->vm, i, VC_X), y = (i16)vs_get(&v->vm, i, VC_Y);
+        i16 w = shown ? (i16)v->sprites[slot].w : 0, h = shown ? (i16)v->sprites[slot].h : 0;
+        if (!shown)
+            slot = 0xFFFF;
+        if (slot == v->drawn[i].slot && (slot == 0xFFFF || (x == v->drawn[i].x && y == v->drawn[i].y)))
+            continue;
+        if (v->drawn[i].slot != 0xFFFF)
+            erase_texts(v, v->drawn[i].x, v->drawn[i].y, v->drawn[i].w, v->drawn[i].h, 1);
+        if (slot != 0xFFFF)
+            erase_texts(v, x, y, w, h, 1);
+        v->drawn[i].slot = slot;
+        v->drawn[i].x = x;
+        v->drawn[i].y = y;
+        v->drawn[i].w = w;
+        v->drawn[i].h = h;
+    }
+}
+
 static void draw(vortex *v)
 {
     int i;
     memcpy(v->st.fb, v->bg, sizeof(v->bg));
+    sprite_changes(v);
     draw_sprites(v);
+    for (i = 0; i < v->text_count; i++)
+        render_text(v, v->st.fb, v->texts[i].font, v->texts[i].x, v->texts[i].y, v->texts[i].w, v->texts[i].h,
+                    v->texts[i].rgb, v->texts[i].text);
+    v->frame++;
     for (i = 0; i < MAX_CLIPS; i++)
         if (v->clips[i].open && xf_player_frame(&v->clips[i].p))
             blit(v->st.fb, xf_player_frame(&v->clips[i].p), v->clips[i].p.video.width, v->clips[i].p.video.height,
@@ -774,6 +881,8 @@ int xf_vortex_run(const char *dir, const xf_game_options *opt)
         return 1;
     if (stage_open(&v->st, dir, opt) != 0)
         goto done;
+    for (i = 0; i < VS_SEQS; i++)
+        v->drawn[i].slot = 0xFFFF;
     insert_disc(v, 1); /* the program may be on the first disc's folder */
     if (stage_path(&v->st, "VORTEX.EXE", path, sizeof(path)) != 0 || vexe_load(&v->exe, path) != 0) {
         xf_warn("%s: cannot read VORTEX.EXE", dir);

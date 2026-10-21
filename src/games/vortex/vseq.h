@@ -86,8 +86,9 @@ typedef struct vs_host {
     void (*sprite_free)(void *user, int slot);
     /* a sprite slot's size; returns 0, or -1 when the slot is empty */
     int (*sprite_size)(void *user, int slot, int *w, int *h);
-    /* 0x7E4, 0x7E5: makes sprite `slot` an image of a text; its size into
-     * *w, *h. Returns 0, or -1. */
+    /* 0x7E4, 0x7E5, 0xD: makes sprite `slot` an image of a text, one line
+     * on black (seg3:10A2); *w, *h give a smaller size the image keeps
+     * at least (0: none), and get its size. Returns 0, or -1. */
     int (*text_sprite)(void *user, int slot, int font, u32 rgb, const char *text, int *w, int *h);
     /* 0xFF: 9 asks which disc is in the drive (its volume VORTEX_n);
      * another n whether disc n is in. */
@@ -111,7 +112,10 @@ typedef struct {
                           * its mask) */
     int mx, my;          /* the pointer at the last vs_move */
     u64 paused[11];      /* DS:2276: the sequences 0xE paused, by group */
-    vx_ptr labels[13];   /* DS:46A8: 0x101's targets, set by 0x100 */
+    /* 0x101's targets, 1 to 12 (DS:46A8 + 4n), set by 0x100; beside them
+     * (DS:50A4 + 4n) a far pointer each that 0xFD sets; both move
+     * together (seg22). `current` (DS:1378) is the 13th that 0x100 gives. */
+    vx_ptr labels[13], label_aux[13], current;
     u16 saved_cursor[VS_SEQS]; /* DS:3EA2: cursors 0x807 took away */
     u16 saved_sprite[VS_SEQS]; /* DS:967A: sprites 0x809 hid */
     u32 rand_seed;

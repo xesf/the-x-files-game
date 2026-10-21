@@ -82,7 +82,8 @@ static void save_shot(xf_stage *s, const char *path)
  *   press <x> <y>    click there
  *   key <c>          press a key (a character, or esc, return, space)
  *   shot <file.bmp>  save the screen
- *   skip             the clips playing end now, as if played
+ *   skip             the clips playing end now, as if played (or the
+ *                    next one to play, when none plays)
  *   quit             end the game
  * Lines starting with # are comments. */
 static int script_event(xf_stage *s, plat_event *ev)
@@ -119,7 +120,7 @@ static int script_event(xf_stage *s, plat_event *ev)
             return 1;
         }
         if (strcmp(cmd, "skip") == 0) {
-            s->skip = 1;
+            s->skip++;
             continue;
         }
         if (strcmp(cmd, "shot") == 0) {

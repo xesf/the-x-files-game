@@ -104,6 +104,14 @@ static vx_ptr far_at(const insn *in, int off) { return vexe_far(in->s->x, in->pc
 static u16 val(const insn *in, int off) { return operand(in->s, in->seq, w_at(in, off)); }
 static u16 *ref(const insn *in, int off) { return operand_ref(in->s, in->seq, w_at(in, off)); }
 
+/* seg8:6FEC, the operand read of sizes: as operand(), but a context word
+ * is always 0 (it compares the whole word with 5, 6, 8 and 9). */
+static u16 val2(const insn *in, int off)
+{
+    u16 w = w_at(in, off);
+    return (w & 0xC000) == 0xC000 ? 0 : operand(in->s, in->seq, w);
+}
+
 /* A string at `off`; its length (with the 0) in *len. */
 static const char *str_at(const insn *in, int off, u32 *len)
 {
@@ -256,6 +264,49 @@ static void show(vs_state *s, int seq, int cursor)
         vs_set(s, seq, VC_SPRITE, s->saved_sprite[seq]);
         vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) | 1));
     }
+}
+
+/* A far pointer an instruction names: in the data segment, the choices'
+ * pointers (DS:50A8 on, beside the targets) are label_aux; elsewhere
+ * the pointer stored there. */
+static vx_ptr text_pointer(vs_state *s, vx_ptr at)
+{
+    if (VX_SEG(at) == s->x->seg_count && VX_OFF(at) >= 0x50A8 && VX_OFF(at) < 0x50D8)
+        return s->label_aux[(VX_OFF(at) - 0x50A4) / 4];
+    return vexe_far(s->x, at);
+}
+
+/* seg22:00F2: target `from` moves to `to`; from 0, `to` is emptied. */
+static void move_label(vs_state *s, u16 to, u16 from)
+{
+    if (to > 12 || from > 12)
+        return;
+    if (from) {
+        s->labels[to] = s->labels[from];
+        s->label_aux[to] = s->label_aux[from];
+    } else {
+        from = to;
+    }
+    s->labels[from] = s->label_aux[from] = 0;
+}
+
+/* seg22:0000: the current target swaps places with the last of the
+ * first six that are set. */
+static void current_last(vs_state *s)
+{
+    int k, n = 0, at = 0, last;
+    vx_ptr t;
+    for (k = 1; k <= 12; k++)
+        if (s->labels[k]) {
+            n++;
+            if (s->labels[k] == s->current)
+                at = k;
+        }
+    last = (n - 1 > 5 ? 5 : n - 1) + 1;
+    if (!at || last < 1 || s->labels[last] == s->current)
+        return;
+    t = s->labels[at]; s->labels[at] = s->labels[last]; s->labels[last] = t;
+    t = s->label_aux[at]; s->label_aux[at] = s->label_aux[last]; s->label_aux[last] = t;
 }
 
 /* Runs one instruction. */
@@ -477,6 +528,10 @@ static int step(vs_state *s, int seq)
         NEXT(4);
         return YIELD;
     }
+    case 0x0814: /* redraw the sprites of sequences (seg8:6228 through
+                  * seg3:13D0): the module redraws every frame */
+        NEXT(6);
+        return YIELD;
     case 0x080D: /* the sequence's slot into a variable (seg8:5F7C) */
         *ref(&in, 2) = vs_get(s, seq, VC_INDEX);
         NEXT(4);
@@ -669,11 +724,55 @@ static int step(vs_state *s, int seq)
         return YIELD;
     }
 
+    case 0x000D: { /* a text a far pointer names (a choice's, DS:50A8 on),
+                    * drawn, or as the sequence's sprite (seg8:3EF8): x, y,
+                    * a box, the pointer, a word, the font, red, green, blue,
+                    * the sprite slot (0: drawn only), drawn too */
+        int x = w_at(&in, 2) > 0x280 ? val(&in, 2) : w_at(&in, 2);
+        int y = w_at(&in, 4) > 0x1E0 ? val(&in, 4) : w_at(&in, 4);
+        int tw = val2(&in, 6), th = val2(&in, 8);
+        u8 font = b_at(&in, 0x10);
+        u32 rgb = (u32)(val(&in, 0x11) & 0xFF) << 16 | (u32)(val(&in, 0x13) & 0xFF) << 8 | (val(&in, 0x15) & 0xFF);
+        vx_ptr tp = text_pointer(s, far_at(&in, 0xA));
+        u32 avail;
+        const char *p = tp ? (const char *)vexe_at(s->x, tp, &avail) : NULL;
+        char text[256];
+        for (n = 0; p && n < avail && n + 1 < sizeof(text) && p[n]; n++)
+            text[n] = p[n];
+        text[n] = '\0';
+        if (!w_at(&in, 0x17) || w_at(&in, 0x19)) {
+            if (s->host.text)
+                s->host.text(s->host.user, font, x, y, 0, 0, rgb, text);
+        }
+        if (w_at(&in, 0x17)) {
+            u16 slot = *ref(&in, 0x17);
+            int ok = slot <= VS_SPRITES && s->host.text_sprite &&
+                     s->host.text_sprite(s->host.user, slot, font, rgb, text, &tw, &th) == 0;
+            vs_set(s, seq, VC_SPRITE, slot);
+            if (ok) {
+                vs_set(s, seq, VC_X, (u16)x);
+                vs_set(s, seq, VC_Y, (u16)y);
+                vs_set(s, seq, VC_W, (u16)tw);
+                vs_set(s, seq, VC_H, (u16)th);
+            }
+            if (!ok || w_at(&in, 0x19)) {
+                vs_set(s, seq, VC_SPRITE, 0xFFFF);
+                vs_set(s, seq, 0x122, 0xFFFF);
+                vs_set(s, seq, 0x124, 0xFFFF);
+                vs_set(s, seq, 0x120, 0);
+                vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) & ~1));
+            } else {
+                vs_set(s, seq, VC_FLAGS, (u16)(vs_get(s, seq, VC_FLAGS) | 1));
+            }
+        }
+        NEXT(0x1B);
+        return YIELD;
+    }
     case 0x07E4: case 0x07E5: { /* a text as the sequence's sprite (seg8:4A96):
                                  * the slot, x, y, z, a box, the font, red,
                                  * green, blue, a flag, the text */
         u16 slot = val(&in, 2);
-        int tw = 0, th = 0;
+        int tw = val2(&in, 0xA), th = val2(&in, 0xC);
         u32 rgb = (u32)(val(&in, 0x10) & 0xFF) << 16 | (u32)(val(&in, 0x12) & 0xFF) << 8 | (val(&in, 0x14) & 0xFF);
         str = str_at(&in, 0x18, &n);
         vs_set(s, seq, VC_SPRITE, slot);
@@ -757,17 +856,40 @@ static int step(vs_state *s, int seq)
         }
         return STOP;
     }
-    case 0x0100: /* the targets of 0x101 */
-        for (k = 0; k < 13; k++)
-            s->labels[k] = far_at(&in, 2 + 4 * k);
+    case 0x0100: /* the targets of 0x101 (seg22:01AA): twelve, then the
+                  * current one */
+        for (k = 1; k <= 12; k++)
+            s->labels[k] = far_at(&in, 2 + 4 * (k - 1));
+        s->current = far_at(&in, 0x32);
         NEXT(54);
         return YIELD;
     case 0x0101: { /* go to a target of 0x100 */
         u16 i2 = val(&in, 2);
-        if (i2 < 13 && s->labels[i2])
+        if (i2 >= 1 && i2 <= 12 && s->labels[i2])
             GOTO(s->labels[i2]);
         return YIELD;
     }
+    case 0x00FD: /* the far pointers beside the targets, from a table of
+                  * twelve (seg22:0206); no current one */
+        for (k = 1; k <= 12; k++)
+            s->label_aux[k] = vexe_far(s->x, far_at(&in, 2) + 4u * (u32)(k - 1));
+        s->current = 0;
+        NEXT(6);
+        return YIELD;
+    case 0x00FE: /* target b moves to a, or a is emptied when b is 0
+                  * (seg22:00F2) */
+        move_label(s, val(&in, 2), val(&in, 4));
+        NEXT(6);
+        return YIELD;
+    case 0x0102: /* closes the gaps in targets 1 to 6, the current one
+                  * last of them (seg22:0156, 0000) */
+        for (k = 1; k <= 5; k++)
+            if (!s->label_aux[k])
+                move_label(s, (u16)k, (u16)(k + 1));
+        if (s->current)
+            current_last(s);
+        NEXT(2);
+        return YIELD;
     case 0x00D5: { /* wait for events (a mask of DS:4ED6's bits) */
         u32 mask = (u32)w_at(&in, 2) | (u32)w_at(&in, 4) << 16, hit;
         if (!get32(s, seq, VC_WAIT))
