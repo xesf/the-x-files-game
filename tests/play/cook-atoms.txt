@@ -1,0 +1,22 @@
+# Atoms: Cook's stock replies at his desk to the items in hand (see
+# docs/engine/conversations.md). The gun on him ends the game in prison.
+include office.txt
+expect view 793
+wait 20000                      # his answer about the APBs ends
+hold Flashlight
+expect played 19794             # What's the matter with you?
+hold none
+hold NightVision
+expect played 19784             # What are you doing?
+hold none
+hold Gun
+hover 21993
+expect played 19738             # Don't do that.
+hover none
+hold Badge
+click 21993
+expect played 19790             # I don't want that.
+hold Gun
+click 21993
+expect played 19656             # Willmore in prison
+expect over 1

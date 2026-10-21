@@ -122,6 +122,7 @@ A script has one command per line; `#` starts a comment.
 | `icon <id>` | Clicks an emotion or action icon |
 | `dial <number>` / `nodial <number>` | Types a number on the cell phone and sends it; `nodial` expects no answer |
 | `rollover <item>` / `rollover none` | Moves the pointer onto an inventory item, or off it (the evidence kit's popup) |
+| `hover <id>` / `hover none` | Moves the pointer onto a hotspot, or off the hotspots (a character's reply to the item in hand) |
 | `open <layout>` | Opens an interface layout, as the menu's Options and Help do |
 | `shoot [id]` | Shoots at a HOT rectangle of the view's clip (by default its first); most shots need the gun in hand |
 | `until-clip <ms>` | Lets time pass until a clip is queued, and leaves it unplayed so the next step can shoot into it |
