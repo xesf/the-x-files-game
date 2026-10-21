@@ -148,6 +148,34 @@ a scene on another disc shows "insert disc" until it is.
 anger, secret, psycho), the MIDI files, then for each cell a song and
 how many times it plays.
 
+## The uber device
+
+Segment 13 (`uber.c`) keeps the player's moods and a log of events
+(`src/games/vortex/vuber.c`). There are three moods, 0 to 2. Each keeps
+the values recorded for it (0 to 255), their total and how many were
+above 0. Opcode 0x805 drives it by a sub-command at +4:
+
+| Sub | Does |
+|---|---|
+| 1, 2 | Start (with 24 built-in events), free |
+| 3 | Records a value for a mood (0xFF: none) and an event: an id and seven words, string resources and a rectangle the scripts use |
+| 4 | Whether a mood's share of the values reaches a percentage (mode 1 the newest value, 2 the newest n, 3 the totals, 4 the newest n counted twice) |
+| 5 | Whether two moods' totals are within a percentage of the sum |
+| 6 | The mood with the most, by the same modes; a tie goes to the mood with more values above 0 |
+| 7, 8 | The default mood |
+| 9 to 15, 23 | The event log: its size, a cursor and the ids and moods at it, an event marked as seen |
+
+Events with ids from a table of 169 are logged once. 0x806 gives a
+mood's colour at a level 0 to 3: green for mood 0, blue for 1, red for
+2, purple when 1 and 2 are within 20% of each other.
+
+The log is shown as a book of two pages (0x81A opens it, 0x81B closes
+it, 0x81D turns a page and gives the events on both sides). 0x81E draws
+a bitmap's black in a colour and keeps the result in the left or right
+page's panel; 0x198 sub 0x11 shows a panel again. 0x824 dissolves a
+bitmap onto the screen; 0x9 draws a string resource word-wrapped in a
+240 by 400 box.
+
 ## Status
 
 `src/games/vortex` runs the opening, the main menu, GO TO SCENE and
