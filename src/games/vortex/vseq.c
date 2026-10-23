@@ -87,9 +87,10 @@ static u16 *operand_ref(vs_state *s, int seq, u16 w)
     return &scratch;
 }
 
+/* seg8:6F62: 0x7FFF ("all sequences") is a value, not local 0x3FFF. */
 static u16 operand(vs_state *s, int seq, u16 w)
 {
-    return *operand_ref(s, seq, w);
+    return w == 0x7FFF ? 0x7FFF : *operand_ref(s, seq, w);
 }
 
 /* --- Reading instructions ------------------------------------------------- */
@@ -1371,6 +1372,8 @@ static void run_seq(vs_state *s, int seq)
         return;
     pending = get32(s, seq, VC_EVENTS);
     s->events = pending | (s->events & 0xFFFF0000u);
+    /* seg8:01BC: a click anywhere (0x2) counts for this turn only */
+    set32(s, seq, VC_EVENTS, pending & ~2u);
     s->signals = get32(s, seq, VC_EVENTS2);
     /* seg8:04F9: the sound channels: 0x20 and 0x40 while channel 1 or 2
      * is quiet, 0x80 and 0x100 while it plays */

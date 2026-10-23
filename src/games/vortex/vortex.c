@@ -24,6 +24,7 @@
 typedef struct {
     xf_player p;
     int open, seq, x, y;
+    int hidden;             /* 0x197 action 9 took its window away */
 } vx_clip;
 
 typedef struct {
@@ -208,6 +209,7 @@ static int on_clip(void *user, int seq, int sub, const char *file, int x, int y,
     }
     xf_info("vortex: clip %s at (%d, %d), sub-type %d", file, x, y, sub);
     v->clips[i].open = 1;
+    v->clips[i].hidden = 0;
     v->clips[i].seq = seq;
     v->clips[i].x = x;
     v->clips[i].y = y;
@@ -238,15 +240,30 @@ static long on_clip_time(void *user, int seq)
     return -1;
 }
 
+/* 0x197 (seg8:79C4): action 9 stops a clip where it is and takes its
+ * window away (seg16:6AFA with 0), the screen under it drawn again when
+ * `a` is set; 10 gives the window back and plays on (6AFA with 1); 11
+ * plays it too. The menu does 9 to all clips and RESUME MOVIE 10, so a
+ * scene goes on where it was. */
 static void on_clip_op(void *user, int seq, int action, u16 a, u16 b)
 {
     vortex *v = user;
     int i;
     (void)a;
     (void)b;
-    for (i = 0; i < MAX_CLIPS; i++)
-        if (v->clips[i].open && v->clips[i].seq == seq && action == 9)
-            stop_clip(v, &v->clips[i]);
+    for (i = 0; i < MAX_CLIPS; i++) {
+        vx_clip *c = &v->clips[i];
+        if (!c->open || c->seq != seq)
+            continue;
+        xf_debug("vortex: clip of sequence %d: action %d", seq, action);
+        if (action == 9) {
+            xf_player_pause(&c->p, 1, plat_ticks_ms());
+            c->hidden = 1;
+        } else if (action == 10 || action == 11) {
+            xf_player_pause(&c->p, 0, plat_ticks_ms());
+            c->hidden = 0;
+        }
+    }
 }
 
 static void on_stopped(void *user, int seq)
@@ -1024,7 +1041,7 @@ static void update_clips(vortex *v)
         vx_clip *c = &v->clips[i];
         if (!c->open)
             continue;
-        if (v->st.skip || !xf_player_update(&c->p, plat_ticks_ms())) {
+        if ((v->st.skip && !c->p.paused) || !xf_player_update(&c->p, plat_ticks_ms())) {
             int seq = c->seq;
             if (v->st.skip)
                 skipped = 1;
@@ -1184,7 +1201,7 @@ static void draw(vortex *v)
     draw_texts(v);
     v->frame++;
     for (i = 0; i < MAX_CLIPS; i++)
-        if (v->clips[i].open && xf_player_frame(&v->clips[i].p))
+        if (v->clips[i].open && !v->clips[i].hidden && xf_player_frame(&v->clips[i].p))
             blit(v->st.fb, xf_player_frame(&v->clips[i].p), v->clips[i].p.video.width, v->clips[i].p.video.height,
                  v->clips[i].x, v->clips[i].y);
     draw_cursor(v);
