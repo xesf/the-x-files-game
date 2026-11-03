@@ -53,7 +53,8 @@ vita_create_vpk(xfiles.vpk XFIL00001 eboot.bin
     VERSION ${VITA_VERSION}
     NAME "X-Files engine"
     FILE sce_sys/icon0.png sce_sys/icon0.png
-         sce_sys/livearea/contents/bg.png sce_sys/livearea/contents/bg.png
+         sce_sys/pic0.png sce_sys/pic0.png
+         sce_sys/livearea/contents/bg0.png sce_sys/livearea/contents/bg0.png
          sce_sys/livearea/contents/startup.png sce_sys/livearea/contents/startup.png
          sce_sys/livearea/contents/template.xml sce_sys/livearea/contents/template.xml
 )

@@ -2,6 +2,12 @@
 
 All notable changes to this project.
 
+## 0.4.1 - 2026-11-03
+
+- Vita: the LiveArea and boot images use the game's own art: the cover as the icon, a hero picture with the logo as the boot picture and the start-up image, and the hero as the LiveArea background.
+- Vortex (in progress): dialogue choices, captions, the uber device with its moods and event log, saved regions, screen update effects (wipes, iris, dissolves), the menu's pause and RESUME MOVIE. Every opcode the sequences hold is now decoded. Discs are read as folders (`VORTEX_1` to `VORTEX_3`).
+- The X-Files game code moved to `src/games/xfiles`, with the Virtual Cinema reader in `src/games/xfiles/vc`.
+
 ## 0.4.0 - 2026-10-21
 
 - Atoms: characters answer items in hand with their stock replies. Pointing the gun, handcuffs or stiletto gets "Don't do that"; a click with an item follows the original's table ("I don't want that", "I don't know anything about that"); the gun or stiletto on someone ends in prison, the handcuffs out of the FBI; taking the binoculars, flashlight or night vision goggles in hand gets a reply from a character in the view. A character's own triggers for the item come first.
