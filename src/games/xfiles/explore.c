@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "audio/mixer.h"
+#include "games/xfiles/episode.h"
 #include "games/xfiles/game.h"
 #include "games/xfiles/script.h"
 #include "gfx/screen.h"
@@ -66,6 +67,10 @@ static const struct {
  * then one rollover animation per item (measured frame by frame). */
 #define RIGHT_INTRO_END 66
 #define MENU_RETURN 72895 /* return.pic */
+/* Our own row under Quit: the episode (run_episode). */
+#define EPISODE_TOP 436
+#define EPISODE_BOTTOM 470
+#define EPISODE_LABEL "Episode 3X99"
 /* The main menu icon: the spinning blue X (25541) in the top-right
  * corner, as the Help screen shows it; it appears when the pointer comes
  * there, as the inventory does at the bottom, and a click opens the
@@ -144,6 +149,14 @@ typedef struct {
     u32 card_start, card_until;
     /* the main menu */
     int in_menu;
+    /* the episode (the menu's Episode 3X99): the story plays by itself */
+    int episode;          /* it runs: the player's input is not taken */
+    int episode_request;  /* the menu asked for it: it starts after the frame */
+    int episode_stop;     /* Escape: back to the menu */
+    int injecting;        /* the script's own input is being sent */
+    int episode_hover;
+    int episode_move;     /* the pointer is going to a move: quicker, hidden */
+    int episode_moves_shown; /* N during the episode: show the pointer on moves too */
     int lang_panel;       /* the Options screen's Language panel is open */
     int media_paused;     /* the game's clips and sounds hold while the menu is up */
     u32 media_pause_from;
@@ -2353,6 +2366,8 @@ static const cursor_art *current_cursor(explorer *e, int mx, int my)
 {
     u32 id = held_cursor(e);
     const cursor_art *c;
+    if (e->episode && e->episode_move && !e->episode_moves_shown)
+        return NULL; /* the episode walks on without the pointer */
     int tool = e->in_menu == 1 ? TOOL_NONE : tool_in_hand(e);
     /* the camera's viewfinder follows the pointer in place of a cursor;
      * with a tool in hand the hotspots show no cursors of their own */
@@ -3278,6 +3293,8 @@ static void menu_update(explorer *e)
     }
 }
 
+static void draw_episode_label(explorer *e);
+
 static void menu_draw(explorer *e)
 {
     int i, y;
@@ -3305,7 +3322,25 @@ static void menu_draw(explorer *e)
                 memcpy(&e->fb[(215 + y) * SCREEN_W + 472], e->return_img.pixels + y * e->return_img.width,
                        (size_t)XF_MIN(e->return_img.width, SCREEN_W - 472) * 4);
     }
+    draw_episode_label(e);
     draw_cursor(e, e->mx, e->my); /* the game's cross, as everywhere else */
+}
+
+/* The episode's row, under Quit: our own, drawn over the menu. */
+
+static int episode_at(const explorer *e, int x, int y)
+{
+    return e->right_frame >= RIGHT_INTRO_END && x >= 472 && y >= EPISODE_TOP && y < EPISODE_BOTTOM;
+}
+
+static void draw_episode_label(explorer *e)
+{
+    float px = 20.0f;
+    size_t len = strlen(EPISODE_LABEL);
+    int w = xf_text_width(&e->font, px, EPISODE_LABEL, len);
+    if (e->right_frame < RIGHT_INTRO_END)
+        return;
+    draw_shadowed(e, &e->font, px, 628 - w, 460, EPISODE_LABEL, len, e->episode_hover ? 0xC8E8FF : 0x5F8FBF);
 }
 
 static int menu_item_at(int x, int y)
@@ -3438,6 +3473,8 @@ static int nav_targets(explorer *e, nav_point *t, int max)
     if (e->in_menu == 1) {
         for (i = 0; i < (int)XF_COUNT(g_menu_items); i++)
             NAV_ADD(556, (g_menu_items[i].top + g_menu_items[i].bottom) / 2);
+        if (e->right_frame >= RIGHT_INTRO_END)
+            NAV_ADD(556, (EPISODE_TOP + EPISODE_BOTTOM) / 2);
         return n;
     }
     if (g->ask) {
@@ -3798,11 +3835,14 @@ static void handle_event(explorer *e, plat_event ev)
         e->my = ev.y;
         menu_set_hover(e, menu_item_at(ev.x, ev.y));
         menu_set_top_hover(e, ev.x, ev.y);
+        e->episode_hover = episode_at(e, ev.x, ev.y);
     }
     else if (e->in_menu == 1 && ev.type == PLAT_EV_MOUSE_DOWN && ev.button == PLAT_MOUSE_LEFT) {
         int item = menu_item_at(ev.x, ev.y);
         if (item >= 0)
             xf_info("menu: %s", g_menu_items[item].name);
+        if (item < 0 && episode_at(e, ev.x, ev.y))
+            e->episode_request = 1; /* after this frame (run_episode) */
         if (item == 0) { /* New */
             drop_game_media(e);
             menu_close(e);
@@ -3951,8 +3991,18 @@ static void run_frame(explorer *e)
     }
     if (!paused)
         game_tick(e->g, plat_ticks_ms() - e->paused_ms);
-    while (plat_poll(&ev))
+    while (plat_poll(&ev)) {
+        if (e->episode) { /* watching: only Escape (back to the menu) and quitting */
+            if (ev.type == PLAT_EV_KEY_DOWN && ev.key == PLAT_KEY_ESCAPE)
+                e->episode_stop = 1;
+            else if (ev.type == PLAT_EV_KEY_DOWN && (ev.key == 'n' || ev.key == 'N'))
+                e->episode_moves_shown = !e->episode_moves_shown;
+            else if (ev.type == PLAT_EV_QUIT)
+                handle_event(e, ev);
+            continue;
+        }
         handle_event(e, ev);
+    }
     t0 = plat_ticks_ms();
     if (!e->media_paused) {
         if ((e->have_clip && !xf_player_update(&e->player, plat_ticks_ms())) ||
@@ -4052,7 +4102,9 @@ static void script_point(void *user, int x, int y)
     e->mx = x;
     e->my = y;
     scr_to_output(&e->layout, x, y, &e->out_mx, &e->out_my);
+    e->injecting = 1;
     handle_event(e, ev);
+    e->injecting = 0;
 }
 
 static void script_input(void *user, int key, int x, int y)
@@ -4137,6 +4189,218 @@ static int script_shot(void *user, const char *path)
     return 0;
 }
 
+/* --- The episode -------------------------------------------------------
+ * The menu's Episode 3X99 plays the story by itself, as an episode to
+ * watch: the steps of the disc scripts (tests/play, compiled in by
+ * tools/episode/make_episode.py), with every clip played to its end and
+ * the pointer going to each thing before it is clicked. Escape stops it. */
+
+static int script_cancelled(void *user)
+{
+    explorer *e = user;
+    return e->episode_stop || !e->running;
+}
+
+/* The clips play out, then a moment to look at the scene. */
+static int script_shot(void *user, const char *path);
+
+/* XF_EPISODE_SHOTS=<folder>: a screenshot every 5 seconds of the episode. */
+static void episode_shot(explorer *e)
+{
+    static u32 next;
+    static int n;
+    const char *dir = getenv("XF_EPISODE_SHOTS");
+    char path[1024];
+    if (!dir || (i32)(plat_ticks_ms() - next) < 0)
+        return;
+    next = plat_ticks_ms() + 5000;
+    snprintf(path, sizeof(path), "%s/ep%04d.bmp", dir, n++);
+    script_shot(e, path);
+}
+
+static void script_rest(void *user)
+{
+    explorer *e = user;
+    u32 end;
+    run_frame(e);
+    while (e->running && !e->episode_stop && (e->playing || game_media_pending(e->g))) {
+        run_frame(e);
+        episode_shot(e);
+    }
+    end = plat_ticks_ms() + (e->episode_move ? 200 : 900); /* moves go on quicker */
+    while (e->running && !e->episode_stop && (i32)(plat_ticks_ms() - end) < 0)
+        run_frame(e);
+    episode_shot(e);
+}
+
+static int script_target(void *user, int kind, u32 id, int *x, int *y)
+{
+    explorer *e = user;
+    game *g = e->g;
+    int i;
+    e->episode_move = 0;
+    run_frame(e); /* the inventory, icons and dialogue box as they are now */
+    if (kind == 'o') {
+        const game_iface_item *it = game_find_item(g, id);
+        if (it) {
+            *x = (it->item.region.left + it->item.region.right) / 2;
+            *y = (it->item.region.top + it->item.region.bottom) / 2;
+            return 1;
+        }
+        for (i = 0; i < g->spot_count; i++)
+            if (g->spots[i].id == id) {
+                e->episode_move = g->spots[i].kind == SPOT_NAV;
+                *x = (g->spots[i].region.left + g->spots[i].region.right) / 2;
+                *y = (g->spots[i].region.top + g->spots[i].region.bottom) / 2;
+                return 1;
+            }
+    } else if (kind == 'q' && g->talking) {
+        dlg_entry rows[16];
+        int more, n;
+        e->talk_tab = 0;
+        n = dialog_layout(e, rows, 16, &more);
+        for (i = 0; i < n; i++)
+            if (rows[i].id == id) {
+                *x = dialog_x(e) + DLG_W / 2;
+                *y = rows[i].y + DLG_LINE / 2;
+                return 1;
+            }
+    } else if (kind == 'i' || kind == 'e') {
+        for (i = 0; i < e->inv_count; i++)
+            if (e->inv_ids[i] == id) {
+                inv_pos(e, i, x, y);
+                *x += INV_W / 2;
+                *y += INV_H / 2;
+                return 1;
+            }
+    } else if (kind == 'c') {
+        for (i = 0; i < e->icon_count; i++)
+            if (e->icon_ids[i] == id) {
+                *x = icon_x(e, i) + ICON_W / 2;
+                *y = ICON_Y + ICON_H / 2;
+                return 1;
+            }
+    }
+    return 0;
+}
+
+/* The pointer moves there, eased, then rests on it a moment. */
+static void script_glide(void *user, int x, int y)
+{
+    explorer *e = user;
+    int x0 = e->mx, y0 = e->my;
+    u32 start = plat_ticks_ms(), len = e->episode_move ? 250 : 700, t;
+    while (e->running && !e->episode_stop && (t = plat_ticks_ms() - start) < len) {
+        float f = (float)t / (float)len;
+        f = f * f * (3 - 2 * f);
+        script_point(e, x0 + (int)((float)(x - x0) * f), y0 + (int)((float)(y - y0) * f));
+        run_frame(e);
+    }
+    episode_shot(e);
+    script_point(e, x, y);
+    start = plat_ticks_ms();
+    while (e->running && !e->episode_stop && plat_ticks_ms() - start < (e->episode_move ? 50u : 350u))
+        run_frame(e);
+}
+
+/* Aims at a HOT target of the clip playing (or of a moving picture of
+ * the view) and clicks when it is up. */
+static int script_shoot(void *user, u32 hot)
+{
+    explorer *e = user;
+    int x, y, w, h, ox, oy;
+    u32 start, end, guard = plat_ticks_ms() + 20000;
+    for (;;) {
+        int k;
+        if (!e->running || e->episode_stop || (i32)(plat_ticks_ms() - guard) > 0)
+            return 0;
+        /* the clip playing, then the moving pictures of the view */
+        for (k = -1; k < e->anim_count; k++) {
+            u32 asset, now;
+            if (k < 0) {
+                if (!e->g->current.asset || !e->have_clip)
+                    continue;
+                asset = e->g->current.asset;
+                now = e->player.now_ms;
+                ox = PICTURE_X;
+                oy = PICTURE_Y;
+            } else {
+                const view_anim *an = &e->anims[k];
+                if (e->playing)
+                    break; /* the view's pictures take shots once the clip is over */
+                const xf_video *vd = anim_video(an);
+                int vw = XF_MIN(vd->width, PICTURE_W), vh = XF_MIN(vd->height, PICTURE_H);
+                u32 t = an->use_player ? an->player.now_ms : plat_ticks_ms() - an->started;
+                t = an->loop ? t % an->length_ms : XF_MIN(t, an->length_ms - 1);
+                asset = an->asset;
+                now = an->start_ms + t;
+                ox = PICTURE_X + (PICTURE_W - vw) / 2;
+                oy = PICTURE_Y + (PICTURE_H - vh) / 2;
+            }
+            if (!game_hot_rect(e->g, asset, hot, &x, &y, &w, &h, &start, &end))
+                continue;
+            if (now + 900 >= start && now < end) {
+                xf_info("episode: shoot %u of %u at (%d, %d) %dx%d, %u-%u ms, now %u", hot, asset, x, y, w, h, start,
+                        end, now);
+                script_glide(e, ox + x + w / 2, oy + y + h / 2);
+                script_input(e, 0, ox + x + w / 2, oy + y + h / 2);
+                return 1;
+            }
+            break; /* the target comes later in this clip: wait for it */
+        }
+        run_frame(e);
+    }
+}
+
+static void run_episode(explorer *e)
+{
+    script sc;
+    char *text;
+    size_t size = 1, at = 0;
+    int i;
+    for (i = 0; i < g_episode_step_count; i++)
+        size += strlen(g_episode_steps[i]) + 1;
+    if (!(text = malloc(size)))
+        return;
+    for (i = 0; i < g_episode_step_count; i++) {
+        size_t n = strlen(g_episode_steps[i]);
+        memcpy(text + at, g_episode_steps[i], n);
+        at += n;
+        text[at++] = '\n';
+    }
+    text[at] = '\0';
+    xf_info("episode: %d steps", g_episode_step_count);
+    drop_game_media(e);
+    menu_close(e);
+    e->g->rand_seed = 0; /* the chances the story scripts were written with */
+    e->episode = 1;
+    e->episode_stop = 0;
+    memset(&sc, 0, sizeof(sc));
+    sc.g = e->g;
+    sc.watch = 1;
+    sc.host.user = e;
+    sc.host.advance = script_advance;
+    sc.host.settle = script_settle;
+    sc.host.point = script_point;
+    sc.host.input = script_input;
+    sc.host.window = script_window;
+    sc.host.rest = script_rest;
+    sc.host.target = script_target;
+    sc.host.glide = script_glide;
+    sc.host.shoot = script_shoot;
+    sc.host.cancelled = script_cancelled;
+    i = script_run_text(&sc, "episode", text, 1);
+    xf_info("episode: %s", e->episode_stop ? "stopped" : i ? "a step failed" : "played");
+    if (!e->episode_stop && !i)
+        script_rest(e); /* the ending and the credits */
+    free(text);
+    e->episode = 0;
+    if (e->episode_stop || i) {
+        e->episode_stop = 0;
+        menu_enter(e);
+    }
+}
+
 int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_view, int disc,
                const char *script_path)
 {
@@ -4189,6 +4453,8 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
     g_prof.since = plat_ticks_ms();
     if (script_path) {
         /* The script starts the game itself. */
+    } else if (start_view == 0 && getenv("XF_EPISODE")) {
+        e->episode_request = 1; /* XF_EPISODE: straight to the episode */
     } else if (start_view == 0) {
         /* Like the original: intro, then the main menu. */
         queue_intro(e);
@@ -4208,12 +4474,22 @@ int xf_explore(const char *data_dir, const char *const *media_dirs, u32 start_vi
         sc.host.point = script_point;
         sc.host.input = script_input;
         sc.host.window = script_window;
+        sc.host.rest = script_rest;
+        sc.host.target = script_target;
+        sc.host.glide = script_glide;
+        sc.host.shoot = script_shoot;
+        sc.host.cancelled = script_cancelled;
         e->in_menu = 0;
         result = script_run(&sc, script_path, 0) ? 1 : 0;
         xf_info("script: %d steps, %s", sc.steps, result ? "stopped at a failure" : "all passed");
     } else {
-        while (e->running)
+        while (e->running) {
             run_frame(e);
+            if (e->episode_request) {
+                e->episode_request = 0;
+                run_episode(e);
+            }
+        }
     }
     stop_media(e);
     stop_sound(e);
