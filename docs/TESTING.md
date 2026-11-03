@@ -171,6 +171,7 @@ XF_HEADLESS=1 build/xfiles --explore <game> 0 1 --media <cd> --script shots.txt
 | Command | What it does in the window |
 |---|---|
 | `clips on` / `clips off` | Lets clips play across steps instead of ending with each step |
+| `watch on` / `watch off` | Plays the steps as the menu's episode does: clips play to their end, the pointer moves to each thing, a shot waits for its target |
 | `key escape\|return\|tab\|space\|left\|right\|up\|down\|<char>` | Presses a key, as the platform would send it; without a window, it goes to the layout field with focus |
 | `press <x> <y>` | Clicks a 640x480 screen point through the window's input, in any layout |
 | `play <ms>` | Lets time pass with the clips playing |
@@ -248,6 +249,17 @@ regions and pictures, and what each trigger does:
 
 ```sh
 python3 -I tools/re/vc_layout.py XFILES.HDB 15108
+```
+
+The episode (the menu's Episode 3X99, see
+[engine/game-ui.md](engine/game-ui.md)) is built from the disc scripts.
+After changing them, run `python3 tools/episode/make_episode.py` to
+build `src/games/xfiles/episode.c` again. `XF_EPISODE=1` starts the
+episode at once; `XF_EPISODE_SHOTS=<folder>` saves a screenshot every
+five seconds of it:
+
+```sh
+XF_HEADLESS=1 XF_EPISODE=1 XF_EPISODE_SHOTS=shots build/xfiles --explore <game> 0 1
 ```
 
 ## The earlier games

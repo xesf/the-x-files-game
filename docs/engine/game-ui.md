@@ -848,3 +848,27 @@ view's media. It is off by default.
   screen layers.
 - The suicide note uses Courier: the ZonkersHand font is not in the
   game data.
+
+## Episode 3X99
+
+An addition of this engine, not in the original: the main menu has an
+extra row under Quit, **Episode 3X99**. It plays the whole story by
+itself, from a new game to the credits, so the game can be watched like
+an episode of the series.
+
+The episode follows the story scripts in `tests/play` (`disc1.txt` to
+`disc7.txt`), the path that completes the game. The program carries
+their steps, built by `tools/episode/make_episode.py` into
+`src/games/xfiles/episode.c`. As it plays:
+
+- every clip plays to its end, with a moment after it to see the scene;
+- the pointer moves to each thing before it is clicked: a hotspot, a
+  question in the dialogue box, an inventory item, an icon;
+- in a gunfight, it aims at the target and fires while the target is up;
+- the player's input is ignored, except Escape (Start on the Vita),
+  which stops the episode and opens the menu.
+
+The random chances start as in the scripts, so the gunfights go the
+way the scripts expect. The steps use the object IDs of the English
+game; a release whose IDs differ stops at the first step that does not
+match and goes back to the menu.
