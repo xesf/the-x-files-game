@@ -2,6 +2,10 @@
 
 All notable changes to this project.
 
+## 0.4.3 - 2026-11-03
+
+- Fixed: the DOS and Windows 9x builds failed on the script reader added in 0.4.2. No change to the game.
+
 ## 0.4.2 - 2026-11-03
 
 - Episode 3X99: a new row under Quit in the main menu plays the whole story by itself, from a new game to the credits, with the pointer moving to each thing before it is clicked and every clip played to its end. Escape (Start on the Vita) stops it. The steps are built from the disc scripts by `tools/episode/make_episode.py`.
