@@ -2,6 +2,11 @@
 
 All notable changes to this project.
 
+## 0.4.2 - 2026-11-03
+
+- Episode 3X99: a new row under Quit in the main menu plays the whole story by itself, from a new game to the credits, with the pointer moving to each thing before it is clicked and every clip played to its end. Escape (Start on the Vita) stops it. The steps are built from the disc scripts by `tools/episode/make_episode.py`.
+- Test scripts: `watch on` plays steps as the episode does.
+
 ## 0.4.1 - 2026-11-03
 
 - Vita: the LiveArea and boot images use the game's own art: the cover as the icon, a hero picture with the logo as the boot picture and the start-up image, and the hero as the LiveArea background.
