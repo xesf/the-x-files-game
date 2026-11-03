@@ -896,7 +896,9 @@ int script_run(script *s, const char *path, int quiet)
 
 int script_run_text(script *s, const char *name, const char *text, int quiet)
 {
-    script_src src = { NULL, text };
+    script_src src;
+    src.fp = NULL;
+    src.text = text;
     return run_src(s, name, &src, quiet);
 }
 
