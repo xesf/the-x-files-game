@@ -2,6 +2,10 @@
 
 All notable changes to this project.
 
+## 0.4.4 - 2026-11-03
+
+- Fixed: the Vita would not install the VPK (error 0x8010113D). The LiveArea and icon pictures are 8-bit palette PNGs again, as the Vita requires.
+
 ## 0.4.3 - 2026-11-03
 
 - Fixed: the DOS and Windows 9x builds failed on the script reader added in 0.4.2. No change to the game.
