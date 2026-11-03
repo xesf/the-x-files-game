@@ -31,10 +31,20 @@ static void drain_media(game *g)
 /* Clips end at once unless the host plays them. */
 static void settle(script *s)
 {
-    if (s->host.settle)
+    if (s->watch && s->host.rest)
+        s->host.rest(s->host.user);
+    else if (s->host.settle)
         s->host.settle(s->host.user);
     else
         drain_media(s->g);
+}
+
+/* Watching: the pointer goes to the thing about to be clicked. */
+static void look(script *s, int kind, u32 id)
+{
+    int x, y;
+    if (s->watch && s->host.target && s->host.glide && s->host.target(s->host.user, kind, id, &x, &y))
+        s->host.glide(s->host.user, x, y);
 }
 
 /* Lets time pass in small steps, so timers fire in order. */
@@ -238,6 +248,7 @@ static int walk(script *s, u32 target)
             vc_nav nav;
             u32 want = vc_read_nav(&g->db, path[i], &nav) == 0 ? nav.target : 0;
             printf("  move %u\n", path[i]);
+            look(s, 'o', path[i]);
             if (!game_click_object(g, path[i]))
                 return 0;
             settle(s);
@@ -281,6 +292,7 @@ static int ask_all(script *s, u32 character)
     for (round = 0; round < 16; round++) {
         u32 ids[GAME_MAX_CHOICES];
         int n, i, any = 0;
+        look(s, 'o', character);
         if (!game_click_object(g, character))
             return asked > 0;
         settle(s);
@@ -292,6 +304,7 @@ static int ask_all(script *s, u32 character)
                 if (vc_read_conversation(&g->db, ids[i], &c) == 0)
                     vc_read_name(&g->db, c.name, q, sizeof(q));
                 printf("  ask %u  %s\n", ids[i], q);
+                look(s, 'q', ids[i]);
                 game_ask(g, ids[i]);
                 settle(s);
                 asked++;
@@ -814,23 +827,93 @@ static int expect(game *g, const char *what, long a, long b, int have_b)
 
 /* Plays a script. Returns the number of failed steps (it stops at the
  * first one). */
+/* The lines of a script: a file, or text in memory. */
+typedef struct {
+    FILE *fp;
+    const char *text;
+} script_src;
+
+static int next_line(script_src *src, char *line, size_t size)
+{
+    size_t n = 0;
+    if (src->fp)
+        return fgets(line, (int)size, src->fp) != NULL;
+    if (!*src->text)
+        return 0;
+    while (*src->text && *src->text != '\n') {
+        if (n + 2 < size)
+            line[n++] = *src->text;
+        src->text++;
+    }
+    if (*src->text)
+        src->text++;
+    line[n++] = '\n';
+    line[n] = '\0';
+    return 1;
+}
+
+/* Watching: whether a shot comes next (after holding a weapon or
+ * waiting), so the clip playing is shot into rather than watched out. */
+static int shot_next(script_src *src)
+{
+    char line[512], cmd[32];
+    long pos = src->fp ? ftell(src->fp) : 0;
+    const char *text = src->text;
+    int r = 0;
+    while (next_line(src, line, sizeof(line))) {
+        char *hash = strchr(line, '#');
+        if (hash)
+            *hash = '\0';
+        if (sscanf(line, "%31s", cmd) != 1)
+            continue;
+        if (strcmp(cmd, "hold") == 0 || strcmp(cmd, "wait") == 0 || strcmp(cmd, "expect") == 0 ||
+            strcmp(cmd, "until-clip") == 0)
+            continue;
+        r = strcmp(cmd, "shoot") == 0;
+        break;
+    }
+    if (src->fp)
+        fseek(src->fp, pos, SEEK_SET);
+    else
+        src->text = text;
+    return r;
+}
+
+static int run_src(script *s, const char *path, script_src *src, int quiet);
+
 int script_run(script *s, const char *path, int quiet)
 {
-    game *g = s->g;
-    FILE *fp = fopen(path, "r");
-    char line[512], file[256];
-    int lineno = 0, failed = 0;
-    if (!fp) {
+    script_src src = { NULL, NULL };
+    int r;
+    if (!(src.fp = fopen(path, "r"))) {
         perror(path);
         return 1;
     }
-    while (fgets(line, sizeof(line), fp)) {
+    r = run_src(s, path, &src, quiet);
+    fclose(src.fp);
+    return r;
+}
+
+int script_run_text(script *s, const char *name, const char *text, int quiet)
+{
+    script_src src = { NULL, text };
+    return run_src(s, name, &src, quiet);
+}
+
+static int run_src(script *s, const char *path, script_src *src, int quiet)
+{
+    game *g = s->g;
+    char line[512], file[256];
+    int lineno = 0, failed = 0;
+    while (next_line(src, line, sizeof(line))) {
         char cmd[32] = "", what[32] = "", path2[32] = "";
         long a = 0, b = 0, c = 0;
         int hold_clip = 0;
         int n, ok = 1;
         char *hash = strchr(line, '#');
         lineno++;
+        if (s->host.cancelled && s->host.cancelled(s->host.user))
+            break;
         if (hash)
             *hash = '\0';
         n = sscanf(line, "%31s", cmd);
@@ -901,6 +984,7 @@ int script_run(script *s, const char *path, int quiet)
         } else if (strcmp(cmd, "view") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             ok = game_enter_view(g, (u32)a) == 0;
         } else if (strcmp(cmd, "click") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            look(s, 'o', (u32)a);
             ok = game_click_object(g, (u32)a);
         } else if (strcmp(cmd, "at") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
             ok = game_click(g, (int)a, (int)b);
@@ -912,8 +996,10 @@ int script_run(script *s, const char *path, int quiet)
             ok = 0;
             for (k = 0; k < n && !ok; k++)
                 ok = ids[k] == (u32)a;
-            if (ok)
+            if (ok) {
+                look(s, 'q', (u32)a);
                 ok = game_ask(g, (u32)a);
+            }
         } else if (strcmp(cmd, "hold") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             ok = game_hold(g, strcmp(what, "none") == 0 ? NULL : what);
         } else if (strcmp(cmd, "askall") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
@@ -929,15 +1015,21 @@ int script_run(script *s, const char *path, int quiet)
              * view's clip (by default its first), with what is in hand */
             if (sscanf(line, "%*s %ld", &a) != 1)
                 a = 0;
-            ok = game_shoot(g, (u32)a);
+            /* watching: aimed and fired through the window, while the
+             * target is up */
+            ok = s->watch && s->host.shoot ? s->host.shoot(s->host.user, (u32)a) || game_shoot(g, (u32)a)
+                                           : game_shoot(g, (u32)a);
         } else if ((strcmp(cmd, "dial") == 0 || strcmp(cmd, "nodial") == 0) && sscanf(line, "%*s %31s", what) == 1) {
             /* nodial: the number must not get through */
             ok = game_dial(g, what) == (cmd[0] == 'd');
         } else if (strcmp(cmd, "icon") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            look(s, 'c', (u32)a);
             ok = game_click_icon(g, (u32)a);
         } else if (strcmp(cmd, "evidence") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            look(s, 'e', (u32)a);
             ok = game_click_evidence(g, (u32)a);
         } else if (strcmp(cmd, "inv") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
+            look(s, 'i', (u32)a);
             ok = game_click_inventory(g, (u32)a);
         } else if (strcmp(cmd, "back") == 0) {
             game_back(g);
@@ -947,17 +1039,30 @@ int script_run(script *s, const char *path, int quiet)
             /* until-clip <ms>: lets time pass until a clip is queued and
              * leaves it unplayed, so the next step can shoot into it */
             u32 end = s->now + (u32)a;
-            while (s->now < end && !game_media_pending(g)) {
-                s->now += 100;
-                game_tick(g, s->now);
+            if (s->watch && s->host.advance && s->host.window) {
+                /* watching: until the window plays it */
+                while (s->now < end && !s->host.window(s->host.user, "playing")) {
+                    s->host.advance(s->host.user, 100);
+                    s->now += 100;
+                }
+                ok = s->host.window(s->host.user, "playing") == 1;
+            } else {
+                while (s->now < end && !game_media_pending(g)) {
+                    s->now += 100;
+                    game_tick(g, s->now);
+                }
+                ok = game_media_pending(g);
             }
-            ok = game_media_pending(g);
             hold_clip = 1;
         } else if (strcmp(cmd, "play") == 0 && sscanf(line, "%*s %ld", &a) == 1) {
             /* Lets the window play the clips for a while, without ending
              * them after the step. */
             if (s->host.advance)
                 s->host.advance(s->host.user, (u32)a);
+            continue;
+        } else if (strcmp(cmd, "watch") == 0 && sscanf(line, "%*s %31s", what) == 1) {
+            /* watch on: as the episode plays, in the window */
+            s->watch = strcmp(what, "on") == 0 && s->host.rest;
             continue;
         } else if (strcmp(cmd, "clips") == 0 && sscanf(line, "%*s %31s", what) == 1) {
             s->keep_clips = strcmp(what, "on") == 0 && s->host.advance;
@@ -972,7 +1077,8 @@ int script_run(script *s, const char *path, int quiet)
             while (*t && *t != '\n' && *t != '\r')
                 ok &= game_key(g, (unsigned char)*t++);
         } else if (strcmp(cmd, "skip") == 0) {
-            settle(s);
+            if (!(s->watch && shot_next(src)))
+                settle(s);
         } else if (strcmp(cmd, "shot") == 0 && sscanf(line, "%*s %255s", file) == 1) {
             ok = !s->host.shot || s->host.shot(s->host.user, file) == 0;
         } else if (strcmp(cmd, "set") == 0 && sscanf(line, "%*s %ld %ld", &a, &b) == 2) {
@@ -1066,7 +1172,7 @@ int script_run(script *s, const char *path, int quiet)
             if (!ok)
                 printf("  window %s is %d\n", what, got);
         } else if (strcmp(cmd, "expect") == 0 && (n = sscanf(line, "%*s %31s %ld %ld", what, &a, &b)) >= 2) {
-            ok = expect(g, what, a, b, n == 3);
+            ok = expect(g, what, a, b, n == 3) || s->watch; /* watching goes on */
         } else {
             fprintf(stderr, "%s:%d: cannot read this line\n", path, lineno);
             ok = 0;
@@ -1079,7 +1185,7 @@ int script_run(script *s, const char *path, int quiet)
             g->ui_request = GAME_UI_NONE;
         /* Clips end with the step, unless `clips on` lets the window play
          * them (until `skip` or until they end). */
-        if (!s->keep_clips && !hold_clip)
+        if (!s->keep_clips && !hold_clip && !(s->watch && shot_next(src)))
             settle(s);
         /* XF_PLAY_RELOAD: save and load again after every step, to show
          * that a save keeps everything the story needs; XF_PLAY_RELOAD=x
@@ -1102,7 +1208,6 @@ int script_run(script *s, const char *path, int quiet)
             break; /* later steps depend on this one */
         }
     }
-    fclose(fp);
     return failed;
 }
 

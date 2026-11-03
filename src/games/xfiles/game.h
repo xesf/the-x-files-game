@@ -338,6 +338,9 @@ const game_scroll *game_scroll_box(game *g, u32 item);
 u32 game_hot_at(game *g, u32 asset, int x, int y, u32 ms);
 int game_shoot(game *g, u32 hot);
 /* Whether the HOT file of the view's clip has this rectangle. */
+/* The first rectangle of a clip's HOT target `id` (0: its first target),
+ * in picture positions, and when it is up, in ms. Returns 1 if found. */
+int game_hot_rect(game *g, u32 asset, u32 id, int *x, int *y, int *w, int *h, u32 *start, u32 *end);
 int game_view_has_hot(game *g, u32 hot);
 
 /* Mouse moved: runs mouse over and off triggers of interface items. */

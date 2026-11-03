@@ -1977,6 +1977,29 @@ static u32 view_hot(game *g, u32 id, int *has)
     return first;
 }
 
+int game_hot_rect(game *g, u32 asset, u32 id, int *x, int *y, int *w, int *h, u32 *start, u32 *end)
+{
+    xf_hot hot;
+    u32 i;
+    int found = 0;
+    if (!asset || load_hot(g, asset, &hot) != 0)
+        return 0;
+    for (i = 0; i < hot.count && !found; i++) {
+        const xf_hotspot *s = &hot.spots[i];
+        if (id && s->id != id)
+            continue;
+        *x = s->left;
+        *y = s->top;
+        *w = s->right - s->left;
+        *h = s->bottom - s->top;
+        *start = s->start;
+        *end = s->end;
+        found = 1;
+    }
+    xf_hot_free(&hot);
+    return found;
+}
+
 int game_view_has_hot(game *g, u32 hot)
 {
     int has;
