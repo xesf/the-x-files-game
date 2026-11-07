@@ -2,6 +2,10 @@
 
 All notable changes to this project.
 
+## 0.4.5 - 2026-11-07
+
+- Releases send the Vita VPK to VitaDB. A `vitadb` workflow sends an existing release again by hand.
+
 ## 0.4.4 - 2026-11-03
 
 - Fixed: the Vita would not install the VPK (error 0x8010113D). The LiveArea and icon pictures are 8-bit palette PNGs again, as the Vita requires.
