@@ -2,6 +2,10 @@
 
 All notable changes to this project.
 
+## 0.4.6 - 2026-11-07
+
+- Fixed: the release build for macOS used a runner image GitHub no longer provides, so 0.4.5 was never published. The builds use `macos-15`.
+
 ## 0.4.5 - 2026-11-07
 
 - Releases send the Vita VPK to VitaDB. A `vitadb` workflow sends an existing release again by hand.
